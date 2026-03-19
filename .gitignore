@@ -1,0 +1,40 @@
+node_modules/
+dist/
+program/dist/
+build/
+.env
+.env.*
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+.vercel
+
+# Skills directories
+skill/
+skills/
+.kilocode/skills/
+
+# Plans directory
+plans/
+
+# Test files
+test/
+tests/
+*.test.js
+*.test.jsx
+*.spec.js
+*.spec.jsx
+
+# Debug files
+debug/
+*.debug.js
+*.debug.jsx
+
+# Agent directories
+.agents/
+.amazonq/
+.claude/
+.opencode/

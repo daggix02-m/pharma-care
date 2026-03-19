@@ -1,0 +1,141 @@
+      {/* ─── Auto-Approve Confirmation Dialog ──────────────────────────────── */}
+      <Dialog open={approveAllDialog.open} onOpenChange={(open) => !approveAllDialog.loading && setApproveAllDialog(p => ({ ...p, open }))}>
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden">
+          {approveAllDialog.progress.stage === 'confirm' ? (
+            // Confirmation State
+            <>
+              <DialogHeader className="pb-0 px-6 pt-6">
+                <DialogTitle className="text-2xl font-display">Approve Registration</DialogTitle>
+                <DialogDescription className="text-base text-slate-600 dark:text-slate-400">
+                  This will activate the pharmacy and manager account. The first branch will be created automatically when the manager logs in.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="px-6 pb-6 space-y-4">
+                <div className="space-y-3">
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
+                    <h4 className="font-semibold text-sm text-emerald-900 dark:text-emerald-300 mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Pharmacy to be Approved
+                    </h4>
+                    <div className="space-y-2 text-sm text-emerald-800 dark:text-emerald-400">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{approveAllDialog.pharmacy?.pharmacy_name || 'Unnamed Pharmacy'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 flex-shrink-0" />
+                        <span>{approveAllDialog.pharmacy?.location || 'Location not specified'}</span>
+                      </div>
+                    </div>
+                  </div>
+                
+                  <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-xl p-4">
+                    <h4 className="font-semibold text-sm text-teal-900 dark:text-teal-300 mb-3 flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Manager to be Activated
+                    </h4>
+                    <div className="space-y-2 text-sm text-teal-800 dark:text-teal-400">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{approveAllDialog.pharmacy?.full_name || approveAllDialog.pharmacy?.manager_name || 'Unknown Manager'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{approveAllDialog.pharmacy?.email || approveAllDialog.pharmacy?.manager_email || 'No email'}</span>
+                      </div>
+                    </div>
+                  </div>
+                
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                    <h4 className="font-semibold text-sm text-amber-900 dark:text-amber-300 mb-3 flex items-center gap-2">
+                      <Info className="w-4 h-4" />
+                      What Happens Next
+                    </h4>
+                    <ul className="space-y-1.5 text-sm text-amber-800 dark:text-amber-400">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <span>Manager can log in immediately after approval</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <span>First branch is auto-created on manager's first login</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <span>Manager receives welcome email with login credentials</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              
+              <DialogFooter className="px-6 pb-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setApproveAllDialog({ open: false, pharmacy: null, managerId: null, loading: false, progress: { stage: 'confirm', message: '', current: 0, total: 3 } })}
+                  className="rounded-xl h-10 font-semibold"
+                  disabled={approveAllDialog.loading}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmApproveAll}
+                  className="rounded-xl h-10 font-bold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-lg shadow-teal-600/30"
+                  disabled={approveAllDialog.loading}
+                >
+                  {approveAllDialog.loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Approve & Activate
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // Progress/Success/Error State
+            <div className="px-6 py-8 text-center space-y-4">
+              {approveAllDialog.progress.stage === 'error' ? (
+                // Error State
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center mx-auto">
+                    <XCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-display font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                      Approval Failed
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {approveAllDialog.progress.message || 'An error occurred during approval.'}
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => setApproveAllDialog({ open: false, pharmacy: null, managerId: null, loading: false, progress: { stage: 'confirm', message: '', current: 0, total: 3 } })}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    Close
+                  </Button>
+                </div>
+              ) : approveAllDialog.progress.stage === 'approving' ? (
+                // Progress State
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-teal-100 dark:bg-teal-900/30 rounded-2xl flex items-center justify-center mx-auto">
+                    <Loader2 className="w-8 h-8 text-teal-600 dark:text-teal-400 animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-display font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                      Processing Approval
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Please wait while we activate the pharmacy and manager account...
+                    </p>
+                  </div>
+                  <ApprovalProgress
+                    cu

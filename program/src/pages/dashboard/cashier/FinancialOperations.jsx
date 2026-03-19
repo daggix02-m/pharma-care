@@ -1,0 +1,480 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { cashierAPI } from '@/api';
+import { toast } from 'sonner';
+import {
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  Loader2,
+  ShoppingCart,
+  CreditCard,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
+
+export function FinancialOperations() {
+  const [dailySales, setDailySales] = useState(null);
+  const [salesSummary, setSalesSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('daily');
+
+  useEffect(() => {
+    fetchFinancialData();
+  }, [view]);
+
+  const fetchFinancialData = async () => {
+    try {
+      setLoading(true);
+      
+      const [dailyResponse, summaryResponse] = await Promise.all([
+        cashierService.getDailySales(),
+        cashierService.getSalesSummary(),
+      ]);
+
+      if (dailyResponse.success) {
+        setDailySales(dailyResponse.data || dailyResponse.daily_sales || {});
+      } else {
+        toast.error(dailyResponse.message || 'Failed to fetch daily sales');
+      }
+
+      if (summaryResponse.success) {
+        setSalesSummary(summaryResponse.data || summaryResponse.sales_summary || {});
+      } else {
+        toast.error(summaryResponse.message || 'Failed to fetch sales summary');
+      }
+    } catch (error) {
+      console.error('Error fetching financial data:', error);
+      toast.error('Failed to fetch financial data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-4 md:p-8">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Financial Operations</h2>
+        <p className="text-muted-foreground">
+          View sales reports and financial summaries
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          variant={view === 'daily' ? 'default' : 'outline'}
+          onClick={() => setView('daily')}
+        >
+          <Calendar className="h-4 w-4 mr-2" />
+          Daily Sales
+        </Button>
+        <Button
+          variant={view === 'summary' ? 'default' : 'outline'}
+          onClick={() => setView('summary')}
+        >
+          <TrendingUp className="h-4 w-4 mr-2" />
+          Sales Summary
+        </Button>
+      </div>
+
+      {view === 'daily' && dailySales && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ETB {(dailySales.total_sales || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {dailySales.sales_count || 0} transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Cash Payments</CardTitle>
+                <DollarSign className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  ETB {(dailySales.cash_payments || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {dailySales.cash_count || 0} cash transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Card Payments</CardTitle>
+                <CreditCard className="h-4 w-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  ETB {(dailySales.card_payments || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {dailySales.card_count || 0} card transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Other Payments</CardTitle>
+                <CreditCard className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">
+                  ETB {(dailySales.other_payments || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {dailySales.other_count || 0} other transactions
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily Sales Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Cash</span>
+                    <span className="font-medium">ETB {(dailySales.cash_payments || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{
+                        width: `${dailySales.total_sales > 0
+                          ? ((dailySales.cash_payments || 0) / dailySales.total_sales) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Card</span>
+                    <span className="font-medium">ETB {(dailySales.card_payments || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{
+                        width: `${dailySales.total_sales > 0
+                          ? ((dailySales.card_payments || 0) / dailySales.total_sales) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Mobile</span>
+                    <span className="font-medium">ETB {(dailySales.mobile_payments || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full"
+                      style={{
+                        width: `${dailySales.total_sales > 0
+                          ? ((dailySales.mobile_payments || 0) / dailySales.total_sales) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Bank Transfer</span>
+                    <span className="font-medium">ETB {(dailySales.bank_transfer_payments || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-orange-600 h-2 rounded-full"
+                      style={{
+                        width: `${dailySales.total_sales > 0
+                          ? ((dailySales.bank_transfer_payments || 0) / dailySales.total_sales) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Refunds & Returns</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Refunds</p>
+                  <p className="text-xl font-bold text-red-600">
+                    ETB {(dailySales.total_refunds || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Return Count</p>
+                  <p className="text-xl font-bold">
+                    {dailySales.return_count || 0}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {view === 'summary' && salesSummary && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ETB {(salesSummary.total_revenue || 0).toFixed(2)}
+                </div>
+                {salesSummary.revenue_change !== undefined && (
+                  <p className={`text-xs flex items-center ${salesSummary.revenue_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {salesSummary.revenue_change >= 0 ? (
+                      <ArrowUp className="h-3 w-3 mr-1" />
+                    ) : (
+                      <ArrowDown className="h-3 w-3 mr-1" />
+                    )}
+                    {Math.abs(salesSummary.revenue_change)}% from last period
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {salesSummary.total_orders || 0}
+                </div>
+                {salesSummary.orders_change !== undefined && (
+                  <p className={`text-xs flex items-center ${salesSummary.orders_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {salesSummary.orders_change >= 0 ? (
+                      <ArrowUp className="h-3 w-3 mr-1" />
+                    ) : (
+                      <ArrowDown className="h-3 w-3 mr-1" />
+                    )}
+                    {Math.abs(salesSummary.orders_change)}% from last period
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Average Order Value</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ETB {(salesSummary.average_order_value || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Per transaction
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Refunds</CardTitle>
+                <ArrowDown className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  ETB {(salesSummary.total_refunds || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {salesSummary.refund_count || 0} refunds processed
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Method Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Cash</span>
+                    <span className="font-medium">ETB {(salesSummary.cash_total || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{
+                        width: `${salesSummary.total_revenue > 0
+                          ? ((salesSummary.cash_total || 0) / salesSummary.total_revenue) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Card</span>
+                    <span className="font-medium">ETB {(salesSummary.card_total || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{
+                        width: `${salesSummary.total_revenue > 0
+                          ? ((salesSummary.card_total || 0) / salesSummary.total_revenue) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Mobile</span>
+                    <span className="font-medium">ETB {(salesSummary.mobile_total || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full"
+                      style={{
+                        width: `${salesSummary.total_revenue > 0
+                          ? ((salesSummary.mobile_total || 0) / salesSummary.total_revenue) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Bank Transfer</span>
+                    <span className="font-medium">ETB {(salesSummary.bank_transfer_total || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-orange-600 h-2 rounded-full"
+                      style={{
+                        width: `${salesSummary.total_revenue > 0
+                          ? ((salesSummary.bank_transfer_total || 0) / salesSummary.total_revenue) * 100
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Selling Categories</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {salesSummary.top_categories && salesSummary.top_categories.length > 0 ? (
+                <div className="space-y-3">
+                  {salesSummary.top_categories.map((category, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
+                          {index + 1}
+                        </span>
+                        <span className="font-medium">{category.category_name}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">ETB {category.total_sales?.toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">{category.item_count} items</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground">No category data available</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Period Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Start Date</p>
+                  <p className="font-medium">
+                    {salesSummary.period_start
+                      ? new Date(salesSummary.period_start).toLocaleDateString()
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">End Date</p>
+                  <p className="font-medium">
+                    {salesSummary.period_end
+                      ? new Date(salesSummary.period_end).toLocaleDateString()
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Net Revenue</p>
+                  <p className="font-medium text-green-600">
+                    ETB {(salesSummary.total_revenue - (salesSummary.total_refunds || 0)).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Refund Rate</p>
+                  <p className="font-medium">
+                    {salesSummary.total_revenue > 0
+                      ? ((salesSummary.total_refunds || 0) / salesSummary.total_revenue * 100).toFixed(2)
+                      : 0}%
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}

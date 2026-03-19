@@ -1,0 +1,509 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cashierAPI } from '@/api';
+import cashierService from '@/services/cashier.service';
+import { toast } from 'sonner';
+import { ChapaPaymentModal } from '@/components/ChapaPaymentModal';
+import {
+  Search,
+  Plus,
+  Trash2,
+  ShoppingCart,
+  Loader2,
+  DollarSign,
+  Percent,
+  CheckCircle,
+  User,
+  CreditCard,
+} from 'lucide-react';
+
+export function POSOperations() {
+  const [cart, setCart] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [medicines, setMedicines] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [customerName, setCustomerName] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [isChapaModalOpen, setIsChapaModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      searchMedicines();
+    }
+  }, [searchQuery]);
+
+  const searchMedicines = async () => {
+    if (!searchQuery.trim()) {
+      setMedicines([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await cashierService.searchMedicines(searchQuery);
+      
+      if (response.success) {
+        const medicinesList = response.data || response.medicines || [];
+        setMedicines(Array.isArray(medicinesList) ? medicinesList : []);
+      } else {
+        toast.error(response.message || 'Failed to search medicines');
+        setMedicines([]);
+      }
+    } catch (error) {
+      console.error('Error searching medicines:', error);
+      toast.error('Failed to search medicines');
+      setMedicines([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addToCart = async (medicine) => {
+    try {
+      setProcessing(true);
+      
+      const itemData = {
+        medicine_id: medicine.medicine_id,
+        quantity: 1,
+        unit_price: medicine.price,
+      };
+
+      const response = await cashierService.addPosItem(itemData);
+      
+      if (response.success) {
+        const existingItem = cart.find(item => item.medicine_id === medicine.medicine_id);
+        
+        if (existingItem) {
+          setCart(cart.map(item =>
+            item.medicine_id === medicine.medicine_id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          ));
+        } else {
+          setCart([...cart, {
+            medicine_id: medicine.medicine_id,
+            medicine_name: medicine.name,
+            quantity: 1,
+            unit_price: medicine.price,
+            stock: medicine.stock,
+          }]);
+        }
+        
+        toast.success(`${medicine.name} added to cart`);
+        setSearchQuery('');
+        setMedicines([]);
+      } else {
+        toast.error(response.message || 'Failed to add item to cart');
+      }
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      toast.error('Failed to add item to cart');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const updateQuantity = (medicineId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(medicineId);
+      return;
+    }
+    
+    setCart(cart.map(item =>
+      item.medicine_id === medicineId
+        ? { ...item, quantity: newQuantity }
+        : item
+    ));
+  };
+
+  const removeFromCart = (medicineId) => {
+    setCart(cart.filter(item => item.medicine_id !== medicineId));
+  };
+
+  const applyDiscount = async () => {
+    if (discountPercent < 0 || discountPercent > 100) {
+      toast.error('Discount must be between 0 and 100');
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      
+      const discountData = {
+        discount_percent: discountPercent,
+      };
+
+      const response = await cashierService.applyPosDiscount(discountData);
+      
+      if (response.success) {
+        toast.success('Discount applied successfully');
+      } else {
+        toast.error(response.message || 'Failed to apply discount');
+      }
+    } catch (error) {
+      console.error('Error applying discount:', error);
+      toast.error('Failed to apply discount');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const calculateTotals = () => {
+    const subtotal = cart.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+    const discountAmount = subtotal * (discountPercent / 100);
+    const total = subtotal - discountAmount;
+    
+    return { subtotal, discountAmount, total };
+  };
+
+  const { subtotal, discountAmount, total } = calculateTotals();
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+
+    if (paymentMethod === 'chapa') {
+      setIsChapaModalOpen(true);
+      return;
+    }
+
+    if (paymentMethod !== 'cash' && !referenceNumber.trim()) {
+      toast.error('Reference number is required for this payment method');
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      
+      const checkoutData = {
+        items: cart.map(item => ({
+          medicine_id: item.medicine_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        })),
+        customer_name: customerName || 'Walk-in',
+        payment_method: paymentMethod,
+        discount_percent: discountPercent,
+        reference_number: paymentMethod !== 'cash' ? referenceNumber : null,
+      };
+
+      const response = await cashierService.posCheckout(checkoutData);
+      
+      if (response.success) {
+        toast.success('Checkout completed successfully!');
+        setCart([]);
+        setCustomerName('');
+        setDiscountPercent(0);
+        setPaymentMethod('cash');
+        setReferenceNumber('');
+      } else {
+        toast.error(response.message || 'Failed to complete checkout');
+      }
+    } catch (error) {
+      console.error('Error during checkout:', error);
+      toast.error('Failed to complete checkout');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleChapaPaymentSuccess = async (paymentData) => {
+    try {
+      setProcessing(true);
+      
+      const checkoutData = {
+        items: cart.map(item => ({
+          medicine_id: item.medicine_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        })),
+        customer_name: customerName || 'Walk-in',
+        payment_method: 'chapa',
+        discount_percent: discountPercent,
+        chapa_transaction_id: paymentData.transactionId,
+        chapa_payment_method: paymentData.paymentMethod,
+        chapa_reference: paymentData.referenceNumber,
+      };
+
+      const response = await cashierService.posCheckout(checkoutData);
+      
+      if (response.success) {
+        toast.success('Checkout completed successfully!');
+        setIsChapaModalOpen(false);
+        setCart([]);
+        setCustomerName('');
+        setDiscountPercent(0);
+        setPaymentMethod('cash');
+        setReferenceNumber('');
+      } else {
+        toast.error(response.message || 'Failed to complete checkout');
+      }
+    } catch (error) {
+      console.error('Error during checkout:', error);
+      toast.error('Failed to complete checkout');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const getPaymentMethodIcon = (method) => {
+    const icons = {
+      cash: DollarSign,
+      card: CreditCard,
+      mobile: CreditCard,
+      bank_transfer: CreditCard,
+    };
+    return icons[method] || DollarSign;
+  };
+
+  return (
+    <div className="space-y-6 p-4 md:p-8">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">POS Operations</h2>
+        <p className="text-muted-foreground">
+          Process sales and manage point of sale operations
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Search className="h-5 w-5 mr-2" />
+                Search Medicines
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Input
+                  placeholder="Search by name, barcode, or manufacturer..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              {loading && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+              
+              {medicines.length > 0 && (
+                <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+                  {medicines.map((medicine) => (
+                    <div
+                      key={medicine.medicine_id}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                      onClick={() => addToCart(medicine)}
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium">{medicine.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Stock: {medicine.stock} | Price: ETB {medicine.price?.toFixed(2)}
+                        </p>
+                      </div>
+                      <Button size="sm">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <ShoppingCart className="h-5 w-5 mr-2" />
+                Cart
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  ({cart.length} items)
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {cart.length === 0 ? (
+                <div className="text-center py-12">
+                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Cart is empty</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {cart.map((item) => (
+                    <div key={item.medicine_id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium">{item.medicine_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          ETB {item.unit_price?.toFixed(2)} each
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateQuantity(item.medicine_id, item.quantity - 1)}
+                        >
+                          -
+                        </Button>
+                        <span className="w-8 text-center">{item.quantity}</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateQuantity(item.medicine_id, item.quantity + 1)}
+                        >
+                          +
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeFromCart(item.medicine_id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Info</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Customer Name</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Enter customer name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div>
+                 <label className="block text-sm font-medium mb-2">Payment Method</label>
+                 <div className="grid grid-cols-2 gap-2">
+                   {['cash', 'card', 'mobile', 'bank_transfer', 'chapa'].map((method) => (
+                     <button
+                       key={method}
+                       type="button"
+                       onClick={() => setPaymentMethod(method)}
+                       className={`px-4 py-3 rounded-lg border-2 transition-colors ${
+                         paymentMethod === method
+                           ? 'border-primary bg-primary text-primary-foreground'
+                           : 'border-input bg-background hover:bg-muted'
+                       }`}
+                     >
+                       <div className="flex items-center justify-center gap-2">
+                         {React.createElement(getPaymentMethodIcon(method), { className: 'h-4 w-4' })}
+                         <span className="capitalize">{method.replace('_', ' ')}</span>
+                       </div>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+
+               {paymentMethod !== 'cash' && paymentMethod !== 'chapa' && (
+                 <div>
+                   <label className="block text-sm font-medium mb-2">Reference Number</label>
+                   <Input
+                     placeholder="Enter reference number"
+                     value={referenceNumber}
+                     onChange={(e) => setReferenceNumber(e.target.value)}
+                   />
+                 </div>
+               )}
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Discount (%)</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Percent className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discountPercent}
+                      onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button variant="outline" onClick={applyDiscount} disabled={processing}>
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium">ETB {subtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Discount</span>
+                  <span className="font-medium">-ETB {discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold pt-3 border-t">
+                <span>Total</span>
+                <span className="text-primary">ETB {total.toFixed(2)}</span>
+              </div>
+               <Button
+                 className="w-full"
+                 size="lg"
+                 onClick={handleCheckout}
+                 disabled={cart.length === 0 || processing}
+               >
+                 {processing ? (
+                   <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                 ) : (
+                   <CheckCircle className="h-5 w-5 mr-2" />
+                 )}
+                 Complete Checkout
+                </Button>
+               </CardContent>
+             </Card>
+         </div>
+       </div>
+       
+       <ChapaPaymentModal
+         open={isChapaModalOpen}
+         onClose={() => setIsChapaModalOpen(false)}
+         amount={total}
+         onSuccess={handleChapaPaymentSuccess}
+       />
+    </div>
+  );
+}
