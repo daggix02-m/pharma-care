@@ -4,8 +4,8 @@ import App from './App.jsx';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import './index.css';
 
-import { ClerkProvider } from '@clerk/clerk-react';
-import { ConvexProvider } from 'convex/react';
+import { ClerkProvider, useAuth } from '@clerk/clerk-react';
+import { ConvexProviderWithClerk } from 'convex/react-clerk';
 import { ConvexReactClient } from 'convex/react';
 
 // Diagnostic logging for Fast Refresh
@@ -23,9 +23,9 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-        <ConvexProvider client={convex}>
+        <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <App />
-        </ConvexProvider>
+        </ConvexProviderWithClerk>
       </ClerkProvider>
     </ErrorBoundary>
   </React.StrictMode>

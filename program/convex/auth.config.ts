@@ -1,5 +1,8 @@
-// Clerk-Convex integration removed - using separate auth providers
-// ConvexProvider uses its own auth mechanism independent of Clerk
 export default {
-  providers: [],
+  providers: [
+    {
+      domain: "https://enduring-owl-795.convex.cloud",
+      applicationID: "app_3B2WJzSFBLv8fCFdn4gJeCJD6vz",
+    },
+  ],
 };
