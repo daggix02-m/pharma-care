@@ -1,7 +1,7 @@
 export default {
   providers: [
     {
-      domain: "https://enduring-owl-795.convex.cloud",
+      domain: "https://square-polecat-7.clerk.accounts.dev",
       applicationID: "convex",
     },
   ],
