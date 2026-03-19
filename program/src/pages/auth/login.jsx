@@ -22,12 +22,15 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [firstFactorResponse, setFirstFactorResponse] = useState(null);
   const navigate = useNavigate();
   const { login: authLogin, isAuthenticated, user } = useAppAuth();
-  
+
   const { isLoaded, signIn, setActive } = useSignIn();
   const storeUser = useMutation(api.users.mutations.storeUser || (() => {})); // Sync Auth to Database
-  
+
   const containerRef = useRef(null);
   const formRef = useRef(null);
 
@@ -71,6 +74,56 @@ export function LoginPage() {
     if (!isLoaded) return;
     setError('');
 
+    // If 2FA is required, handle it
+    if (requiresTwoFactor) {
+      if (!twoFactorCode) {
+        setError('Please enter your 2FA code.');
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const signInAttempt = await signIn.attemptSecondFactor({
+          strategy: 'code',
+          code: twoFactorCode,
+        });
+
+        if (signInAttempt.status === 'complete') {
+          await setActive({ session: signInAttempt.createdSessionId });
+
+          const userData = await storeUser();
+          let userRole = userData?.role || 'user';
+
+          if (userData?.status === 'pending') {
+            navigate('/auth/pending-approval');
+            return;
+          }
+
+          authLogin({
+            id: userData?._id,
+            email: userData?.email || email,
+            full_name: userData?.full_name || '',
+            role: userRole,
+            pharmacy_name: userData?.pharmacy?.name,
+          });
+
+          if (userRole === 'admin') navigate('/admin/overview');
+          else if (userRole === 'manager') navigate('/manager/overview');
+          else if (userRole === 'pharmacist') navigate('/pharmacist/overview');
+          else if (userRole === 'cashier') navigate('/cashier/overview');
+          else navigate('/manager/overview');
+        } else {
+          setError('Invalid 2FA code. Please try again.');
+        }
+      } catch (err) {
+        setError(err.errors?.[0]?.longMessage || '2FA verification failed.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Regular login flow (first factor)
     if (!validateEmail(email)) {
       setError('Please enter a valid email address.');
       return;
@@ -92,11 +145,9 @@ export function LoginPage() {
       if (signInAttempt.status === 'complete') {
         await setActive({ session: signInAttempt.createdSessionId });
 
-        // Sync and get user data from Convex DB
         const userData = await storeUser();
-        
-        let userRole = userData?.role || signInAttempt.userData?.unsafeMetadata?.role || 'user';
-        
+        let userRole = userData?.role || 'user';
+
         if (userData?.status === 'pending') {
           navigate('/auth/pending-approval');
           return;
@@ -116,9 +167,11 @@ export function LoginPage() {
         else if (userRole === 'cashier') navigate('/cashier/overview');
         else navigate('/manager/overview');
 
+      } else if (signInAttempt.status === 'needs_second_factor') {
+        // Show 2FA input form
+        setRequiresTwoFactor(true);
+        setFirstFactorResponse(signInAttempt);
       } else {
-        // Handle next steps like MFA
-        console.error('Sign-in requires further steps:', signInAttempt);
         setError('Additional authentication steps required.');
       }
     } catch (err) {
@@ -168,77 +221,135 @@ export function LoginPage() {
                 <img src="/logo.png" alt="PharmaCare Logo" className="h-12 w-12 rounded-xl shadow-lg shadow-blue-500/20" />
                 <span className="font-bold text-2xl text-gray-900 tracking-tight">PharmaCare</span>
               </Link>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome Back</h1>
-              <p className="text-gray-500 font-light">Enter your credentials to access your portal</p>
+              {requiresTwoFactor ? (
+                <>
+                  <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Two-Factor Authentication</h1>
+                  <p className="text-gray-500 font-light">Enter the 6-digit code from your authenticator app</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome Back</h1>
+                  <p className="text-gray-500 font-light">Enter your credentials to access your portal</p>
+                </>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <div className="relative">
-                  <Input
-                    placeholder="Email address"
-                    className={cn(
-                      "h-12 ps-11 bg-white border-blue-50 focus:border-blue-400 focus:ring-blue-400/20 transition-all rounded-xl",
-                      error && (email === '') ? "border-red-500" : ""
-                    )}
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                  <div className="absolute inset-y-0 start-0 flex items-center ps-4 text-gray-400">
-                    <AtSignIcon className="size-4" />
+              {requiresTwoFactor ? (
+                // 2FA Code Input
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Input
+                        placeholder="Enter 6-digit code"
+                        className="h-12 text-center text-2xl tracking-widest bg-white border-blue-50 focus:border-blue-400 focus:ring-blue-400/20 transition-all rounded-xl"
+                        type="text"
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        maxLength={6}
+                      />
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <div className="relative">
-                  <Input
-                    placeholder="Password"
-                    className={cn(
-                      "h-12 ps-11 bg-white border-blue-50 focus:border-blue-400 focus:ring-blue-400/20 transition-all rounded-xl",
-                      error && (password === '') ? "border-red-500" : ""
-                    )}
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <div className="absolute inset-y-0 start-0 flex items-center ps-4 text-gray-400">
-                    <LockIcon className="size-4" />
-                  </div>
+                  {error && (
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm flex items-center gap-2">
+                      <div className="h-1 w-1 rounded-full bg-red-600" />
+                      {error}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98]"
+                    disabled={isLoading || twoFactorCode.length !== 6}
+                  >
+                    {isLoading ? 'Verifying...' : 'Verify'}
+                  </Button>
+
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors"
+                    onClick={() => {
+                      setRequiresTwoFactor(false);
+                      setTwoFactorCode('');
+                      setFirstFactorResponse(null);
+                      setError('');
+                    }}
+                    className="w-full text-sm text-gray-600 hover:text-blue-600 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    ← Back to email/password login
                   </button>
                 </div>
-              </div>
+              ) : (
+                // Email/Password Login
+                <>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Input
+                        placeholder="Email address"
+                        className={cn(
+                          "h-12 ps-11 bg-white border-blue-50 focus:border-blue-400 focus:ring-blue-400/20 transition-all rounded-xl",
+                          error && (email === '') ? "border-red-500" : ""
+                        )}
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                      <div className="absolute inset-y-0 start-0 flex items-center ps-4 text-gray-400">
+                        <AtSignIcon className="size-4" />
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-end">
-                <Link
-                  to="/auth/forgot-password"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline underline-offset-4"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Input
+                        placeholder="Password"
+                        className={cn(
+                          "h-12 ps-11 bg-white border-blue-50 focus:border-blue-400 focus:ring-blue-400/20 transition-all rounded-xl",
+                          error && (password === '') ? "border-red-500" : ""
+                        )}
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <div className="absolute inset-y-0 start-0 flex items-center ps-4 text-gray-400">
+                        <LockIcon className="size-4" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
+                  </div>
 
-              {error && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm flex items-center gap-2">
-                  <div className="h-1 w-1 rounded-full bg-red-600" />
-                  {error}
-                </div>
+                  <div className="flex items-center justify-end">
+                    <Link
+                      to="/auth/forgot-password"
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline underline-offset-4"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+
+                  {error && (
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm flex items-center gap-2">
+                      <div className="h-1 w-1 rounded-full bg-red-600" />
+                      {error}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98]"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Signing In...' : 'Sign In'}
+                  </Button>
+                </>
               )}
-
-              <Button 
-                type="submit" 
-                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98]" 
-                disabled={isLoading}
-              >
-                {isLoading ? 'Signing In...' : 'Sign In'}
-              </Button>
             </form>
 
             <div className="text-center space-y-4">
