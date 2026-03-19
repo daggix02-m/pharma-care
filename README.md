@@ -48,7 +48,7 @@ In the `program` directory, you can run:
 
 ## Environment Variables
 
-Create a `.env` file in the `program` directory. See `.env.production.example` for all required variables:
+Create a `.env` file in the `program` directory with the following variables:
 
 ```bash
 # API Configuration
