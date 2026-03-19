@@ -1,6 +1,6 @@
 {
-  "framework": "vite",
-  "buildCommand": "cd program && npm run build",
+  "framework": null,
+  "buildCommand": "cd program && npm install && npm run build",
   "outputDirectory": "program/dist",
   "installCommand": "cd program && npm install",
   "rewrites": [
@@ -44,6 +44,5 @@
         }
       ]
     }
-  ],
-
+  ]
 }

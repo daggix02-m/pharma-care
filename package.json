@@ -1,0 +1,9 @@
+{
+  "name": "pharmacare-deploy",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd program && npm run build",
+    "start": "cd program && npm run start"
+  }
+}
