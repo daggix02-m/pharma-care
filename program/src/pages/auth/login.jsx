@@ -15,6 +15,7 @@ import gsap from 'gsap';
 import logger from '@/utils/logger';
 import ElegantShape from '../landing/ElegantShape';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -84,7 +85,7 @@ export function LoginPage() {
       setIsLoading(true);
       try {
         const signInAttempt = await signIn.attemptSecondFactor({
-          strategy: 'code',
+          strategy: 'email_code',
           code: twoFactorCode,
         });
 
@@ -224,7 +225,7 @@ export function LoginPage() {
               {requiresTwoFactor ? (
                 <>
                   <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Two-Factor Authentication</h1>
-                  <p className="text-gray-500 font-light">Enter the 6-digit code from your authenticator app</p>
+                  <p className="text-gray-500 font-light">Enter the 6-digit code sent to your email</p>
                 </>
               ) : (
                 <>
@@ -277,6 +278,21 @@ export function LoginPage() {
                     className="w-full text-sm text-gray-600 hover:text-blue-600 transition-colors"
                   >
                     ← Back to email/password login
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await signIn.prepareSecondFactor({ strategy: 'email_code' });
+                        toast.success('A new code has been sent to your email');
+                      } catch (err) {
+                        toast.error('Failed to resend code');
+                      }
+                    }}
+                    className="w-full text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    Resend verification code
                   </button>
                 </div>
               ) : (

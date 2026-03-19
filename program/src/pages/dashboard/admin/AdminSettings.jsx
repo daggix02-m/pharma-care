@@ -284,8 +284,9 @@ export function AdminSettings() {
                       <p className="text-[13px] font-semibold text-foreground">External Security Provider</p>
                       <p className="text-[12px] text-muted-foreground mt-1">
                         We use Clerk for industry-standard authentication and security. 
-                        Password changes and two-factor authentication can be managed through 
-                        your account settings or the sign-in assistance flow.
+                        When two-factor authentication is enabled, a verification code is sent to your email 
+                        during login for additional protection. Password changes are managed through your 
+                        account settings or sign-in assistance flow.
                       </p>
                     </div>
                   </div>
