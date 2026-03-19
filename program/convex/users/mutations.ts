@@ -10,6 +10,9 @@ export const storeUser = mutation({
       throw new Error("Called storeUser without authentication present");
     }
 
+    // Get admin email from environment variable
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@pharmacare.com";
+
     // Check if we've already stored this identity before.
     const user = await ctx.db
       .query("users")
@@ -20,10 +23,10 @@ export const storeUser = mutation({
 
     if (user !== null) {
       // If we've seen this identity before but the name changed, patch it.
-      if (user.full_name !== identity.name || (identity.email === "admin@pharmacare.com" && user.role !== "admin")) {
+      if (user.full_name !== identity.name || (identity.email === ADMIN_EMAIL && user.role !== "admin")) {
         await ctx.db.patch(user._id, { 
           full_name: identity.name || "",
-          role: identity.email === "admin@pharmacare.com" ? "admin" : user.role
+          role: identity.email === ADMIN_EMAIL ? "admin" : user.role
         });
       }
 
@@ -60,7 +63,7 @@ export const storeUser = mutation({
     }
 
     // Designated Platform Admin
-    const isAdminEmail = identity.email === "admin@pharmacare.com";
+    const isAdminEmail = identity.email === ADMIN_EMAIL;
 
     // If it's a completely new user, create it
     const newUserId = await ctx.db.insert("users", {

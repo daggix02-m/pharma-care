@@ -62,6 +62,28 @@ VITE_APP_VERSION=1.0.0
 VITE_ENABLE_DEBUG=false
 VITE_ENABLE_MOCK_DATA=false
 
+# Admin Email (Convex environment variable)
+ADMIN_EMAIL=admin@pharmacare.com
+
+# Backend Services
+VITE_CONVEX_URL=https://enduring-owl-795.convex.cloud
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZXYk
+```
+
+**Note:** `ADMIN_EMAIL` is a Convex environment variable and must be added in the Convex dashboard, not in your local `.env` file.
+
+```bash
+# API Configuration
+VITE_API_BASE_URL=https://pharmacare-api.onrender.com/api
+
+# Application Settings
+VITE_APP_NAME=PharmaCare
+VITE_APP_VERSION=1.0.0
+
+# Feature Flags
+VITE_ENABLE_DEBUG=false
+VITE_ENABLE_MOCK_DATA=false
+
 # Backend Services
 VITE_CONVEX_URL=https://enduring-owl-795.convex.cloud
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZXYk
@@ -134,7 +156,14 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
    - Install and authorize
    - Select your Convex project: `enduring-owl-795`
 
-6. **Deploy**
+6. **Configure Convex Environment Variables**
+   - Go to your [Convex Dashboard](https://dashboard.convex.dev)
+   - Select your project: `enduring-owl-795`
+   - Go to Settings → Environment Variables
+   - Add: `ADMIN_EMAIL` with your desired admin email (e.g., `admin@pharmacare.com`)
+   - Save and deploy changes
+
+7. **Deploy**
    - Click "Deploy" button
    - Wait for build to complete
    - Get your Vercel URL
@@ -214,6 +243,34 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
 - **ESLint**: Code linting
 - **Prettier**: Code formatting
 - **Vitest**: Testing framework
+
+## Admin Account Setup
+
+The application automatically assigns admin role to users with the email specified in the `ADMIN_EMAIL` environment variable.
+
+### Setting Up Admin Account
+
+1. **Configure Admin Email**
+   - Set `ADMIN_EMAIL` in Convex Dashboard (see deployment steps above)
+   - Default fallback: `admin@pharmacare.com`
+
+2. **Create Admin User**
+   - **Option A**: Sign up through the app with the admin email
+   - **Option B**: Create user in Clerk Dashboard with the admin email
+
+3. **Automatic Role Assignment**
+   - System automatically grants admin role to the admin email
+   - No additional configuration needed
+
+### Changing Admin Email
+
+To change the admin email:
+
+1. Go to [Convex Dashboard](https://dashboard.convex.dev)
+2. Select your project → Settings → Environment Variables
+3. Update `ADMIN_EMAIL` to the new email address
+4. Save changes
+5. New user with that email will receive admin role on signup
 
 ## Role-Based Access
 
