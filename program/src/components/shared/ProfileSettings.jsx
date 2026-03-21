@@ -6,10 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Eye, EyeOff, Camera, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getProfile, updateProfile, changePassword, uploadProfilePicture, deleteProfilePicture } from '@/api/auth.api';
-import { ENV_CONFIG } from '@/api/apiClient';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
-export const ProfileSettings = ({ userRole = 'User' }) => {
+export const ProfileSettings = ({ userRole = 'User', user }) => {
   const [profileData, setProfileData] = useState({
     name: '',
     email: '',
@@ -33,27 +33,34 @@ export const ProfileSettings = ({ userRole = 'User' }) => {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  React.useEffect(() => {
-    fetchProfile();
-  }, []);
+  // Convex mutations
+  const updateProfileMutation = useMutation(api.users.mutations.updateProfile);
+  const changePasswordMutation = useMutation(api.auth.mutations.changePassword);
+  const uploadProfilePictureMutation = useMutation(api.auth.mutations.uploadProfilePicture);
+  const deleteProfilePictureMutation = useMutation(api.auth.mutations.deleteProfilePicture);
 
-  const fetchProfile = async () => {
-    try {
-      const response = await getProfile();
-      if (response.success) {
-        const user = response?.data || response?.user || {};
-        setProfileData({
-          name: user.name || user.full_name || '',
-          email: user.email || '',
-          phone: user.phone || user.phone_number || '',
-          profile_picture: user.profile_picture || null,
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      toast.error('Failed to load profile data');
+  // Initialize profile data from user prop
+  React.useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.full_name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        profile_picture: user.profile_picture || null,
+      });
     }
-  };
+  }, [user]);
+
+  React.useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.full_name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        profile_picture: user.profile_picture || null,
+      });
+    }
+  }, [user]);
 
   const handlePhotoClick = () => {
     if (fileInputRef.current) {
@@ -82,17 +89,18 @@ export const ProfileSettings = ({ userRole = 'User' }) => {
     setIsUploadingPhoto(true);
 
     try {
-      const formData = new FormData();
-      formData.append('profile_picture', file);
-
-      const response = await uploadProfilePicture(formData);
-      if (response.success) {
-        toast.success('Profile picture updated successfully!');
-        // Refresh profile data to get the new picture URL
-        fetchProfile();
-      } else {
-        toast.error(response.message || 'Failed to update profile picture');
-      }
+      // Convert file to base64 for storage
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target.result;
+        const response = await uploadProfilePictureMutation({ fileData: base64 });
+        if (response.message && response.message.includes('Clerk')) {
+          toast.success('Profile pictures are managed by Clerk. Use your Clerk account settings.');
+        } else {
+          toast.success('Profile picture updated successfully!');
+        }
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       toast.error('Failed to upload profile picture');
@@ -115,12 +123,13 @@ export const ProfileSettings = ({ userRole = 'User' }) => {
     setIsDeletingPhoto(true);
 
     try {
-      const response = await deleteProfilePicture();
-      if (response.success) {
-        toast.success('Profile picture deleted successfully!');
+      const response = await deleteProfilePictureMutation();
+      if (response.message && response.message.includes('Clerk')) {
+        toast.success('Profile pictures are managed by Clerk. Use your Clerk account settings to delete.');
         setProfileData(prev => ({ ...prev, profile_picture: null }));
       } else {
-        toast.error(response.message || 'Failed to delete profile picture');
+        toast.success('Profile picture deleted successfully!');
+        setProfileData(prev => ({ ...prev, profile_picture: null }));
       }
     } catch (error) {
       console.error('Error deleting profile picture:', error);
@@ -145,7 +154,7 @@ export const ProfileSettings = ({ userRole = 'User' }) => {
     setIsUpdatingProfile(true);
 
     try {
-      const response = await updateProfile(profileData);
+      const response = await updateProfileMutation({ full_name: profileData.name });
       if (response.success) {
         toast.success('Profile updated successfully!');
       } else {
@@ -175,9 +184,12 @@ export const ProfileSettings = ({ userRole = 'User' }) => {
     setIsChangingPassword(true);
 
     try {
-      const response = await changePassword(passwordData.currentPassword, passwordData.newPassword);
-      if (response.success) {
-        toast.success('Password changed successfully!');
+      const response = await changePasswordMutation({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+      if (response.success || response.message) {
+        toast.success('Password management is handled by Clerk. Use your account settings to change password.');
         setPasswordData({
           currentPassword: '',
           newPassword: '',
@@ -207,7 +219,7 @@ export const ProfileSettings = ({ userRole = 'User' }) => {
               <div className='relative'>
                 <Avatar className='h-24 w-24'>
                   {profileData.profile_picture ? (
-                    <AvatarImage src={profileData.profile_picture.startsWith('http') ? profileData.profile_picture : `${ENV_CONFIG.API_BASE_URL.replace('/api', '')}${profileData.profile_picture}`} alt={profileData.name} />
+                    <AvatarImage src={profileData.profile_picture.startsWith('http') ? profileData.profile_picture : profileData.profile_picture} alt={profileData.name} />
                   ) : null}
                   <AvatarFallback className='bg-primary/10 text-primary text-2xl'>
                     <User className='h-12 w-12' />

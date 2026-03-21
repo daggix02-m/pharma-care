@@ -1,15 +1,15 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { cashierAPI } from '@/api';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  DollarSign, 
-  ShoppingCart, 
-  Clock, 
+import {
+  BarChart3,
+  TrendingUp,
+  DollarSign,
+  ShoppingCart,
+  Clock,
   Loader2,
   FileText,
   ArrowUpRight,
@@ -19,15 +19,9 @@ import {
 } from 'lucide-react';
 
 export function ShiftSummary() {
-  const { data: summary, isLoading } = useQuery({
-    queryKey: ['shift-summary'],
-    queryFn: async () => {
-      const res = await cashierAPI.getShiftSummary();
-      return res?.data || res || {};
-    },
-  });
+  const summary = useQuery(api.cashier.queries.getShiftSummary);
 
-  if (isLoading) {
+  const isLoading = summary === undefined;
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />

@@ -17,11 +17,14 @@ import {
   RotateCcw,
   Activity
 } from 'lucide-react';
-import { cashierAPI } from '@/api';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 
 export function CashierOverview() {
   const navigate = useNavigate();
+  const dashboardStats = useQuery(api.cashier.queries.getDashboardStats);
+
   const [metrics, setMetrics] = useState({
     todaySales: 0,
     totalPayments: 0,
@@ -29,36 +32,23 @@ export function CashierOverview() {
     avgTransactionValue: 0,
     pendingPayments: 0,
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+
+  const loading = dashboardStats === undefined;
+  const error = null;
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await cashierAPI.dashboard();
-
-        if (response.success) {
-          const data = response.data || response;
-          setMetrics({
-            todaySales: data.todaySales || 0,
-            totalPayments: data.totalPayments || 0,
-            totalReturns: data.totalReturns || 0,
-            avgTransactionValue: data.avgTransactionValue || 0,
-            pendingPayments: data.pendingPayments || 0,
-          });
-        }
-      } catch (err) {
-        console.error('Error fetching cashier dashboard data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, []);
+    if (dashboardStats) {
+      setMetrics({
+        todaySales: dashboardStats.totalDailySales || 0,
+        totalPayments: dashboardStats.totalDailySales || 0,
+        totalReturns: 0,
+        avgTransactionValue: dashboardStats.totalDailySales > 0
+          ? Math.round(dashboardStats.revenueToday / dashboardStats.totalDailySales)
+          : 0,
+        pendingPayments: 0,
+      });
+    }
+  }, [dashboardStats]);
 
   const metricCards = [
     {
