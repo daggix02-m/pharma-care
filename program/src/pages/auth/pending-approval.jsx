@@ -5,7 +5,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import FloatingPaths from '@/components/shared/FloatingPaths';
 import { ClockIcon, CheckCircleIcon, Loader2Icon, WifiOffIcon } from 'lucide-react';
-import { checkAccountStatus } from '@/api/auth.api';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { toast } from 'sonner';
 
 import ElegantShape from '../landing/ElegantShape';
@@ -26,17 +27,14 @@ export function PendingApprovalPage() {
   const intervalRef = useRef(null);
   const mountedRef = useRef(true);
 
+  // Use Convex to check account status
+  const accountStatus = useQuery(api.auth.queries.checkAccountStatus, pendingEmail ? { email: pendingEmail } : "skip");
+
   const pollStatus = useCallback(async () => {
     if (!pendingEmail || !mountedRef.current) return;
 
     try {
-      const result = await checkAccountStatus(pendingEmail);
-      if (!mountedRef.current) return;
-
-      setPollError(false);
-      setLastChecked(new Date());
-
-      if (result?.is_active === true) {
+      if (accountStatus?.status === 'active') {
         setApproved(true);
         setPolling(false);
         if (intervalRef.current) {
@@ -58,7 +56,7 @@ export function PendingApprovalPage() {
       setPollError(true);
       console.error('Account status check failed:', error);
     }
-  }, [pendingEmail, navigate]);
+  }, [pendingEmail, navigate, accountStatus]);
 
   useEffect(() => {
     mountedRef.current = true;

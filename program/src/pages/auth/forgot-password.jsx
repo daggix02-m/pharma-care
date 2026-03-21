@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FloatingPaths from '@/components/shared/FloatingPaths';
 import { ChevronLeftIcon, AtSignIcon, AlertCircle, CheckCircle2, Info } from 'lucide-react';
-import { forgotPassword } from '@/api/auth.api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -57,47 +56,13 @@ export function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await forgotPassword(email);
-
-      if (
-        response.message &&
-        (response.message.includes('503') ||
-          response.message.toLowerCase().includes('service unavailable') ||
-          response.message.toLowerCase().includes('email service') ||
-          response.message.toLowerCase().includes('smtp'))
-      ) {
-        setError(
-          'Email service is not configured. Please contact your administrator to reset your password.'
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      if (response.verificationCode || response.code || response.verification_code) {
-        const code = response.verificationCode || response.code || response.verification_code;
-        setVerificationCode(code);
-        setIsDevelopmentMode(true);
-        setSuccess(`Password reset code generated (Development Mode)`);
-        setEmail('');
-      } else if (response.success) {
-        setSuccess('Password reset link has been sent to your email address.');
-        setEmail('');
-      } else {
-        setError(response.message || 'Failed to send reset link. Please try again.');
-      }
+      // Password reset is handled by Clerk
+      // Redirect to Clerk's password reset flow
+      // For now, show a message informing the user
+      setSuccess('Password reset is handled by Clerk. Please use the "Forgot Password" link on the login page.');
+      setEmail('');
     } catch (err) {
-      if (
-        err.message &&
-        (err.message.includes('503') ||
-          err.message.toLowerCase().includes('service unavailable') ||
-          err.message.toLowerCase().includes('email service'))
-      ) {
-        setError(
-          'Email service is not configured. Please contact your administrator to reset your password.'
-        );
-      } else {
-        setError(err.message || 'An unexpected error occurred. Please try again.');
-      }
+      setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

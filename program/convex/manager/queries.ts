@@ -313,14 +313,14 @@ export const getBranchMedicineStats = query({
     handler: async (ctx: any, args: any) => {
       const identity = await ctx.auth.getUserIdentity();
       if (!identity) throw new Error("Unauthorized");
-  
+
       const manager = await ctx.db
          .query("users")
          .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
          .unique();
-  
+
       if (!manager || manager.role !== "manager") {
-           throw new Error("Unauthorized: Manager only");
+            throw new Error("Unauthorized: Manager only");
       }
 
       // Verify: branch belongs to this manager's pharmacy
@@ -328,12 +328,12 @@ export const getBranchMedicineStats = query({
       if (!branch || branch.pharmacyId !== manager.pharmacyId) {
         throw new Error("Unauthorized: Branch does not belong to your pharmacy");
       }
-      
+
       const medicines = await ctx.db
          .query("medicines")
          .withIndex("by_branch", (q: any) => q.eq("branchId", args.branchId))
          .collect();
-      
+
       return {
         totalMedicines: medicines.length,
         totalStock: medicines.reduce((acc: number, m: any) => acc + m.stock, 0),
@@ -344,4 +344,403 @@ export const getBranchMedicineStats = query({
         }, {}),
       };
     },
+});
+
+export const searchMedicines = query({
+  args: { query: v.string() },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    if (!args.query.trim()) return [];
+
+    const branches = await ctx.db
+       .query("branches")
+       .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+       .collect();
+    const branchIds = branches.map((b: any) => b._id);
+
+    const medicines = await ctx.db.query("medicines").collect();
+    const pharmacyMedicines = medicines.filter((m: any) => branchIds.includes(m.branchId));
+
+    return pharmacyMedicines.filter((m: any) =>
+      m.name?.toLowerCase().includes(args.query.toLowerCase()) ||
+      m.category?.toLowerCase().includes(args.query.toLowerCase()) ||
+      m.manufacturer?.toLowerCase().includes(args.query.toLowerCase())
+    );
+  },
+});
+
+export const getMedicinesByCategory = query({
+  args: { category: v.string() },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const branches = await ctx.db
+       .query("branches")
+       .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+       .collect();
+    const branchIds = branches.map((b: any) => b._id);
+
+    const medicines = await ctx.db.query("medicines").collect();
+    const pharmacyMedicines = medicines.filter((m: any) =>
+      branchIds.includes(m.branchId) &&
+      m.category?.toLowerCase() === args.category.toLowerCase()
+    );
+
+    return pharmacyMedicines;
+  },
+});
+
+export const getAuditTrail = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    let logsQuery = ctx.db
+       .query("audit_logs")
+       .filter((q: any) => q.eq(q.field("userId"), manager._id))
+       .order("desc");
+
+    if (args.limit) {
+      logsQuery = logsQuery.take(args.limit);
+    }
+
+    const logs = await logsQuery.collect();
+
+    return logs;
+  },
+});
+
+export const getReportsSales = query({
+  args: { period: v.optional(v.string()) },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const branches = await ctx.db
+       .query("branches")
+       .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+       .collect();
+    const branchIds = branches.map((b: any) => b._id);
+
+    let startDate = new Date();
+    const period = args.period || "7days";
+
+    switch (period) {
+      case "today":
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case "7days":
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case "30days":
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      case "90days":
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+      default:
+        startDate.setDate(startDate.getDate() - 7);
+    }
+
+    const sales = await ctx.db.query("sales").collect();
+    const pharmacySales = sales.filter((s: any) =>
+      branchIds.includes(s.branchId) && s._creationTime >= startDate.getTime()
+    );
+
+    return {
+      period,
+      totalSales: pharmacySales.length,
+      totalRevenue: pharmacySales.reduce((sum: number, s: any) => sum + s.totalAmount, 0),
+      salesByBranch: await Promise.all(branches.map(async (branch: any) => {
+        const branchSales = pharmacySales.filter((s: any) => s.branchId === branch._id);
+        return {
+          branchId: branch._id,
+          branchName: branch.name,
+          sales: branchSales.length,
+          revenue: branchSales.reduce((sum: number, s: any) => sum + s.totalAmount, 0),
+        };
+      })),
+    };
+  },
+});
+
+export const getReportsInventory = query({
+  args: {},
+  handler: async (ctx: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const branches = await ctx.db
+       .query("branches")
+       .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+       .collect();
+    const branchIds = branches.map((b: any) => b._id);
+
+    const medicines = await ctx.db.query("medicines").collect();
+    const pharmacyMedicines = medicines.filter((m: any) => branchIds.includes(m.branchId));
+
+    return {
+      totalMedicines: pharmacyMedicines.length,
+      totalStock: pharmacyMedicines.reduce((sum: number, m: any) => sum + m.stock, 0),
+      totalValue: pharmacyMedicines.reduce((sum: number, m: any) => sum + (m.stock * m.price), 0),
+      lowStockCount: pharmacyMedicines.filter((m: any) => m.stock <= 10).length,
+      outOfStockCount: pharmacyMedicines.filter((m: any) => m.stock === 0).length,
+      inventoryByBranch: await Promise.all(branches.map(async (branch: any) => {
+        const branchMedicines = pharmacyMedicines.filter((m: any) => m.branchId === branch._id);
+        return {
+          branchId: branch._id,
+          branchName: branch.name,
+          totalMedicines: branchMedicines.length,
+          totalStock: branchMedicines.reduce((sum: number, m: any) => sum + m.stock, 0),
+          totalValue: branchMedicines.reduce((sum: number, m: any) => sum + (m.stock * m.price), 0),
+        };
+      })),
+    };
+  },
+});
+
+export const getReportsStaffActivity = query({
+  args: {},
+  handler: async (ctx: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const staff = await ctx.db
+       .query("users")
+       .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+       .collect();
+
+    const staffIds = staff.map((s: any) => s._id);
+    const allLogs = await ctx.db.query("audit_logs").collect();
+    const staffLogs = allLogs.filter((log: any) => staffIds.includes(log.userId));
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return await Promise.all(staff.map(async (member: any) => {
+      const memberLogs = staffLogs.filter((log: any) => log.userId === member._id);
+      const todayLogs = memberLogs.filter((log: any) => log._creationTime >= today.getTime());
+
+      return {
+        userId: member._id,
+        name: member.full_name,
+        email: member.email,
+        role: member.role,
+        totalActions: memberLogs.length,
+        todayActions: todayLogs.length,
+        lastActivity: memberLogs.length > 0 ? memberLogs[0].timestamp : null,
+      };
+    }));
+  },
+});
+
+export const getRefundPolicy = query({
+  args: {},
+  handler: async (ctx: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || !manager.pharmacyId) {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const pharmacy = await ctx.db.get(manager.pharmacyId);
+    if (!pharmacy) {
+      return {
+        allow_refunds: true,
+        refund_window_days: 7,
+        allow_discounts: true,
+        max_discount_percent: 20,
+        require_manager_approval: false,
+      };
+    }
+
+    return pharmacy.refundPolicy || {
+      allow_refunds: true,
+      refund_window_days: 7,
+      allow_discounts: true,
+      max_discount_percent: 20,
+      require_manager_approval: false,
+    };
+  },
+});
+
+export const getPharmacyByCode = query({
+  args: { code: v.string() },
+  handler: async (ctx: any, args: any) => {
+    const pharmacies = await ctx.db.query("pharmacies").collect();
+    const pharmacy = pharmacies.find((p: any) => p.licenseCode === args.code || p.inviteCode === args.code);
+
+    if (!pharmacy) {
+      return null;
+    }
+
+    return {
+      _id: pharmacy._id,
+      name: pharmacy.name,
+      licenseCode: pharmacy.licenseCode,
+      status: pharmacy.status,
+      subscriptionTier: pharmacy.subscriptionTier,
+    };
+  },
+});
+
+export const getStaffActivityLogs = query({
+  args: { staffId: v.id("users") },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const staffMember = await ctx.db.get(args.staffId);
+    if (!staffMember || staffMember.pharmacyId !== manager.pharmacyId) {
+      throw new Error("Unauthorized: Staff member not found or not in your pharmacy");
+    }
+
+    const logs = await ctx.db
+       .query("audit_logs")
+       .filter((q: any) => q.eq(q.field("userId"), args.staffId))
+       .order("desc")
+       .take(50)
+       .collect();
+
+    return logs;
+  },
+});
+
+export const getSalesByPeriod = query({
+  args: { period: v.string() },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    const branches = await ctx.db
+       .query("branches")
+       .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+       .collect();
+    const branchIds = branches.map((b: any) => b._id);
+
+    let startDate = new Date();
+    const period = args.period || "7days";
+
+    switch (period) {
+      case "today":
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case "7days":
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case "30days":
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      case "90days":
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+      default:
+        startDate.setDate(startDate.getDate() - 7);
+    }
+
+    const sales = await ctx.db.query("sales").collect();
+    const pharmacySales = sales.filter((s: any) =>
+      branchIds.includes(s.branchId) && s._creationTime >= startDate.getTime()
+    );
+
+    const salesByDay = {};
+    pharmacySales.forEach((sale: any) => {
+      const date = new Date(sale._creationTime).toISOString().split('T')[0];
+      salesByDay[date] = (salesByDay[date] || 0) + sale.totalAmount;
+    });
+
+    return {
+      period,
+      startDate: startDate.getTime(),
+      endDate: Date.now(),
+      totalSales: pharmacySales.length,
+      totalRevenue: pharmacySales.reduce((sum: number, s: any) => sum + s.totalAmount, 0),
+      salesByDay: Object.entries(salesByDay).map(([date, revenue]) => ({ date, revenue })),
+      dailyAverage: pharmacySales.length > 0
+        ? pharmacySales.reduce((sum: number, s: any) => sum + s.totalAmount, 0) / 7
+        : 0,
+    };
+  },
 });

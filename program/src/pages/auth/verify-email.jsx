@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FloatingPaths from '@/components/shared/FloatingPaths';
 import { MailIcon, AtSignIcon, ChevronLeftIcon } from 'lucide-react';
-import { verifyEmail, resendVerification } from '@/api/auth.api';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -47,28 +46,12 @@ export function VerifyEmailPage() {
       return;
     }
 
-    if (!verificationCode.trim()) {
-      setError('Please enter the verification code.');
-      return;
-    }
-
-    if (verificationCode.length !== 6) {
-      setError('Verification code must be 6 digits.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const response = await verifyEmail(email, verificationCode);
-
-      if (!response.success) {
-        setError(response.message || 'Verification failed. Please check your code and try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      toast.success('Email verified successfully! You can now login.');
+      // Email verification is handled by Clerk
+      // Users are automatically verified when they click the link in their email
+      toast.success('Email verification is handled by Clerk. Please check your email for the verification link.');
       navigate('/auth/login');
     } catch (err) {
       setError(err.message || 'An unexpected error occurred. Please try again.');
@@ -87,15 +70,10 @@ export function VerifyEmailPage() {
     setError('');
 
     try {
-      const response = await resendVerification(email);
-
-      if (response.success) {
-        toast.success('Verification code sent successfully!');
-      } else {
-        setError(response.message || 'Failed to resend verification code.');
-      }
+      // Email verification is handled by Clerk
+      toast.success('Verification emails are handled by Clerk. Check your email for the verification link.');
     } catch (err) {
-      setError(err.message || 'An error occurred while resending the code.');
+      setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setIsResending(false);
     }

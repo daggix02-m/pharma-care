@@ -10,6 +10,8 @@
 
 import type * as admin_mutations from "../admin/mutations.js";
 import type * as admin_queries from "../admin/queries.js";
+import type * as auth_mutations from "../auth/mutations.js";
+import type * as auth_queries from "../auth/queries.js";
 import type * as cashier_mutations from "../cashier/mutations.js";
 import type * as cashier_queries from "../cashier/queries.js";
 import type * as manager_mutations from "../manager/mutations.js";
@@ -29,6 +31,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   "admin/mutations": typeof admin_mutations;
   "admin/queries": typeof admin_queries;
+  "auth/mutations": typeof auth_mutations;
+  "auth/queries": typeof auth_queries;
   "cashier/mutations": typeof cashier_mutations;
   "cashier/queries": typeof cashier_queries;
   "manager/mutations": typeof manager_mutations;

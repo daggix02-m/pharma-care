@@ -191,3 +191,127 @@ export const deleteBranch = mutation({
     return { success: true };
   },
 });
+
+export const updatePharmacy = mutation({
+  args: {
+    id: v.id("pharmacies"),
+    data: v.object({
+      name: v.optional(v.string()),
+      licenseCode: v.optional(v.string()),
+      staffCount: v.optional(v.number()),
+      subscriptionTier: v.optional(v.string()),
+      status: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
+    }
+
+    const pharmacy = await ctx.db.get(args.id);
+    if (!pharmacy) {
+      throw new Error("Pharmacy not found");
+    }
+
+    await ctx.db.patch(args.id, args.data);
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "update_pharmacy",
+      entityId: args.id,
+      entityType: "pharmacy",
+      details: "Pharmacy updated by admin",
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const updateBranch = mutation({
+  args: {
+    id: v.id("branches"),
+    data: v.object({
+      name: v.optional(v.string()),
+      address: v.optional(v.string()),
+      managerId: v.optional(v.id("users")),
+      status: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
+    }
+
+    const branch = await ctx.db.get(args.id);
+    if (!branch) {
+      throw new Error("Branch not found");
+    }
+
+    await ctx.db.patch(args.id, args.data);
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "update_branch",
+      entityId: args.id,
+      entityType: "branch",
+      details: "Branch updated by admin",
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const resetManagerPassword = mutation({
+  args: {
+    managerId: v.id("users"),
+    newPassword: v.string(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
+    }
+
+    const manager = await ctx.db.get(args.managerId);
+    if (!manager) {
+      throw new Error("Manager not found");
+    }
+
+    // Note: Password reset is handled by Clerk
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "password_reset",
+      entityId: args.managerId,
+      entityType: "user",
+      details: `Password reset for manager: ${manager.email}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, message: "Password reset initiated via Clerk" };
+  },
+});

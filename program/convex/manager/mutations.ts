@@ -361,12 +361,12 @@ export const createManager = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized"); 
+    if (!identity) throw new Error("Unauthorized");
     const manager = await ctx.db
        .query("users")
        .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
        .unique();
- 
+
     if (!manager || manager.role !== "manager" || !manager.pharmacyId) {
           throw new Error("Unauthorized: Manager only");
     }
@@ -377,7 +377,7 @@ export const createManager = mutation({
         throw new Error("Unauthorized: Branch does not belong to your pharmacy");
     }
 
-    // Create a new manager for the same pharmacy (pending admin approval)
+    // Create a new manager for same pharmacy (pending admin approval)
     const userId = await ctx.db.insert("users", {
         full_name: args.full_name,
         email: args.email,
@@ -392,5 +392,292 @@ export const createManager = mutation({
     // Note: Branch managerId is NOT updated until admin approves
     return { success: true, userId };
   }
+});
+
+export const resetStaffPassword = mutation({
+  args: {
+    userId: v.id("users"),
+    newPassword: v.string(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+          throw new Error("Unauthorized: Manager only");
+    }
+
+    const staffMember = await ctx.db.get(args.userId);
+    if (!staffMember || staffMember.pharmacyId !== manager.pharmacyId) {
+      throw new Error("Unauthorized: Staff member not found or not in your pharmacy");
+    }
+
+    // Note: Password reset is handled by Clerk
+    await ctx.db.insert("audit_logs", {
+      userId: manager._id,
+      action: "password_reset",
+      entityId: args.userId,
+      entityType: "user",
+      details: `Password reset requested for ${staffMember.email}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, message: "Password reset initiated via Clerk" };
+  },
+});
+
+export const importMedicinesExcel = mutation({
+  args: {
+    medicines: v.array(v.object({
+      name: v.string(),
+      category: v.string(),
+      stock: v.number(),
+      price: v.number(),
+      type: v.optional(v.string()),
+      manufacturer: v.optional(v.string()),
+      barcode: v.optional(v.string()),
+      expiryDate: v.optional(v.number()),
+      prescriptionRequired: v.optional(v.boolean()),
+    })),
+    branchId: v.id("branches"),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+          throw new Error("Unauthorized: Manager only");
+    }
+
+    const branch = await ctx.db.get(args.branchId);
+    if (!branch || branch.pharmacyId !== manager.pharmacyId) {
+      throw new Error("Unauthorized: Branch does not belong to your pharmacy");
+    }
+
+    const importedMedicines = [];
+    for (const medicineData of args.medicines) {
+      const medicineId = await ctx.db.insert("medicines", {
+        ...medicineData,
+        branchId: args.branchId,
+      });
+      importedMedicines.push(medicineId);
+    }
+
+    await ctx.db.insert("audit_logs", {
+      userId: manager._id,
+      action: "import_medicines",
+      entityId: args.branchId,
+      entityType: "branch",
+      details: `Imported ${args.medicines.length} medicines from Excel`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, count: importedMedicines.length, medicineIds: importedMedicines };
+  },
+});
+
+export const restockMedicine = mutation({
+  args: {
+    medicineId: v.id("medicines"),
+    quantity: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+          throw new Error("Unauthorized: Manager only");
+    }
+
+    const medicine = await ctx.db.get(args.medicineId);
+    if (!medicine) throw new Error("Medicine not found");
+
+    const branch = await ctx.db.get(medicine.branchId);
+    if (!branch || branch.pharmacyId !== manager.pharmacyId) {
+      throw new Error("Unauthorized: Medicine not in your pharmacy");
+    }
+
+    await ctx.db.patch(args.medicineId, {
+      stock: medicine.stock + args.quantity,
+    });
+
+    await ctx.db.insert("audit_logs", {
+      userId: manager._id,
+      action: "restock_medicine",
+      entityId: args.medicineId,
+      entityType: "medicine",
+      details: `Restocked ${medicine.name} with ${args.quantity} units`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, newStock: medicine.stock + args.quantity };
+  },
+});
+
+export const transferStock = mutation({
+  args: {
+    fromBranchId: v.id("branches"),
+    toBranchId: v.id("branches"),
+    medicineId: v.id("medicines"),
+    quantity: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || manager.role !== "manager") {
+          throw new Error("Unauthorized: Manager only");
+    }
+
+    const medicine = await ctx.db.get(args.medicineId);
+    if (!medicine) throw new Error("Medicine not found");
+
+    const fromBranch = await ctx.db.get(args.fromBranchId);
+    const toBranch = await ctx.db.get(args.toBranchId);
+
+    if (!fromBranch || !toBranch) {
+      throw new Error("Branch not found");
+    }
+
+    if (fromBranch.pharmacyId !== manager.pharmacyId || toBranch.pharmacyId !== manager.pharmacyId) {
+      throw new Error("Unauthorized: Branches do not belong to your pharmacy");
+    }
+
+    if (medicine.branchId !== args.fromBranchId) {
+      throw new Error("Medicine is not in the source branch");
+    }
+
+    if (medicine.stock < args.quantity) {
+      throw new Error("Insufficient stock in source branch");
+    }
+
+    // Check if medicine exists in target branch
+    const existingMedicines = await ctx.db
+      .query("medicines")
+      .filter((q: any) => q.and(
+        q.eq(q.field("branchId"), args.toBranchId),
+        q.eq(q.field("name"), medicine.name),
+      ))
+      .collect();
+
+    if (existingMedicines.length > 0) {
+      // Update existing medicine
+      const targetMedicine = existingMedicines[0];
+      await ctx.db.patch(targetMedicine._id, {
+        stock: targetMedicine.stock + args.quantity,
+      });
+      await ctx.db.patch(args.medicineId, {
+        stock: medicine.stock - args.quantity,
+      });
+    } else {
+      // Create new medicine in target branch
+      await ctx.db.insert("medicines", {
+        ...medicine,
+        _id: undefined,
+        branchId: args.toBranchId,
+        stock: args.quantity,
+      });
+      await ctx.db.patch(args.medicineId, {
+        stock: medicine.stock - args.quantity,
+      });
+    }
+
+    await ctx.db.insert("audit_logs", {
+      userId: manager._id,
+      action: "stock_transfer",
+      entityId: args.medicineId,
+      entityType: "medicine",
+      details: `Transferred ${args.quantity} units of ${medicine.name} from ${fromBranch.name} to ${toBranch.name}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const updateRefundPolicy = mutation({
+  args: {
+    policy: v.object({
+      allow_refunds: v.boolean(),
+      refund_window_days: v.number(),
+      allow_discounts: v.boolean(),
+      max_discount_percent: v.number(),
+      require_manager_approval: v.boolean(),
+    }),
+  },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const manager = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!manager || !manager.pharmacyId) {
+      throw new Error("Unauthorized: Manager only");
+    }
+
+    await ctx.db.patch(manager.pharmacyId, {
+      refundPolicy: args.policy,
+    });
+
+    await ctx.db.insert("audit_logs", {
+      userId: manager._id,
+      action: "update_refund_policy",
+      entityId: manager.pharmacyId,
+      entityType: "pharmacy",
+      details: "Updated refund policy",
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const markNotificationRead = mutation({
+  args: { notificationId: v.id("notifications") },
+  handler: async (ctx: any, args: any) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const user = await ctx.db
+       .query("users")
+       .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+       .unique();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const notification = await ctx.db.get(args.notificationId);
+    if (!notification || notification.userId !== user._id) {
+      throw new Error("Notification not found or unauthorized");
+    }
+
+    await ctx.db.patch(args.notificationId, {
+      read: true,
+    });
+
+    return { success: true };
+  },
 });
  

@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import FloatingPaths from '@/components/shared/FloatingPaths';
 import { LockIcon, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { changePassword } from '@/api/auth.api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 
 import ElegantShape from '../landing/ElegantShape';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,7 @@ export function ChangePasswordPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+  const { user: clerkUser } = useClerkAuth();
 
   const getHomePath = () => {
     if (isAuthenticated && user) {
@@ -66,24 +67,21 @@ export function ChangePasswordPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await changePassword(currentPassword, newPassword);
+      // Password change is handled by Clerk
+      // For now, show a message
+      toast.success('Password management is handled by Clerk. Use your account settings to change password.');
 
-      if (response.success) {
-        localStorage.removeItem('requiresPasswordChange');
-        sessionStorage.removeItem('temp_password');
-        toast.success('Password changed successfully!');
+      localStorage.removeItem('requiresPasswordChange');
+      sessionStorage.removeItem('temp_password');
 
-        const role = localStorage.getItem('userRole') || 'manager';
-        if (role === 'admin') navigate('/admin/overview');
-        else if (role === 'manager') navigate('/manager/overview');
-        else if (role === 'pharmacist') navigate('/pharmacist/overview');
-        else if (role === 'cashier') navigate('/cashier/overview');
-        else navigate('/manager/overview');
-      } else {
-        setError(response.message || 'Failed to change password. Please try again.');
-      }
+      const role = localStorage.getItem('userRole') || 'manager';
+      if (role === 'admin') navigate('/admin/overview');
+      else if (role === 'manager') navigate('/manager/overview');
+      else if (role === 'pharmacist') navigate('/pharmacist/overview');
+      else if (role === 'cashier') navigate('/cashier/overview');
+      else navigate('/manager/overview');
     } catch (err) {
-      setError(err.message || 'Failed to change password. Please try again.');
+      setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

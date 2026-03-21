@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth as useAppAuth } from '@/contexts/AuthContext';
-import { useSignIn } from '@clerk/clerk-react';
+import { useSignIn, useAuth } from '@clerk/clerk-react';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useNavigate, Link } from 'react-router-dom';
@@ -27,9 +27,10 @@ export function LoginPage() {
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [firstFactorResponse, setFirstFactorResponse] = useState(null);
   const navigate = useNavigate();
-  const { login: authLogin, isAuthenticated, user } = useAppAuth();
+  const { login: authLogin, isAuthenticated, user, userEmail } = useAppAuth();
 
   const { isLoaded, signIn, setActive } = useSignIn();
+  const { isSignedIn } = useAuth();
   const storeUser = useMutation(api.users.mutations.storeUser || (() => {})); // Sync Auth to Database
 
   const containerRef = useRef(null);
@@ -65,6 +66,12 @@ export function LoginPage() {
 
     return () => ctx.revert();
   }, []);
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn && isAuthenticated && user) {
+      navigate(getHomePath());
+    }
+  }, [isLoaded, isSignedIn, isAuthenticated, user, navigate]);
 
   const validateEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -176,7 +183,16 @@ export function LoginPage() {
         setError('Additional authentication steps required.');
       }
     } catch (err) {
-      setError(err.errors?.[0]?.longMessage || 'Login failed. Please check your credentials.');
+      const errorCode = err.errors?.[0]?.code;
+      
+      if (errorCode === 'session_exists') {
+        setError('You are already signed in. Redirecting to your dashboard...');
+        setTimeout(() => {
+          navigate(getHomePath());
+        }, 1500);
+      } else {
+        setError(err.errors?.[0]?.longMessage || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -235,7 +251,39 @@ export function LoginPage() {
               )}
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignedIn && isAuthenticated && user ? (
+              <div className="bg-green-50 border border-green-100 rounded-xl p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">You're already signed in</p>
+                    <p className="text-sm text-gray-600">as {userEmail || user?.email}</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => navigate(getHomePath())}
+                    className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold shadow-lg shadow-green-600/20 transition-all"
+                  >
+                    Go to Dashboard
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => navigate('/')}
+                    variant="outline"
+                    className="flex-1 h-12 border-2 border-gray-200 hover:border-gray-300 text-gray-700 rounded-xl font-semibold transition-all"
+                  >
+                    Back to Home
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
               {requiresTwoFactor ? (
                 // 2FA Code Input
                 <div className="space-y-4">
@@ -367,6 +415,8 @@ export function LoginPage() {
                 </>
               )}
             </form>
+            )}
+
 
             <div className="text-center space-y-4">
               <div className="text-sm text-gray-500">

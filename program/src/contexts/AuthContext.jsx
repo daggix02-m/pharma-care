@@ -27,16 +27,18 @@ export const AuthProvider = ({ children }) => {
   const dbUser = useQuery(api.users.queries.getCurrentUser, isSignedIn ? undefined : "skip");
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // We are "loading" until Clerk is loaded and, if signed in, until Convex returns the user doc.
+  // We are "loading" until Clerk is loaded and (if signed in) Convex returns data
   useEffect(() => {
     if (isClerkLoaded) {
       if (isSignedIn) {
+        // Wait for Convex to return user data (or null/error)
         if (dbUser !== undefined) {
-           setLoading(false);
+          setLoading(false);
         }
       } else {
-         setLoading(false);
+        setLoading(false);
       }
     }
   }, [isClerkLoaded, isSignedIn, dbUser]);
@@ -53,7 +55,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAuthenticated = isSignedIn && dbUser !== undefined && dbUser !== null;
-  
+
   // Safe default role if dbUser hasn't populated or clerk hasn't synced
   const userRole = dbUser?.role || clerkUser?.unsafeMetadata?.role || 'user';
 
@@ -65,6 +67,7 @@ export const AuthProvider = ({ children }) => {
     } : null,
     isAuthenticated,
     loading,
+    error,
     login,
     logout,
     role: userRole,
