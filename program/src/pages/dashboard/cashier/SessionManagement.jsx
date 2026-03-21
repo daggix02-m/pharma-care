@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { cashierAPI } from '@/api';
+import React, { useState } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { 
-  Play, 
-  Square, 
-  Clock, 
-  DollarSign, 
-  History, 
-  Loader2, 
+import {
+  Play,
+  Square,
+  Clock,
+  DollarSign,
+  History,
+  Loader2,
   AlertCircle,
   CheckCircle2,
   Calendar,
@@ -21,41 +21,30 @@ import {
 } from 'lucide-react';
 
 export function SessionManagement() {
-  const queryClient = useQueryClient();
   const [startingSession, setStartingSession] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('0');
   const [closingBalance, setClosingBalance] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Fetch active session and sessions history
-  const { data: sessionData, isLoading: sessionLoading } = useQuery({
-    queryKey: ['cashier-sessions'],
-    queryFn: async () => {
-      const res = await cashierAPI.getSessions();
-      return res?.data || res || [];
-    },
-  });
+  // Fetch sessions from Convex
+  const { data: sessionData, isLoading: sessionLoading } = useQuery(api.cashier.queries.getSessions);
 
-  const activeSession = Array.isArray(sessionData) 
-    ? sessionData.find(s => s.status === 'active' || s.status === 'open') 
+  const activeSession = Array.isArray(sessionData)
+    ? sessionData.find(s => s.status === 'active' || s.status === 'open')
     : (sessionData?.status === 'active' ? sessionData : null);
+
+  const startSessionMutation = useMutation(api.cashier.mutations.startSession);
+  const endSessionMutation = useMutation(api.cashier.mutations.endSession);
 
   const handleStartSession = async (e) => {
     e.preventDefault();
     setStartingSession(true);
     try {
-      const response = await cashierAPI.startSession({
-        opening_balance: parseFloat(openingBalance)
-      });
-      if (response?.success) {
-        toast.success('Cashier session started');
-        queryClient.invalidateQueries(['cashier-sessions']);
-      } else {
-        toast.error(response?.message || 'Failed to start session');
-      }
+      await startSessionMutation({});
+      toast.success('Cashier session started');
     } catch (error) {
-      toast.error('An error occurred');
+      toast.error(error.message || 'Failed to start session');
     } finally {
       setStartingSession(false);
     }
@@ -63,26 +52,16 @@ export function SessionManagement() {
 
   const handleEndSession = async (e) => {
     e.preventDefault();
-    if (!closingBalance) {
-      toast.error('Closing balance is required');
-      return;
-    }
     setEndingSession(true);
     try {
-      const response = await cashierAPI.endSession({
-        closing_balance: parseFloat(closingBalance),
-        notes
+      await endSessionMutation({
+        closingCash: parseFloat(closingBalance)
       });
-      if (response?.success) {
-        toast.success('Cashier session ended successfully');
-        setClosingBalance('');
-        setNotes('');
-        queryClient.invalidateQueries(['cashier-sessions']);
-      } else {
-        toast.error(response?.message || 'Failed to end session');
-      }
+      toast.success('Cashier session ended successfully');
+      setClosingBalance('');
+      setNotes('');
     } catch (error) {
-      toast.error('An error occurred');
+      toast.error(error.message || 'Failed to end session');
     } finally {
       setEndingSession(false);
     }
