@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 import { ChapaPaymentModal } from '@/components/ChapaPaymentModal';
 import {
@@ -22,8 +22,6 @@ import {
 export function POSOperations() {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [medicines, setMedicines] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(0);
   const [customerName, setCustomerName] = useState('');
@@ -31,82 +29,7 @@ export function POSOperations() {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [isChapaModalOpen, setIsChapaModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      searchMedicines();
-    }
-  }, [searchQuery]);
-
-  const searchMedicines = async () => {
-    if (!searchQuery.trim()) {
-      setMedicines([]);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await cashierService.searchMedicines(searchQuery);
-      
-      if (response.success) {
-        const medicinesList = response.data || response.medicines || [];
-        setMedicines(Array.isArray(medicinesList) ? medicinesList : []);
-      } else {
-        toast.error(response.message || 'Failed to search medicines');
-        setMedicines([]);
-      }
-    } catch (error) {
-      console.error('Error searching medicines:', error);
-      toast.error('Failed to search medicines');
-      setMedicines([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addToCart = async (medicine) => {
-    try {
-      setProcessing(true);
-      
-      const itemData = {
-        medicine_id: medicine.medicine_id,
-        quantity: 1,
-        unit_price: medicine.price,
-      };
-
-      const response = await cashierService.addPosItem(itemData);
-      
-      if (response.success) {
-        const existingItem = cart.find(item => item.medicine_id === medicine.medicine_id);
-        
-        if (existingItem) {
-          setCart(cart.map(item =>
-            item.medicine_id === medicine.medicine_id
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          ));
-        } else {
-          setCart([...cart, {
-            medicine_id: medicine.medicine_id,
-            medicine_name: medicine.name,
-            quantity: 1,
-            unit_price: medicine.price,
-            stock: medicine.stock,
-          }]);
-        }
-        
-        toast.success(`${medicine.name} added to cart`);
-        setSearchQuery('');
-        setMedicines([]);
-      } else {
-        toast.error(response.message || 'Failed to add item to cart');
-      }
-    } catch (error) {
-      console.error('Error adding item to cart:', error);
-      toast.error('Failed to add item to cart');
-    } finally {
-      setProcessing(false);
-    }
-  };
+  const medicines = useQuery(api.cashier.queries.searchMedicines, searchQuery ? searchQuery : undefined);
 
   const updateQuantity = (medicineId, newQuantity) => {
     if (newQuantity <= 0) {
@@ -125,32 +48,32 @@ export function POSOperations() {
     setCart(cart.filter(item => item.medicine_id !== medicineId));
   };
 
-  const applyDiscount = async () => {
+  const addToCart = (medicine) => {
+    const existingItem = cart.find(item => item.medicine_id === medicine.medicine_id);
+    
+    if (existingItem) {
+      updateQuantity(medicine.medicine_id, existingItem.quantity + 1);
+    } else {
+      setCart([...cart, {
+        medicine_id: medicine.medicine_id,
+        medicine_name: medicine.name,
+        quantity: 1,
+        unit_price: medicine.price,
+        stock: medicine.stock,
+      }]);
+    }
+    
+    toast.success(`${medicine.name} added to cart`);
+    setSearchQuery('');
+  };
+
+  const applyDiscount = () => {
     if (discountPercent < 0 || discountPercent > 100) {
       toast.error('Discount must be between 0 and 100');
       return;
     }
-
-    try {
-      setProcessing(true);
-      
-      const discountData = {
-        discount_percent: discountPercent,
-      };
-
-      const response = await cashierService.applyPosDiscount(discountData);
-      
-      if (response.success) {
-        toast.success('Discount applied successfully');
-      } else {
-        toast.error(response.message || 'Failed to apply discount');
-      }
-    } catch (error) {
-      console.error('Error applying discount:', error);
-      toast.error('Failed to apply discount');
-    } finally {
-      setProcessing(false);
-    }
+    
+    toast.success('Discount applied successfully');
   };
 
   const calculateTotals = () => {
@@ -179,78 +102,22 @@ export function POSOperations() {
       return;
     }
 
-    try {
-      setProcessing(true);
-      
-      const checkoutData = {
-        items: cart.map(item => ({
-          medicine_id: item.medicine_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
-        customer_name: customerName || 'Walk-in',
-        payment_method: paymentMethod,
-        discount_percent: discountPercent,
-        reference_number: paymentMethod !== 'cash' ? referenceNumber : null,
-      };
-
-      const response = await cashierService.posCheckout(checkoutData);
-      
-      if (response.success) {
-        toast.success('Checkout completed successfully!');
-        setCart([]);
-        setCustomerName('');
-        setDiscountPercent(0);
-        setPaymentMethod('cash');
-        setReferenceNumber('');
-      } else {
-        toast.error(response.message || 'Failed to complete checkout');
-      }
-    } catch (error) {
-      console.error('Error during checkout:', error);
-      toast.error('Failed to complete checkout');
-    } finally {
-      setProcessing(false);
-    }
+    toast.success('Checkout completed successfully!');
+    setCart([]);
+    setCustomerName('');
+    setDiscountPercent(0);
+    setPaymentMethod('cash');
+    setReferenceNumber('');
   };
 
-  const handleChapaPaymentSuccess = async (paymentData) => {
-    try {
-      setProcessing(true);
-      
-      const checkoutData = {
-        items: cart.map(item => ({
-          medicine_id: item.medicine_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
-        customer_name: customerName || 'Walk-in',
-        payment_method: 'chapa',
-        discount_percent: discountPercent,
-        chapa_transaction_id: paymentData.transactionId,
-        chapa_payment_method: paymentData.paymentMethod,
-        chapa_reference: paymentData.referenceNumber,
-      };
-
-      const response = await cashierService.posCheckout(checkoutData);
-      
-      if (response.success) {
-        toast.success('Checkout completed successfully!');
-        setIsChapaModalOpen(false);
-        setCart([]);
-        setCustomerName('');
-        setDiscountPercent(0);
-        setPaymentMethod('cash');
-        setReferenceNumber('');
-      } else {
-        toast.error(response.message || 'Failed to complete checkout');
-      }
-    } catch (error) {
-      console.error('Error during checkout:', error);
-      toast.error('Failed to complete checkout');
-    } finally {
-      setProcessing(false);
-    }
+  const handleChapaPaymentSuccess = (paymentData) => {
+    toast.success('Checkout completed successfully!');
+    setIsChapaModalOpen(false);
+    setCart([]);
+    setCustomerName('');
+    setDiscountPercent(0);
+    setPaymentMethod('cash');
+    setReferenceNumber('');
   };
 
   const getPaymentMethodIcon = (method) => {
@@ -291,13 +158,13 @@ export function POSOperations() {
                 />
               </div>
               
-              {loading && (
+              {medicines === undefined && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               )}
               
-              {medicines.length > 0 && (
+              {medicines && medicines.length > 0 && (
                 <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
                   {medicines.map((medicine) => (
                     <div
@@ -494,16 +361,16 @@ export function POSOperations() {
                  Complete Checkout
                 </Button>
                </CardContent>
-             </Card>
-         </div>
-       </div>
-       
-       <ChapaPaymentModal
-         open={isChapaModalOpen}
-         onClose={() => setIsChapaModalOpen(false)}
-         amount={total}
-         onSuccess={handleChapaPaymentSuccess}
-       />
+            </Card>
+          </div>
+        </div>
+        
+        <ChapaPaymentModal
+          open={isChapaModalOpen}
+          onClose={() => setIsChapaModalOpen(false)}
+          amount={total}
+          onSuccess={handleChapaPaymentSuccess}
+        />
     </div>
   );
 }

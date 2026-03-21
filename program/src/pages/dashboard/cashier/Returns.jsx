@@ -1,88 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { cashierAPI } from '@/api';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 import {
   RotateCcw,
   Search,
   Package,
   Trash2,
-  Loader2,
   ShoppingCart,
   ArrowRightLeft,
   Calendar,
 } from 'lucide-react';
 
 export function Returns() {
-  const [sales, setSales] = useState([]);
-  const [filteredSales, setFilteredSales] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState(null);
   const [selectedItems, setSelectedItems] = useState({});
   const [returnReason, setReturnReason] = useState('');
   const [returnCondition, setReturnCondition] = useState('good');
   const [processing, setProcessing] = useState(false);
 
-  useEffect(() => {
-    fetchReturnableSales();
-  }, []);
+  const sales = useQuery(api.cashier.queries.getReturnableSales) || [];
+  const returnableItems = useQuery(api.cashier.queries.getReturnableItems, selectedSale ? { saleId: selectedSale.sale_id } : 'skip') || [];
 
-  const fetchReturnableSales = async () => {
-    try {
-      setLoading(true);
-      const response = await cashierService.getReturnableSales();
+  const processReturn = useMutation(api.cashier.mutations.processReturn);
 
-      if (response.success) {
-        const salesList = response.data || response.sales || [];
-        setSales(Array.isArray(salesList) ? salesList : []);
-      } else {
-        toast.error(response.message || 'Failed to fetch sales for return');
-        setSales([]);
-      }
-    } catch (error) {
-      console.error('Error fetching returnable sales:', error);
-      toast.error('Failed to fetch sales for return');
-      setSales([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      fetchReturnableSales();
-      return;
-    }
-
+  const filteredSales = sales.filter((s) => {
+    if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
-    const filtered = sales.filter(
-      (s) => s.sale_id?.toString().includes(query) || s.customer_name?.toLowerCase().includes(query)
+    return (
+      s.sale_id?.toString().toLowerCase().includes(query) ||
+      s.customer_name?.toLowerCase().includes(query)
     );
-    setFilteredSales(filtered);
-  };
+  });
 
-  const handleSelectSale = async (sale) => {
-    try {
-      setLoading(true);
-      const response = await cashierService.getReturnableItems(sale.sale_id);
-
-      if (response.success) {
-        const itemsList = response.data || response.items || [];
-        setSelectedSale(sale);
-        setSelectedItems(itemsList);
-      } else {
-        toast.error(response.message || 'Failed to fetch sale items');
-      }
-    } catch (error) {
-      console.error('Error fetching sale items:', error);
-      toast.error('Failed to fetch sale items');
-    } finally {
-      setLoading(false);
-    }
+  const handleSelectSale = (sale) => {
+    setSelectedSale(sale);
+    setSelectedItems({});
   };
 
   const handleItemSelect = (itemId) => {
@@ -102,9 +60,12 @@ export function Returns() {
   const handleProcessReturn = async (e) => {
     e.preventDefault();
 
-    const selectedItemsList = Object.entries(selectedItems)
-      .filter(([_, quantity]) => quantity)
-      .map(([itemId, quantity]) => ({ medicine_id: itemId, quantity_returned: quantity }));
+    const selectedItemsList = returnableItems
+      .filter((item) => selectedItems[item.medicine_id])
+      .map((item) => ({
+        medicine_id: item.medicine_id,
+        quantity_returned: selectedItems[item.medicine_id]?.quantity || 1,
+      }));
 
     if (selectedItemsList.length === 0) {
       toast.error('Please select at least one item to return');
@@ -119,25 +80,17 @@ export function Returns() {
     try {
       setProcessing(true);
 
-      const returnData = {
-        sale_id: selectedSale.sale_id,
+      await processReturn({
+        saleId: selectedSale.sale_id,
         items: selectedItemsList,
-        return_reason: returnReason,
-        return_condition: returnCondition,
-      };
+        reason: returnReason,
+      });
 
-      const response = await cashierService.processRefund(returnData);
-
-      if (response.success) {
-        toast.success('Return processed successfully!');
-        setSelectedSale(null);
-        setSelectedItems({});
-        setReturnReason('');
-        setReturnCondition('good');
-        fetchReturnableSales();
-      } else {
-        toast.error(response.message || 'Failed to process return');
-      }
+      toast.success('Return processed successfully!');
+      setSelectedSale(null);
+      setSelectedItems({});
+      setReturnReason('');
+      setReturnCondition('good');
     } catch (error) {
       console.error('Error processing return:', error);
       toast.error('Failed to process return');
@@ -158,14 +111,6 @@ export function Returns() {
     return <Badge className={badge.color}>{badge.label}</Badge>;
   };
 
-  if (loading && !selectedSale) {
-    return (
-      <div className='flex justify-center items-center h-64'>
-        <Loader2 className='h-8 w-8 animate-spin text-primary' />
-      </div>
-    );
-  }
-
   return (
     <div className='space-y-6 p-4 md:p-8'>
       <div className='space-y-2'>
@@ -181,7 +126,6 @@ export function Returns() {
               placeholder='Search sales by ID or customer name...'
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               className='pl-10'
             />
           </div>
@@ -297,8 +241,8 @@ export function Returns() {
                 <div>
                   <p className='text-sm text-muted-foreground mb-2'>Select Items to Return</p>
                   <div className='space-y-2 max-h-64 overflow-y-auto'>
-                    {selectedSale.items && selectedSale.items.length > 0 ? (
-                      selectedSale.items.map((item) => (
+                    {returnableItems.length > 0 ? (
+                      returnableItems.map((item) => (
                         <div
                           key={item.medicine_id}
                           className='flex items-center justify-between p-3 border rounded-lg'
@@ -391,11 +335,11 @@ export function Returns() {
                   <Button
                     type='submit'
                     disabled={
-                      processing || Object.values(selectedItems).filter((v) => v).length === 0
+                      processing || !Object.values(selectedItems).filter((v) => v).length
                     }
                   >
                     {processing ? (
-                      <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                      <Trash2 className='h-4 w-4 animate-spin mr-2' />
                     ) : (
                       <Trash2 className='h-4 w-4 mr-2' />
                     )}

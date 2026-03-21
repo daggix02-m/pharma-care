@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
@@ -81,28 +83,16 @@ function DashboardContent() {
   };
 
   // Poll for pending approvals if admin
+  const pendingManagers = useQuery(api.admin.queries.getPendingManagers) || [];
+  const pendingBranches = useQuery(api.admin.queries.getPendingBranches) || [];
+
+  const newPendingCount = (pendingManagers?.length || 0) + (pendingBranches?.length || 0);
+
   useEffect(() => {
     if (userRole !== 'admin') return;
 
-    const fetchPendingCount = async () => {
-      try {
-        const [mgrs, branches] = await Promise.all([
-          import('@/api').then(m => m.adminAPI.getPendingManagers()),
-          import('@/api').then(m => m.adminAPI.getPendingBranches())
-        ]);
-        
-        const mCount = mgrs?.data?.length || 0;
-        const bCount = branches?.data?.length || 0;
-        setPendingCount(mCount + bCount);
-      } catch (err) {
-        console.error('Failed to poll pending counts:', err);
-      }
-    };
-
-    fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 60000);
-    return () => clearInterval(interval);
-  }, [userRole]);
+    setPendingCount(newPendingCount);
+  }, [userRole, newPendingCount]);
 
   // Auto-expand parent menu when a child route is active
   useEffect(() => {

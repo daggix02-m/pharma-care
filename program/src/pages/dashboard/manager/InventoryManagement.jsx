@@ -45,6 +45,7 @@ import {
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
+import { usePharmacies } from '@/hooks/usePharmacies';
 import { toast } from 'sonner';
 import {
   Search,
@@ -104,6 +105,7 @@ export function InventoryManagement() {
   const branches = useQuery(api.manager.queries.getBranches) || [];
   const allMedicines = useQuery(api.manager.queries.getAllMedicines) || [];
   const soldHistory = useQuery(api.manager.queries.getSales) || [];
+  const { pharmacies } = usePharmacies();
   const loading = branches === undefined || allMedicines === undefined || soldHistory === undefined;
  
   const addMedicineMutation = useMutation(api.manager.mutations.addMedicine);

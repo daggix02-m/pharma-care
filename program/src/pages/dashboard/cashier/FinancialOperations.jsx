@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { cashierAPI } from '@/api';
-import { toast } from 'sonner';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import {
   DollarSign,
   TrendingUp,
@@ -15,44 +15,12 @@ import {
 } from 'lucide-react';
 
 export function FinancialOperations() {
-  const [dailySales, setDailySales] = useState(null);
-  const [salesSummary, setSalesSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState('daily');
 
-  useEffect(() => {
-    fetchFinancialData();
-  }, [view]);
+  const dailySales = useQuery(api.cashier.queries.getSalesSummary);
+  const salesSummary = useQuery(api.cashier.queries.getSalesSummary);
 
-  const fetchFinancialData = async () => {
-    try {
-      setLoading(true);
-      
-      const [dailyResponse, summaryResponse] = await Promise.all([
-        cashierService.getDailySales(),
-        cashierService.getSalesSummary(),
-      ]);
-
-      if (dailyResponse.success) {
-        setDailySales(dailyResponse.data || dailyResponse.daily_sales || {});
-      } else {
-        toast.error(dailyResponse.message || 'Failed to fetch daily sales');
-      }
-
-      if (summaryResponse.success) {
-        setSalesSummary(summaryResponse.data || summaryResponse.sales_summary || {});
-      } else {
-        toast.error(summaryResponse.message || 'Failed to fetch sales summary');
-      }
-    } catch (error) {
-      console.error('Error fetching financial data:', error);
-      toast.error('Failed to fetch financial data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (dailySales === undefined) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

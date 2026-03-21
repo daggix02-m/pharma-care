@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,11 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/ui';
-import { managerAPI } from '@/api';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { toast } from 'sonner';
-import { Loader2, ArrowRightLeft, Package, Building2 } from 'lucide-react';
+import { Loader2, ArrowRightLeft, Package } from 'lucide-react';
 
 export function StockTransferModal({ open, onOpenChange, medicines = [], branches = [] }) {
+  const transferStock = useMutation(api.manager.mutations.transferStock);
+  
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     medicine_id: '',
@@ -29,17 +32,6 @@ export function StockTransferModal({ open, onOpenChange, medicines = [], branche
     to_branch_id: '',
     quantity: '',
   });
-
-  useEffect(() => {
-    if (open) {
-      setFormData({
-        medicine_id: '',
-        from_branch_id: '',
-        to_branch_id: '',
-        quantity: '',
-      });
-    }
-  }, [open]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,7 +51,6 @@ export function StockTransferModal({ open, onOpenChange, medicines = [], branche
       return;
     }
 
-    // Check available stock if possible
     const selectedMedicine = medicines.find(m => String(m.id) === String(formData.medicine_id));
     if (selectedMedicine) {
       const stock = selectedMedicine.stock_quantity || selectedMedicine.quantity || 0;
@@ -71,17 +62,15 @@ export function StockTransferModal({ open, onOpenChange, medicines = [], branche
 
     setLoading(true);
     try {
-      const response = await managerAPI.transferStock({
-        ...formData,
-        quantity: qty
+      await transferStock({
+        fromBranchId: formData.from_branch_id,
+        toBranchId: formData.to_branch_id,
+        medicineId: formData.medicine_id,
+        quantity: qty,
       });
 
-      if (response?.success) {
-        toast.success('Stock transfer initiated successfully');
-        onOpenChange(false);
-      } else {
-        toast.error(response?.message || 'Failed to transfer stock');
-      }
+      toast.success('Stock transfer initiated successfully');
+      onOpenChange(false);
     } catch (error) {
       console.error('Transfer error:', error);
       toast.error(error?.message || 'Failed to transfer stock');

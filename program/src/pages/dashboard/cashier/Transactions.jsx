@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cashierAPI } from '@/api';
-import { toast } from 'sonner';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import {
   Search,
-  Loader2,
   ArrowUpDown,
   Calendar,
   DollarSign,
@@ -16,78 +15,26 @@ import {
 } from 'lucide-react';
 
 export function Transactions() {
-  const [transactions, setTransactions] = useState([]);
-  const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [filterType, setFilterType] = useState('all');
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
+  const transactions = useQuery(api.cashier.queries.getTransactions) || [];
 
-  useEffect(() => {
-    filterTransactions();
-  }, [searchQuery, filterType, transactions]);
+  const filteredTransactions = transactions.filter((t) => {
+    const matchesSearch =
+      !searchQuery.trim() ||
+      t.transaction_id?.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.sale_id?.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.customer_name?.toLowerCase().includes(searchQuery.toLowerCase());
 
-  const fetchTransactions = async () => {
-    try {
-      setLoading(true);
-      const response = await cashierService.getTransactions();
+    const matchesFilter = filterType === 'all' || t.type === filterType;
 
-      if (response.success) {
-        const transactionsList = response.data || response.transactions || [];
-        setTransactions(Array.isArray(transactionsList) ? transactionsList : []);
-      } else {
-        toast.error(response.message || 'Failed to fetch transactions');
-        setTransactions([]);
-      }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      toast.error('Failed to fetch transactions');
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return matchesSearch && matchesFilter;
+  });
 
-  const filterTransactions = () => {
-    let filtered = [...transactions];
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (t) =>
-          t.transaction_id?.toString().includes(query) ||
-          t.sale_id?.toString().includes(query) ||
-          t.customer_name?.toLowerCase().includes(query)
-      );
-    }
-
-    if (filterType !== 'all') {
-      filtered = filtered.filter((t) => t.type === filterType);
-    }
-
-    setFilteredTransactions(filtered);
-  };
-
-  const handleViewDetails = async (transactionId) => {
-    try {
-      setLoading(true);
-      const response = await cashierService.getTransactionById(transactionId);
-
-      if (response.success) {
-        setSelectedTransaction(response.data || response.transaction);
-      } else {
-        toast.error(response.message || 'Failed to fetch transaction details');
-      }
-    } catch (error) {
-      console.error('Error fetching transaction details:', error);
-      toast.error('Failed to fetch transaction details');
-    } finally {
-      setLoading(false);
-    }
+  const handleViewDetails = (transactionId) => {
+    setSelectedTransaction(transactions.find(t => t.transaction_id === transactionId));
   };
 
   const getTransactionTypeBadge = (type) => {
@@ -131,14 +78,6 @@ export function Transactions() {
       </span>
     );
   };
-
-  if (loading && !selectedTransaction) {
-    return (
-      <div className='flex justify-center items-center h-64'>
-        <Loader2 className='h-8 w-8 animate-spin text-primary' />
-      </div>
-    );
-  }
 
   return (
     <div className='space-y-6 p-4 md:p-8'>

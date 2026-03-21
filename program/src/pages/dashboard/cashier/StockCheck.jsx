@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -12,47 +12,20 @@ import {
   Input,
 } from '@/components/ui/ui';
 import { Search } from 'lucide-react';
-import { cashierAPI } from '@/api';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 
 export function StockCheck() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  const products = useQuery(api.cashier.queries.searchMedicines, searchTerm ? searchTerm : undefined) || [];
 
-  const fetchProducts = async (search = '') => {
-    try {
-      setLoading(true);
-      const response = await cashierService.checkStock({ search });
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-      if (response.success) {
-        const productsData = response.data || response.products || [];
-        setProducts(Array.isArray(productsData) ? productsData : []);
-      } else {
-        toast.error('Failed to load product data');
-        setProducts([]);
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      toast.error('Failed to load product data');
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = (e) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-    // Debounced search would be better, but for now we'll search on every change
-    fetchProducts(value);
-  };
-
-  if (loading) {
+  if (products === undefined) {
     return (
       <div className='space-y-4 sm:space-y-6 p-4 sm:p-6'>
         <h1 className='text-3xl font-bold'>Stock Check</h1>
@@ -62,10 +35,6 @@ export function StockCheck() {
       </div>
     );
   }
-
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <div className='space-y-4 sm:space-y-6 p-4 sm:p-6'>
@@ -83,7 +52,7 @@ export function StockCheck() {
                 placeholder='Search for a product...'
                 className='pl-8'
                 value={searchTerm}
-                onChange={handleSearch}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>

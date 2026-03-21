@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FloatingPaths from '@/components/shared/FloatingPaths';
 import { ChevronLeftIcon, LockIcon, Eye, EyeOff } from 'lucide-react';
-import { resetPassword } from '@/api/auth.api';
-import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 import ElegantShape from '../landing/ElegantShape';
@@ -22,7 +22,6 @@ export function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
 
   const getHomePath = () => {
     if (isAuthenticated && user) {
@@ -63,19 +62,11 @@ export function ResetPasswordPage() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      const response = await resetPassword(token, password);
-
-      if (response.success) {
-        setSuccess('Password has been reset successfully. Redirecting to login...');
-        setTimeout(() => {
-          navigate('/auth/login');
-        }, 2000);
-      } else {
-        setError(response.message || 'Failed to reset password. Please try again.');
-      }
+      setIsLoading(true);
+      
+      toast.info('Password reset is handled by Clerk. Please use the link from your email or visit Clerk dashboard.');
+      navigate('/auth/login');
     } catch (err) {
       setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {

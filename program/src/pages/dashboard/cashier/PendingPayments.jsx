@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { cashierAPI } from '@/api';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 import {
   Clock,
@@ -16,37 +17,14 @@ import {
 } from 'lucide-react';
 
 export function PendingPayments() {
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [referenceNumber, setReferenceNumber] = useState('');
 
-  useEffect(() => {
-    fetchPendingPayments();
-  }, []);
+  const payments = useQuery(api.cashier.queries.getPendingPayments) || [];
 
-  const fetchPendingPayments = async () => {
-    try {
-      setLoading(true);
-      const response = await cashierService.getPendingPayments();
-
-      if (response.success) {
-        const paymentsList = response.data || response.payments || [];
-        setPayments(Array.isArray(paymentsList) ? paymentsList : []);
-      } else {
-        toast.error(response.message || 'Failed to fetch pending payments');
-        setPayments([]);
-      }
-    } catch (error) {
-      console.error('Error fetching pending payments:', error);
-      toast.error('Failed to fetch pending payments');
-      setPayments([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const processPayment = useMutation(api.cashier.mutations.processPayment);
 
   const handleProcessPayment = async (e) => {
     e.preventDefault();
@@ -56,24 +34,17 @@ export function PendingPayments() {
     try {
       setActionLoading(selectedPayment.sale_id);
 
-      const paymentData = {
-        sale_id: selectedPayment.sale_id,
-        payment_method: paymentMethod,
+      await processPayment({
+        saleId: selectedPayment.sale_id,
         amount: selectedPayment.total_amount,
-        reference_number: referenceNumber || null,
-      };
+        paymentMethod: paymentMethod,
+        referenceNumber: referenceNumber || undefined,
+      });
 
-      const response = await cashierService.processPayment(paymentData);
-
-      if (response.success) {
-        toast.success('Payment processed successfully!');
-        setPaymentMethod('cash');
-        setReferenceNumber('');
-        setSelectedPayment(null);
-        fetchPendingPayments();
-      } else {
-        toast.error(response.message || 'Failed to process payment');
-      }
+      toast.success('Payment processed successfully!');
+      setPaymentMethod('cash');
+      setReferenceNumber('');
+      setSelectedPayment(null);
     } catch (error) {
       console.error('Error processing payment:', error);
       toast.error('Failed to process payment');
@@ -100,14 +71,6 @@ export function PendingPayments() {
     );
   };
 
-  if (loading) {
-    return (
-      <div className='flex justify-center items-center h-64'>
-        <Loader2 className='h-8 w-8 animate-spin text-primary' />
-      </div>
-    );
-  }
-
   return (
     <div className='space-y-6 p-4 md:p-8'>
       <div className='space-y-2'>
@@ -117,7 +80,6 @@ export function PendingPayments() {
         </p>
       </div>
 
-      {/* Payments Table */}
       <Card>
         <CardHeader>
           <CardTitle>
@@ -216,7 +178,6 @@ export function PendingPayments() {
         </CardContent>
       </Card>
 
-      {/* Process Payment Modal */}
       {selectedPayment && (
         <Card className='mt-6'>
           <CardHeader>
@@ -225,7 +186,6 @@ export function PendingPayments() {
           <CardContent>
             <form onSubmit={handleProcessPayment}>
               <div className='space-y-4'>
-                {/* Sale Details */}
                 <div className='p-4 bg-muted/50 rounded-lg'>
                   <h3 className='font-semibold mb-3'>Sale Details</h3>
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -242,7 +202,6 @@ export function PendingPayments() {
                   </div>
                 </div>
 
-                {/* Payment Form */}
                 <div className='space-y-4'>
                   <div>
                     <label className='block text-sm font-medium mb-2'>Payment Method</label>
@@ -271,7 +230,6 @@ export function PendingPayments() {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className='flex gap-2 pt-4'>
                   <Button
                     type='button'

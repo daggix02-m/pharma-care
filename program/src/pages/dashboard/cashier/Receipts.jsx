@@ -1,65 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cashierAPI } from '@/api';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 import {
   Receipt,
   Search,
   Printer,
   Eye,
-  Loader2,
   DollarSign,
   Calendar,
   CreditCard,
 } from 'lucide-react';
 
 export function Receipts() {
-  const [receipts, setReceipts] = useState([]);
-  const [filteredReceipts, setFilteredReceipts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
 
-  useEffect(() => {
-    fetchReceipts();
-  }, []);
+  const receipts = useQuery(api.cashier.queries.getTransactions) || [];
 
-  const fetchReceipts = async () => {
-    try {
-      setLoading(true);
-      const response = await cashierService.getTransactions();
-
-      if (response.success) {
-        const receiptsList = response.data || response.transactions || [];
-        setReceipts(Array.isArray(receiptsList) ? receiptsList : []);
-      } else {
-        toast.error(response.message || 'Failed to fetch receipts');
-        setReceipts([]);
-      }
-    } catch (error) {
-      console.error('Error fetching receipts:', error);
-      toast.error('Failed to fetch receipts');
-      setReceipts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      fetchReceipts();
-      return;
-    }
-
+  const filteredReceipts = receipts.filter((r) => {
+    if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
-    const filtered = receipts.filter(
-      (r) =>
-        r.sale_id?.toString().includes(query) || r.receipt_number?.toLowerCase().includes(query)
+    return (
+      r.sale_id?.toString().toLowerCase().includes(query) ||
+      r.receipt_number?.toLowerCase().includes(query)
     );
-    setFilteredReceipts(filtered);
-  };
+  });
 
   const handleViewDetails = (receipt) => {
     setSelectedReceipt(receipt);
@@ -95,14 +64,6 @@ export function Receipts() {
     );
   };
 
-  if (loading) {
-    return (
-      <div className='flex justify-center items-center h-64'>
-        <Loader2 className='h-8 w-8 animate-spin text-primary' />
-      </div>
-    );
-  }
-
   return (
     <div className='space-y-6 p-4 md:p-8'>
       <div className='space-y-2'>
@@ -118,7 +79,6 @@ export function Receipts() {
               placeholder='Search by sale ID or receipt number...'
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               className='pl-10'
             />
           </div>

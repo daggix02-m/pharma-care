@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { Button } from '@/components/ui/button';
@@ -238,17 +239,17 @@ export function AdminPharmacies() {
 
   const isLoading = rawPharmacies === undefined || rawBranches === undefined || rawManagers === undefined;
 
-  const pharmacies = useMemo(() => rawPharmacies.map(p => ({
+  const pharmacies = React.useMemo(() => rawPharmacies.map(p => ({
     ...p,
     id: p._id,
     name: p.name,
     total_branches: rawBranches.filter(b => b.pharmacyId === p._id).length,
   })), [rawPharmacies, rawBranches]);
 
-  const branches = useMemo(() => rawBranches.map(b => ({
+  const branches = React.useMemo(() => rawBranches.map(b => ({
     ...b,
     id: b._id,
-    branch_id: b._id, // Mapping _id to branch_id for consistency
+    branch_id: b._id,
     pharmacy_id: b.pharmacyId,
     branch_name: b.name,
   })), [rawBranches]);
