@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cashierAPI } from '@/api';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { toast } from 'sonner';
