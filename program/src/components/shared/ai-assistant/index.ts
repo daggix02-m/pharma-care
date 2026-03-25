@@ -1,0 +1,1 @@
+export { AIAssistantWidget } from './AIAssistantWidget';
