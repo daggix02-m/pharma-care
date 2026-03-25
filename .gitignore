@@ -43,3 +43,6 @@ program/coverage/
 .amazonq/
 .claude/
 .opencode/
+
+# Agent configuration files
+AGENTS.md
