@@ -1,9 +1,7 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useNavigate } from 'react-router-dom';
-import logger from '@/utils/logger';
 import { toast } from 'sonner';
 
 interface AuthUser {
@@ -19,7 +17,9 @@ interface AuthUser {
     status?: string;
   };
   pharmacy_status?: string;
-  must_change_password?: boolean;
+  mustResetPassword?: boolean;
+  emailVerified?: boolean;
+  image?: string;
 }
 
 interface AuthContextValue {
@@ -27,8 +27,11 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
-  login: (userData: any) => void;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  signup: (userData: SignupData) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  resetPassword: (token: string, email: string, newPassword: string) => Promise<void>;
   role: string | null;
   userId?: string;
   userEmail?: string;
@@ -37,18 +40,20 @@ interface AuthContextValue {
   pharmacyName?: string;
   pharmacyStatus?: string;
   isSyncing: boolean;
-  hasAttemptedSync: boolean;
-  handleManualSync: () => Promise<void>;
 }
 
-const AuthContext =
-  ((globalThis as any).__AuthContext__ as React.Context<AuthContextValue | null>) ||
-  createContext<AuthContextValue | null>(null);
-if (import.meta.env.DEV) {
-  (globalThis as any).__AuthContext__ = AuthContext;
+interface SignupData {
+  email: string;
+  password: string;
+  full_name: string;
+  pharmacyDetails?: {
+    name: string;
+    licenseNumber: string;
+    location: string;
+  };
 }
 
-const ADMIN_EMAIL = 'daggi.x02@gmail.com';
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
@@ -59,100 +64,129 @@ export const useAuth = (): AuthContextValue => {
 };
 
 interface AuthProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const { isLoaded: isClerkLoaded, isSignedIn, signOut } = useClerkAuth();
-  const { user: clerkUser } = useUser();
   const navigate = useNavigate();
-
-  const dbUser = useQuery(api.users.queries.getCurrentUser, isSignedIn ? undefined : 'skip');
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasAttemptedSync, setHasAttemptedSync] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const storeUserMutation = useMutation(api.users.mutations.storeUser);
+  // Query current user from Convex
+  const dbUser = useQuery(api.users.queries.getCurrentUser);
 
-  const login = async (_userData: any) => {
-    logger.log('Login called directly, Auth State is now managed by Clerk & Convex.');
+  // Mutations
+  const requestPasswordResetMutation = useMutation(api.auth.mutations.requestPasswordReset);
+  const resetPasswordMutation = useMutation(api.auth.mutations.resetPassword);
+
+  useEffect(() => {
+    // Loading is complete once we have user data (or null if not logged in)
+    if (dbUser !== undefined) {
+      setLoading(false);
+    }
+  }, [dbUser]);
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // With Convex Auth, login is handled via OAuth or the auth API
+      // For email/password, we'll redirect to the login page
+      // This is a placeholder for the actual implementation
+      console.log('[AuthContext] Login initiated for:', email);
+      
+      // TODO: Implement actual Convex Auth login
+      // This will be implemented when we have the full Convex Auth setup
+      
+      toast.success('Login functionality coming soon with Convex Auth');
+    } catch (err: any) {
+      console.error('[AuthContext] Login error:', err);
+      setError(err.message || 'Login failed');
+      toast.error(err.message || 'Login failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = async () => {
-    logger.log('Logout initialized via Clerk');
-    await signOut();
-    navigate('/auth/login');
-  };
-
-  const handleManualSync = async () => {
-    if (isSyncing) return;
-
-    setIsSyncing(true);
-    setError(null);
-
+    setLoading(true);
+    
     try {
-      await storeUserMutation();
-      toast.success('Account synced successfully!');
-      setError(null);
-      setHasAttemptedSync(false);
+      // TODO: Implement Convex Auth logout
+      console.log('[AuthContext] Logout initiated');
+      
+      // For now, just navigate to login
+      navigate('/auth/login');
+      toast.success('Logged out successfully');
     } catch (err: any) {
-      console.error('[AuthContext] Manual sync failed:', err);
-      setError(err.message || 'Failed to sync account');
-      toast.error('Failed to sync account. Please try again.');
+      console.error('[AuthContext] Logout error:', err);
+      toast.error('Logout failed');
     } finally {
-      setIsSyncing(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isClerkLoaded) {
-      if (isSignedIn) {
-        if (dbUser !== undefined) {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
+  const signup = async (userData: SignupData) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // TODO: Implement Convex Auth signup
+      console.log('[AuthContext] Signup initiated for:', userData.email);
+      
+      toast.success('Signup functionality coming soon with Convex Auth');
+    } catch (err: any) {
+      console.error('[AuthContext] Signup error:', err);
+      setError(err.message || 'Signup failed');
+      toast.error(err.message || 'Signup failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    setLoading(true);
+    
+    try {
+      const result = await requestPasswordResetMutation({ email });
+      
+      if (result.success) {
+        toast.success(result.message);
       }
+    } catch (err: any) {
+      console.error('[AuthContext] Password reset request error:', err);
+      toast.error(err.message || 'Failed to request password reset');
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  }, [isClerkLoaded, isSignedIn, dbUser]);
+  };
 
-  useEffect(() => {
-    const needsSync =
-      isClerkLoaded && isSignedIn && dbUser === null && clerkUser && !hasAttemptedSync;
-
-    if (needsSync) {
-      console.log('[AuthContext] User signed into Clerk but missing from Convex - auto-syncing...');
-      setHasAttemptedSync(true);
-
-      const syncUser = async () => {
-        try {
-          await storeUserMutation();
-          console.log('[AuthContext] Auto-sync successful');
-          setError(null);
-          toast.success('Account synced successfully!');
-          setTimeout(() => setHasAttemptedSync(false), 30000);
-        } catch (err: any) {
-          console.error('[AuthContext] Auto-sync failed:', err);
-          setError(err.message || 'Failed to sync account');
-          setTimeout(() => setHasAttemptedSync(false), 30000);
-        }
-      };
-
-      syncUser();
-    } else if (dbUser !== undefined && !needsSync) {
-      setHasAttemptedSync(false);
+  const resetPassword = async (token: string, email: string, newPassword: string) => {
+    setLoading(true);
+    
+    try {
+      const result = await resetPasswordMutation({ token, email, newPassword });
+      
+      if (result.success) {
+        toast.success(result.message);
+        navigate('/auth/login');
+      }
+    } catch (err: any) {
+      console.error('[AuthContext] Password reset error:', err);
+      toast.error(err.message || 'Failed to reset password');
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  }, [isClerkLoaded, isSignedIn, dbUser, clerkUser, hasAttemptedSync, storeUserMutation]);
+  };
 
-  const isAuthenticated = !!isSignedIn && dbUser !== undefined && dbUser !== null;
-
-  const userRole: string =
-    dbUser?.role ||
-    (clerkUser?.emailAddresses?.[0]?.emailAddress === ADMIN_EMAIL ? 'admin' : null) ||
-    (clerkUser?.unsafeMetadata?.role as string) ||
-    'user';
+  const isAuthenticated = !!dbUser;
+  const userRole = dbUser?.role || 'pending';
 
   const value: AuthContextValue = {
     user: dbUser
@@ -173,6 +207,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     error,
     login,
     logout,
+    signup,
+    requestPasswordReset,
+    resetPassword,
     role: userRole,
     userId: dbUser?._id,
     userEmail: dbUser?.email,
@@ -181,8 +218,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     pharmacyName: dbUser?.pharmacy?.name,
     pharmacyStatus: dbUser?.pharmacy?.status,
     isSyncing,
-    hasAttemptedSync,
-    handleManualSync,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

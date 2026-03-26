@@ -3,11 +3,16 @@ import { v } from 'convex/values';
 
 export default defineSchema({
   users: defineTable({
-    clerkId: v.string(), // Clerk's unique user ID
-    tokenIdentifier: v.string(), // "https://issuer.clerk.accounts.dev|user_2..."
-    full_name: v.string(),
+    // Convex Auth compatible fields
+    tokenIdentifier: v.optional(v.string()), // For backward compatibility during migration
     email: v.string(),
-    role: v.string(), // "admin", "manager", "pharmacist", "cashier"
+    emailVerified: v.optional(v.boolean()),
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    
+    // Application-specific fields
+    full_name: v.string(),
+    role: v.string(), // "admin", "manager", "pharmacist", "cashier", "owner"
     status: v.string(), // "pending", "active", "deactivated", "locked"
     pharmacyId: v.optional(v.id('pharmacies')),
     branchId: v.optional(v.id('branches')),
@@ -31,13 +36,20 @@ export default defineSchema({
     // v4.0 Activity fields
     lastActionPerformed: v.optional(v.string()),
     totalActionsLast30Days: v.optional(v.number()),
+    
+    // Migration fields
+    migratedFromClerk: v.optional(v.boolean()),
+    clerkId: v.optional(v.string()), // Keep for reference during migration
+    mustResetPassword: v.optional(v.boolean()),
+    migrationCompletedAt: v.optional(v.number()),
   })
-    .index('by_clerk_id', ['clerkId'])
+    .index('by_email', ['email'])
     .index('by_tokenIdentifier', ['tokenIdentifier'])
     .index('by_status', ['status'])
     .index('by_role', ['role'])
     .index('by_pharmacy', ['pharmacyId'])
-    .index('by_branch', ['branchId']),
+    .index('by_branch', ['branchId'])
+    .index('by_clerk_id', ['clerkId']),
 
   pharmacies: defineTable({
     name: v.string(),
@@ -660,4 +672,46 @@ export default defineSchema({
   })
     .index('by_date', ['date'])
     .index('by_section_date', ['sectionId', 'date']),
+
+  // Convex Auth Tables
+  authAccounts: defineTable({
+    userId: v.id('users'),
+    type: v.string(), // "oauth", "email", "credentials"
+    provider: v.string(), // "google", "github", "email"
+    providerAccountId: v.string(),
+    refresh_token: v.optional(v.string()),
+    access_token: v.optional(v.string()),
+    expires_at: v.optional(v.number()),
+    token_type: v.optional(v.string()),
+    scope: v.optional(v.string()),
+    id_token: v.optional(v.string()),
+    session_state: v.optional(v.string()),
+  })
+    .index('by_user_id', ['userId'])
+    .index('by_provider_account', ['provider', 'providerAccountId']),
+
+  authSessions: defineTable({
+    userId: v.id('users'),
+    sessionToken: v.string(),
+    expires: v.number(),
+  })
+    .index('by_session_token', ['sessionToken'])
+    .index('by_user_id', ['userId']),
+
+  authVerificationTokens: defineTable({
+    identifier: v.string(),
+    token: v.string(),
+    expires: v.number(),
+  })
+    .index('by_identifier_token', ['identifier', 'token']),
+
+  // Migration tracking
+  migration_status: defineTable({
+    userId: v.id('users'),
+    migratedFrom: v.string(), // "clerk"
+    migratedAt: v.number(),
+    passwordResetSent: v.boolean(),
+    emailVerified: v.boolean(),
+  })
+    .index('by_user_id', ['userId']),
 });
