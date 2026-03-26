@@ -11,7 +11,7 @@ async function hashPassword(password: string): Promise<string> {
   const data = encoder.encode(password + process.env.CONVEX_AUTH_SECRET);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
@@ -25,11 +25,13 @@ export const signUpWithEmail = mutation({
     email: v.string(),
     password: v.string(),
     full_name: v.string(),
-    pharmacyDetails: v.optional(v.object({
-      name: v.string(),
-      licenseNumber: v.string(),
-      location: v.string(),
-    })),
+    pharmacyDetails: v.optional(
+      v.object({
+        name: v.string(),
+        licenseNumber: v.string(),
+        location: v.string(),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     // Check if user already exists
@@ -207,7 +209,7 @@ export const signOut = mutation({
           .query('authSessions')
           .withIndex('by_session_token', (q) => q.eq('sessionToken', args.sessionToken))
           .unique();
-        
+
         if (session) {
           await ctx.db.delete(session._id);
         }

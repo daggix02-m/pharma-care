@@ -95,7 +95,7 @@ export const getAllMedicines = query({
 });
 
 export const getMedicineDetails = query({
-  args: { 
+  args: {
     id: v.id('medicines'),
     sessionToken: v.optional(v.string()),
   },
@@ -106,7 +106,7 @@ export const getMedicineDetails = query({
 });
 
 export const getSalesByBranch = query({
-  args: { 
+  args: {
     branchId: v.id('branches'),
     sessionToken: v.optional(v.string()),
   },
@@ -120,7 +120,7 @@ export const getSalesByBranch = query({
 });
 
 export const getSales = query({
-  args: { 
+  args: {
     branchId: v.optional(v.id('branches')),
     sessionToken: v.optional(v.string()),
   },
@@ -149,7 +149,7 @@ export const getSales = query({
 });
 
 export const getSalesSummary = query({
-  args: { 
+  args: {
     branchId: v.optional(v.string()),
     sessionToken: v.optional(v.string()),
   },
@@ -168,7 +168,7 @@ export const getSalesSummary = query({
 });
 
 export const getInventorySummary = query({
-  args: { 
+  args: {
     branchId: v.optional(v.string()),
     sessionToken: v.optional(v.string()),
   },
@@ -183,7 +183,7 @@ export const getInventorySummary = query({
 });
 
 export const getTopSelling = query({
-  args: { 
+  args: {
     branchId: v.optional(v.string()),
     sessionToken: v.optional(v.string()),
   },
@@ -215,7 +215,7 @@ export const getNotifications = query({
 });
 
 export const getBranchOverview = query({
-  args: { 
+  args: {
     branchId: v.optional(v.id('branches')),
     sessionToken: v.optional(v.string()),
   },
@@ -229,7 +229,7 @@ export const getBranchOverview = query({
 });
 
 export const getMedicinesByBranch = query({
-  args: { 
+  args: {
     branchId: v.id('branches'),
     sessionToken: v.optional(v.string()),
   },
@@ -266,7 +266,7 @@ export const getPendingBranches = query({
 });
 
 export const getBranchMedicineStats = query({
-  args: { 
+  args: {
     branchId: v.id('branches'),
     sessionToken: v.optional(v.string()),
   },
@@ -297,7 +297,7 @@ export const getBranchMedicineStats = query({
 });
 
 export const searchMedicines = query({
-  args: { 
+  args: {
     query: v.string(),
     sessionToken: v.optional(v.string()),
   },
@@ -325,7 +325,7 @@ export const searchMedicines = query({
 });
 
 export const getMedicinesByCategory = query({
-  args: { 
+  args: {
     category: v.string(),
     sessionToken: v.optional(v.string()),
   },
@@ -349,7 +349,7 @@ export const getMedicinesByCategory = query({
 });
 
 export const getAuditTrail = query({
-  args: { 
+  args: {
     limit: v.optional(v.number()),
     sessionToken: v.optional(v.string()),
   },
@@ -372,7 +372,7 @@ export const getAuditTrail = query({
 });
 
 export const getReportsSales = query({
-  args: { 
+  args: {
     period: v.optional(v.string()),
     sessionToken: v.optional(v.string()),
   },
@@ -536,7 +536,7 @@ export const getRefundPolicy = query({
 });
 
 export const getPharmacyByCode = query({
-  args: { 
+  args: {
     code: v.string(),
     sessionToken: v.optional(v.string()),
   },
@@ -585,7 +585,7 @@ export const getMyPharmacy = query({
 });
 
 export const getStaffActivityLogs = query({
-  args: { 
+  args: {
     staffId: v.id('users'),
     sessionToken: v.optional(v.string()),
   },
@@ -609,7 +609,7 @@ export const getStaffActivityLogs = query({
 });
 
 export const getSalesByPeriod = query({
-  args: { 
+  args: {
     period: v.string(),
     sessionToken: v.optional(v.string()),
   },

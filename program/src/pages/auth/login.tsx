@@ -6,14 +6,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  AtSignIcon,
-  LockIcon,
-  Eye,
-  EyeOff,
-  Loader2,
-  ChevronLeftIcon,
-} from 'lucide-react';
+import { AtSignIcon, LockIcon, Eye, EyeOff, Loader2, ChevronLeftIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuthLayout } from '@/components/shared/AuthLayout';
 import { OAuthButtons } from '@/components/shared/OAuthButtons';
@@ -136,11 +129,7 @@ export function LoginPage() {
                 onClick={() => setShowPassword(!showPassword)}
                 className='absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors'
               >
-                {showPassword ? (
-                  <EyeOff className='h-5 w-5' />
-                ) : (
-                  <Eye className='h-5 w-5' />
-                )}
+                {showPassword ? <EyeOff className='h-5 w-5' /> : <Eye className='h-5 w-5' />}
               </button>
             </div>
           </div>

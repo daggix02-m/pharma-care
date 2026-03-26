@@ -29,16 +29,14 @@ export function SSOCallbackPage() {
           <h1 className='text-2xl font-bold font-display text-foreground tracking-tight'>
             OAuth Login
           </h1>
-          <p className='text-muted-foreground font-medium'>
-            Coming Soon
-          </p>
+          <p className='text-muted-foreground font-medium'>Coming Soon</p>
           <p className='text-sm text-muted-foreground'>
             Google and GitHub login will be available shortly.
           </p>
         </div>
-        
-        <Button asChild variant="outline">
-          <Link to="/auth/login">Back to Login</Link>
+
+        <Button asChild variant='outline'>
+          <Link to='/auth/login'>Back to Login</Link>
         </Button>
       </div>
     </div>

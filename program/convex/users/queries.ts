@@ -8,7 +8,7 @@ export const getCurrentUser = query({
   },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx, args.sessionToken);
-    
+
     if (!user) return null;
 
     let pharmacy = null;

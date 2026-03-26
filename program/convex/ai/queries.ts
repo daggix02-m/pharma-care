@@ -4,7 +4,7 @@ import { v } from 'convex/values';
 import { requireAdmin, requireAuth } from '../lib/auth';
 
 export const getConversation = query({
-  args: { 
+  args: {
     userId: v.id('users'),
     sessionToken: v.optional(v.string()),
   },
@@ -44,7 +44,7 @@ export const getConversation = query({
 });
 
 export const getConversationById = query({
-  args: { 
+  args: {
     conversationId: v.id('ai_conversations'),
     sessionToken: v.optional(v.string()),
   },

@@ -52,7 +52,9 @@ export function TestimonialsManager() {
 
   const testimonials = useQuery(
     api.admin.testimonials.getTestimonials,
-    sessionToken ? { sessionToken, status: statusFilter === 'all' ? undefined : statusFilter } : 'skip'
+    sessionToken
+      ? { sessionToken, status: statusFilter === 'all' ? undefined : statusFilter }
+      : 'skip'
   );
   const stats = useQuery(
     api.admin.testimonials.getTestimonialStats,

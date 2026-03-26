@@ -298,22 +298,19 @@ export const TopBar = React.memo(function TopBar({ className }: TopBarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const headerRef = React.useRef<HTMLElement>(null);
 
-  // Fetch pending counts for admin - only query when user is admin
+  // OPTIMIZATION: Combined pending counts query
+  // Reduces queries from 2 to 1, eliminates N+1 pattern
   const { sessionToken } = useAuth();
-  const pendingManagers = useQuery(
-    api.admin.queries.getPendingManagers,
-    userRole === 'admin' && sessionToken ? { sessionToken } : 'skip'
-  );
-  const pendingBranches = useQuery(
-    api.admin.queries.getPendingBranches,
+  const pendingCounts = useQuery(
+    api.admin.queries.getPendingCounts,
     userRole === 'admin' && sessionToken ? { sessionToken } : 'skip'
   );
 
   // Memoized computations
   const pendingCount = React.useMemo(() => {
     if (userRole !== 'admin') return 0;
-    return (pendingManagers?.length || 0) + (pendingBranches?.length || 0);
-  }, [userRole, pendingManagers, pendingBranches]);
+    return (pendingCounts?.managers || 0) + (pendingCounts?.branches || 0);
+  }, [userRole, pendingCounts]);
 
   const pharmacyName = React.useMemo(() => {
     return pharmacies.find((b) => b.pharmacy_name)?.pharmacy_name || 'PharmaCare';

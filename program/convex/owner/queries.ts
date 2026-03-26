@@ -26,7 +26,7 @@ export const getMyMessages = query({
 });
 
 export const getMessageStatus = query({
-  args: { 
+  args: {
     messageId: v.id('owner_messages'),
     sessionToken: v.optional(v.string()),
   },

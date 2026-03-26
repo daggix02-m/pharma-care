@@ -70,7 +70,7 @@ export const getMedicines = query({
 });
 
 export const getMedicineById = query({
-  args: { 
+  args: {
     id: v.id('medicines'),
     sessionToken: v.optional(v.string()),
   },

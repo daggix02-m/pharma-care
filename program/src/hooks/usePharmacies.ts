@@ -80,9 +80,7 @@ export function usePharmacies(): UsePharmaciesReturn {
 
   // Select correct query based on role with session token
   const pharmaciesData = useQuery(
-    isAdmin
-      ? api.admin.queries.getPharmacies
-      : api.manager.queries.getBranches,
+    isAdmin ? api.admin.queries.getPharmacies : api.manager.queries.getBranches,
     sessionToken ? { sessionToken } : 'skip'
   );
 

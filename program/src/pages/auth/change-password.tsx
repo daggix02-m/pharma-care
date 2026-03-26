@@ -193,10 +193,7 @@ export function ChangePasswordPage() {
                 </div>
                 <div className='h-1 w-full bg-muted rounded-full overflow-hidden'>
                   <div
-                    className={cn(
-                      'h-full transition-all duration-500',
-                      passwordStrength.color
-                    )}
+                    className={cn('h-full transition-all duration-500', passwordStrength.color)}
                     style={{ width: `${passwordStrength.strength}%` }}
                   />
                 </div>

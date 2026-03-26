@@ -3,13 +3,13 @@ import { v } from 'convex/values';
 
 /**
  * Migration script to move users from Clerk to Convex Auth
- * 
+ *
  * Usage:
  * 1. Export users from Clerk Dashboard as CSV
  * 2. Parse CSV and call this mutation for each user
  * 3. Set mustResetPassword: true for all migrated users
  * 4. Send password reset emails
- * 
+ *
  * Note: This mutation handles the data migration only.
  * Users will need to reset their passwords as we cannot migrate password hashes.
  */
@@ -61,12 +61,14 @@ export const migrateUserFromClerk = mutation({
         migratedFromClerk: true,
         migrationCompletedAt: Date.now(),
         mustResetPassword: true,
-        name: args.firstName && args.lastName 
-          ? `${args.firstName} ${args.lastName}` 
-          : existingUser.name,
-        full_name: args.firstName && args.lastName 
-          ? `${args.firstName} ${args.lastName}` 
-          : existingUser.full_name,
+        name:
+          args.firstName && args.lastName
+            ? `${args.firstName} ${args.lastName}`
+            : existingUser.name,
+        full_name:
+          args.firstName && args.lastName
+            ? `${args.firstName} ${args.lastName}`
+            : existingUser.full_name,
         image: args.imageUrl || existingUser.image,
       });
 
@@ -87,9 +89,10 @@ export const migrateUserFromClerk = mutation({
     }
 
     // Create new user from Clerk data
-    const fullName = args.firstName && args.lastName 
-      ? `${args.firstName} ${args.lastName}` 
-      : args.email.split('@')[0];
+    const fullName =
+      args.firstName && args.lastName
+        ? `${args.firstName} ${args.lastName}`
+        : args.email.split('@')[0];
 
     const userId = await ctx.db.insert('users', {
       email: args.email,
@@ -144,9 +147,9 @@ export const getMigrationStatus = mutation({
   args: {},
   handler: async (ctx) => {
     const allMigrations = await ctx.db.query('migration_status').collect();
-    
+
     const totalMigrated = allMigrations.length;
-    const passwordResetSent = allMigrations.filter(m => m.passwordResetSent).length;
+    const passwordResetSent = allMigrations.filter((m) => m.passwordResetSent).length;
     const pendingPasswordReset = totalMigrated - passwordResetSent;
 
     return {
@@ -189,7 +192,7 @@ export const getUsersNeedingPasswordReset = mutation({
       .filter((q) => q.eq(q.field('mustResetPassword'), true))
       .collect();
 
-    return users.map(user => ({
+    return users.map((user) => ({
       userId: user._id,
       email: user.email,
       fullName: user.full_name,

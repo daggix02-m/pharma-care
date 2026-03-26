@@ -129,9 +129,7 @@ export function VerifyEmailPage() {
                 )}
                 type='text'
                 value={verificationCode}
-                onChange={(e) =>
-                  setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))
-                }
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 maxLength={6}
               />
               <div className='pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4 text-muted-foreground'>

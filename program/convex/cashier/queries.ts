@@ -64,7 +64,7 @@ export const getDailySales = query({
 });
 
 export const searchMedicines = query({
-  args: { 
+  args: {
     query: v.string(),
     sessionToken: v.optional(v.string()),
   },
@@ -124,7 +124,7 @@ export const getTransactions = query({
 });
 
 export const getTransactionDetails = query({
-  args: { 
+  args: {
     transactionId: v.id('sales'),
     sessionToken: v.optional(v.string()),
   },
@@ -152,7 +152,7 @@ export const getTransactionDetails = query({
 });
 
 export const getReceipt = query({
-  args: { 
+  args: {
     saleId: v.id('sales'),
     sessionToken: v.optional(v.string()),
   },
@@ -203,7 +203,7 @@ export const getReturnableSales = query({
 });
 
 export const getReturnableItems = query({
-  args: { 
+  args: {
     saleId: v.id('sales'),
     sessionToken: v.optional(v.string()),
   },
@@ -508,7 +508,7 @@ export const getPendingPayments = query({
 });
 
 export const getPaymentDetails = query({
-  args: { 
+  args: {
     saleId: v.id('sales'),
     sessionToken: v.optional(v.string()),
   },

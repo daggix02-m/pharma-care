@@ -105,7 +105,8 @@
     @apply border-border;
   }
 
-  html, body {
+  html,
+  body {
     @apply overflow-x-hidden;
   }
 

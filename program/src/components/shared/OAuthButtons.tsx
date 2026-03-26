@@ -71,12 +71,12 @@ export function OAuthButtons({ mode }: OAuthButtonsProps) {
               Social Login Coming Soon
             </p>
             <p className='text-xs text-secondary-foreground/70 mt-0.5'>
-              We're working on adding Google, GitHub, and Apple authentication. 
-              Stay tuned for updates!
+              We're working on adding Google, GitHub, and Apple authentication. Stay tuned for
+              updates!
             </p>
           </div>
         </div>
-        
+
         {/* Decorative elements */}
         <div className='absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-pulse' />
       </div>

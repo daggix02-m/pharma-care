@@ -38,10 +38,9 @@ export function Transactions() {
   const { sessionToken } = useAuth();
 
   const transactions =
-    (useQuery(
-      api.cashier.queries.getTransactions,
-      sessionToken ? { sessionToken } : 'skip'
-    ) as Transaction[] | undefined) || [];
+    (useQuery(api.cashier.queries.getTransactions, sessionToken ? { sessionToken } : 'skip') as
+      | Transaction[]
+      | undefined) || [];
 
   const filteredTransactions = transactions.filter((t: Transaction) => {
     const matchesSearch =

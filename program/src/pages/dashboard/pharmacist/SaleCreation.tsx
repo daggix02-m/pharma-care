@@ -58,10 +58,8 @@ interface PaymentData {
 
 export function SaleCreation() {
   const { sessionToken } = useAuth();
-  const medicines = useQuery(
-    api.pharmacist.queries.getMedicines,
-    sessionToken ? { sessionToken } : 'skip'
-  ) || [];
+  const medicines =
+    useQuery(api.pharmacist.queries.getMedicines, sessionToken ? { sessionToken } : 'skip') || [];
   const loading = medicines === undefined;
   const createSaleMutation = useMutation(api.pharmacist.mutations.createSale);
 

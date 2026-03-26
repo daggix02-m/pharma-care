@@ -9,7 +9,7 @@ export default defineSchema({
     emailVerified: v.optional(v.boolean()),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
-    
+
     // Application-specific fields
     full_name: v.string(),
     role: v.string(), // "admin", "manager", "pharmacist", "cashier", "owner"
@@ -36,13 +36,13 @@ export default defineSchema({
     // v4.0 Activity fields
     lastActionPerformed: v.optional(v.string()),
     totalActionsLast30Days: v.optional(v.number()),
-    
+
     // Migration fields
     migratedFromClerk: v.optional(v.boolean()),
     clerkId: v.optional(v.string()), // Keep for reference during migration
     mustResetPassword: v.optional(v.boolean()),
     migrationCompletedAt: v.optional(v.number()),
-    
+
     // Email/Password Authentication
     passwordHash: v.optional(v.string()), // Bcrypt hashed password
   })
@@ -705,8 +705,7 @@ export default defineSchema({
     identifier: v.string(),
     token: v.string(),
     expires: v.number(),
-  })
-    .index('by_identifier_token', ['identifier', 'token']),
+  }).index('by_identifier_token', ['identifier', 'token']),
 
   // Migration tracking
   migration_status: defineTable({
@@ -715,6 +714,5 @@ export default defineSchema({
     migratedAt: v.number(),
     passwordResetSent: v.boolean(),
     emailVerified: v.boolean(),
-  })
-    .index('by_user_id', ['userId']),
+  }).index('by_user_id', ['userId']),
 });

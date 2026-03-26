@@ -73,7 +73,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(localStorage.getItem('sessionToken'));
+  const [sessionToken, setSessionToken] = useState<string | null>(
+    localStorage.getItem('sessionToken')
+  );
 
   // Listen for session token changes
   useEffect(() => {
@@ -99,25 +101,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const resetPasswordMutation = useMutation(api.auth.mutations.resetPassword);
 
   useEffect(() => {
-    // Loading is complete once we have user data (or null if not logged in)
+    // Set maximum loading time of 3 seconds as safety net
+    const timeout = setTimeout(() => {
+      console.log('[AuthContext] Loading timeout reached, forcing loading state to false');
+      setLoading(false);
+    }, 3000);
+
     if (dbUser !== undefined) {
+      clearTimeout(timeout);
       setLoading(false);
     }
+
+    return () => clearTimeout(timeout);
   }, [dbUser]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await signInMutation({ email, password });
-      
+
       if (result.success) {
         // Store session token
         localStorage.setItem('sessionToken', result.sessionToken);
-        
+
         toast.success('Signed in successfully');
-        
+
         // Navigate based on role - use window.location for full page reload
         // This ensures Convex queries re-fetch with the new session
         const homePath = getHomePath(result.role);
@@ -136,20 +146,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const logout = async () => {
     setIsLoading(true);
-    
+
     try {
       const sessionToken = localStorage.getItem('sessionToken');
       await signOutMutation({ sessionToken: sessionToken || undefined });
-      
+
       // Clear session
       localStorage.removeItem('sessionToken');
-      
+
       toast.success('Signed out successfully');
       window.location.href = '/auth/login';
     } catch (err: any) {
       console.error('[AuthContext] Logout error:', err);
       toast.error('Logout failed');
-      
+
       // Still clear local session
       localStorage.removeItem('sessionToken');
       window.location.href = '/auth/login';
@@ -161,7 +171,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signup = async (userData: SignupData) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await signUpMutation({
         email: userData.email,
@@ -169,7 +179,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         full_name: userData.full_name,
         pharmacyDetails: userData.pharmacyDetails,
       });
-      
+
       if (result.success) {
         toast.success(result.message);
         // Store email in sessionStorage since we can't pass state with window.location
@@ -189,10 +199,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const requestPasswordReset = async (email: string) => {
     setIsLoading(true);
-    
+
     try {
       const result = await requestPasswordResetMutation({ email });
-      
+
       if (result.success) {
         toast.success(result.message);
       }
@@ -208,10 +218,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const resetPassword = async (token: string, email: string, newPassword: string) => {
     setIsLoading(true);
-    
+
     try {
       const result = await resetPasswordMutation({ token, email, newPassword });
-      
+
       if (result.success) {
         toast.success(result.message);
         window.location.href = '/auth/login';

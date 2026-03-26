@@ -72,14 +72,28 @@ const queryClient = new QueryClient({
 const GlobalLoader = React.memo(function GlobalLoader() {
   return (
     <div className='min-h-screen flex items-center justify-center bg-background'>
-      <div className='text-center p-8 border-2 border-foreground'>
-        <div className='w-12 h-12 bg-foreground mx-auto mb-4 animate-pulse' />
-        <h2 className='text-2xl font-display font-bold tracking-tight mb-2 uppercase'>
+      <div className='text-center p-8'>
+        <img src='/logo.png' alt='PharmaCare' className='w-24 h-24 mx-auto mb-6 animate-pulse' />
+        <h2 className='text-3xl font-display font-bold tracking-tight mb-3 text-foreground'>
           PharmaCare
         </h2>
         <p className='text-muted-foreground font-mono text-sm uppercase tracking-widest'>
           Initialising...
         </p>
+        <div className='mt-6 flex justify-center gap-1'>
+          <div
+            className='w-2 h-2 bg-primary rounded-full animate-bounce'
+            style={{ animationDelay: '0ms' }}
+          />
+          <div
+            className='w-2 h-2 bg-primary rounded-full animate-bounce'
+            style={{ animationDelay: '150ms' }}
+          />
+          <div
+            className='w-2 h-2 bg-primary rounded-full animate-bounce'
+            style={{ animationDelay: '300ms' }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -156,20 +170,20 @@ const AppRoutes = React.memo(function AppRoutes() {
       <Route path='/about' element={<AboutPage />} />
       <Route path='/contact-success' element={<ContactSuccess />} />
 
-      {/* Shared Boundary for Auth/Dashboard logic */}
-      <Route element={<LoadingBoundary />}>
-        {/* Auth Routes */}
-        <Route path='/auth/login/*' element={<LoginPage />} />
-        <Route path='/auth/signup/*' element={<SignupPage />} />
-        <Route path='/auth/sso-callback' element={<SSOCallbackPage />} />
-        <Route path='/auth/forgot-password/*' element={<ForgotPasswordPage />} />
-        <Route path='/auth/reset-password' element={<ResetPasswordPage />} />
-        <Route path='/auth/change-password' element={<ChangePasswordPage />} />
-        <Route path='/auth/verify-email' element={<VerifyEmailPage />} />
-        <Route path='/auth/pending-approval' element={<PendingApprovalPage />} />
-        <Route path='/auth/pharmacy-request-confirm' element={<PharmacyRequestConfirmPage />} />
-        <Route path='/auth/pharmacy-suspended' element={<PharmacySuspendedPage />} />
+      {/* Public Auth Routes - NO LoadingBoundary */}
+      <Route path='/auth/login/*' element={<LoginPage />} />
+      <Route path='/auth/signup/*' element={<SignupPage />} />
+      <Route path='/auth/sso-callback' element={<SSOCallbackPage />} />
+      <Route path='/auth/forgot-password/*' element={<ForgotPasswordPage />} />
+      <Route path='/auth/reset-password' element={<ResetPasswordPage />} />
+      <Route path='/auth/change-password' element={<ChangePasswordPage />} />
+      <Route path='/auth/verify-email' element={<VerifyEmailPage />} />
+      <Route path='/auth/pending-approval' element={<PendingApprovalPage />} />
+      <Route path='/auth/pharmacy-request-confirm' element={<PharmacyRequestConfirmPage />} />
+      <Route path='/auth/pharmacy-suspended' element={<PharmacySuspendedPage />} />
 
+      {/* Protected Routes - WITH LoadingBoundary */}
+      <Route element={<LoadingBoundary />}>
         {/* Owner Dashboard */}
         <Route
           path='/owner'

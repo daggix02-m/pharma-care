@@ -4,7 +4,14 @@ import { useState, FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronLeftIcon, AtSignIcon, AlertCircle, CheckCircle2, Info, Loader2 } from 'lucide-react';
+import {
+  ChevronLeftIcon,
+  AtSignIcon,
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  Loader2,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { AuthLayout } from '@/components/shared/AuthLayout';

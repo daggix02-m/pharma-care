@@ -21,9 +21,7 @@ export async function getAuthenticatedUser(ctx: any, sessionToken?: string) {
   if (sessionToken) {
     const session = await ctx.db
       .query('authSessions')
-      .withIndex('by_session_token', (q: any) =>
-        q.eq('sessionToken', sessionToken)
-      )
+      .withIndex('by_session_token', (q: any) => q.eq('sessionToken', sessionToken))
       .first();
 
     if (session && session.expires > Date.now()) {
@@ -39,11 +37,17 @@ export async function getAuthenticatedUser(ctx: any, sessionToken?: string) {
  * Require admin role
  */
 export async function requireAdmin(ctx: any, sessionToken?: string) {
-  console.log('[AUTH] requireAdmin called with sessionToken:', sessionToken ? 'present' : 'missing');
-  
+  console.log(
+    '[AUTH] requireAdmin called with sessionToken:',
+    sessionToken ? 'present' : 'missing'
+  );
+
   const user = await getAuthenticatedUser(ctx, sessionToken);
-  
-  console.log('[AUTH] getAuthenticatedUser returned:', user ? `user ${user._id} with role ${user.role}` : 'null');
+
+  console.log(
+    '[AUTH] getAuthenticatedUser returned:',
+    user ? `user ${user._id} with role ${user.role}` : 'null'
+  );
 
   if (!user) {
     console.log('[AUTH] FAILED: No user found');

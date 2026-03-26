@@ -24,10 +24,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-slot', 'lucide-react'],
-          'charts': ['recharts'],
-          'utils': ['clsx', 'tailwind-merge', 'date-fns', 'gsap'],
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-select',
+            '@radix-ui/react-slot',
+            'lucide-react',
+          ],
+          charts: ['recharts'],
+          utils: ['clsx', 'tailwind-merge', 'date-fns', 'gsap'],
         },
       },
     },

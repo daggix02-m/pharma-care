@@ -126,7 +126,12 @@ export function FloatingPaths({ position }: { position: number }) {
 
   return (
     <div ref={containerRef} className='pointer-events-none absolute inset-0 overflow-hidden'>
-      <svg className='h-full w-full' viewBox='0 0 696 316' preserveAspectRatio='xMidYMid slice' fill='none'>
+      <svg
+        className='h-full w-full'
+        viewBox='0 0 696 316'
+        preserveAspectRatio='xMidYMid slice'
+        fill='none'
+      >
         <title>Background Paths</title>
         {paths.map((path) => (
           <path
