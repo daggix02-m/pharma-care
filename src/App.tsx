@@ -24,34 +24,30 @@ import { PendingApprovalPage } from './pages/auth/pending-approval';
 import { PharmacyRequestConfirmPage } from './pages/auth/pharmacy-request-confirm';
 import { PharmacySuspendedPage } from './pages/auth/pharmacy-suspended';
 
-// Pages - Dashboard - Owner
-import { OwnerDashboard } from './pages/dashboard/owner/OwnerDashboard';
-import { OwnerAppealHistory } from './pages/dashboard/owner/appeals/OwnerAppealHistory';
-import { TestimonialSubmission } from './pages/dashboard/owner/testimonials/TestimonialSubmission';
+// Pages - Dashboard - Lazy loaded for code splitting
+const OwnerDashboard = React.lazy(() => import('./pages/dashboard/owner/OwnerDashboard'));
+const OwnerAppealHistory = React.lazy(() => import('./pages/dashboard/owner/appeals/OwnerAppealHistory'));
+const TestimonialSubmission = React.lazy(() => import('./pages/dashboard/owner/testimonials/TestimonialSubmission'));
 
-// Pages - Dashboard - Admin
-import { AdminDashboard } from './pages/dashboard/admin/AdminDashboard';
-import { AdminAppealReview } from './pages/dashboard/admin/appeals/AdminAppealReview';
-import { PharmacyDetailPage } from './pages/dashboard/admin/pharmacy-detail/PharmacyDetailPage';
+const AdminDashboard = React.lazy(() => import('./pages/dashboard/admin/AdminDashboard'));
+const AdminAppealReview = React.lazy(() => import('./pages/dashboard/admin/appeals/AdminAppealReview'));
+const PharmacyDetailPage = React.lazy(() => import('./pages/dashboard/admin/pharmacy-detail/PharmacyDetailPage'));
 
-// Pages - Dashboard - Manager
-import { ManagerDashboard } from './pages/dashboard/manager/ManagerDashboard';
+const ManagerDashboard = React.lazy(() => import('./pages/dashboard/manager/ManagerDashboard'));
 
-// Pages - Dashboard - Pharmacist
-import { PharmacistDashboard } from './pages/dashboard/pharmacist/PharmacistDashboard';
+const PharmacistDashboard = React.lazy(() => import('./pages/dashboard/pharmacist/PharmacistDashboard'));
 
-// Pages - Dashboard - Cashier
-import { CashierOverview } from './pages/dashboard/cashier/CashierOverview';
-import { Settings as CashierSettings } from './pages/dashboard/cashier/Settings';
-import { StockCheck } from './pages/dashboard/cashier/StockCheck';
-import { Receipts } from './pages/dashboard/cashier/Receipts';
-import { PendingPayments } from './pages/dashboard/cashier/PendingPayments';
-import { Returns } from './pages/dashboard/cashier/Returns';
-import { Transactions } from './pages/dashboard/cashier/Transactions';
-import { POSOperations } from './pages/dashboard/cashier/POSOperations';
-import { FinancialOperations } from './pages/dashboard/cashier/FinancialOperations';
-import { SessionManagement } from './pages/dashboard/cashier/SessionManagement';
-import { ShiftSummary } from './pages/dashboard/cashier/ShiftSummary';
+const CashierOverview = React.lazy(() => import('./pages/dashboard/cashier/CashierOverview'));
+const CashierSettings = React.lazy(() => import('./pages/dashboard/cashier/Settings'));
+const StockCheck = React.lazy(() => import('./pages/dashboard/cashier/StockCheck'));
+const Receipts = React.lazy(() => import('./pages/dashboard/cashier/Receipts'));
+const PendingPayments = React.lazy(() => import('./pages/dashboard/cashier/PendingPayments'));
+const Returns = React.lazy(() => import('./pages/dashboard/cashier/Returns'));
+const Transactions = React.lazy(() => import('./pages/dashboard/cashier/Transactions'));
+const POSOperations = React.lazy(() => import('./pages/dashboard/cashier/POSOperations'));
+const FinancialOperations = React.lazy(() => import('./pages/dashboard/cashier/FinancialOperations'));
+const SessionManagement = React.lazy(() => import('./pages/dashboard/cashier/SessionManagement'));
+const ShiftSummary = React.lazy(() => import('./pages/dashboard/cashier/ShiftSummary'));
 
 // Optimized QueryClient configuration
 const queryClient = new QueryClient({
@@ -182,121 +178,123 @@ const AppRoutes = React.memo(function AppRoutes() {
       <Route path='/auth/pharmacy-request-confirm' element={<PharmacyRequestConfirmPage />} />
       <Route path='/auth/pharmacy-suspended' element={<PharmacySuspendedPage />} />
 
-      {/* Protected Routes - WITH LoadingBoundary */}
+      {/* Protected Routes - WITH LoadingBoundary and Suspense for lazy loading */}
       <Route element={<LoadingBoundary />}>
-        {/* Owner Dashboard */}
-        <Route
-          path='/owner'
-          element={
-            <RoleProtectedRoute allowedRoles={['owner']}>
-              <DashboardLayout>
-                <OwnerDashboard />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
-        <Route
-          path='/owner/appeals'
-          element={
-            <RoleProtectedRoute allowedRoles={['owner']}>
-              <DashboardLayout>
-                <OwnerAppealHistory />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
-        <Route
-          path='/owner/testimonials'
-          element={
-            <RoleProtectedRoute allowedRoles={['owner']}>
-              <DashboardLayout>
-                <TestimonialSubmission />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
+        <Route element={<React.Suspense fallback={<GlobalLoader />} />}>
+          {/* Owner Dashboard */}
+          <Route
+            path='/owner'
+            element={
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <DashboardLayout>
+                  <OwnerDashboard />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path='/owner/appeals'
+            element={
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <DashboardLayout>
+                  <OwnerAppealHistory />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path='/owner/testimonials'
+            element={
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <DashboardLayout>
+                  <TestimonialSubmission />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
 
-        {/* Admin Dashboard */}
-        <Route
-          path='/admin'
-          element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <DashboardLayout>
-                <AdminDashboard />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
-        <Route
-          path='/admin/pharmacies/:pharmacyId'
-          element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <DashboardLayout>
-                <PharmacyDetailPage />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
-        <Route
-          path='/admin/appeals'
-          element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <DashboardLayout>
-                <AdminAppealReview />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
+          {/* Admin Dashboard */}
+          <Route
+            path='/admin'
+            element={
+              <RoleProtectedRoute allowedRoles={['admin']}>
+                <DashboardLayout>
+                  <AdminDashboard />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path='/admin/pharmacies/:pharmacyId'
+            element={
+              <RoleProtectedRoute allowedRoles={['admin']}>
+                <DashboardLayout>
+                  <PharmacyDetailPage />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path='/admin/appeals'
+            element={
+              <RoleProtectedRoute allowedRoles={['admin']}>
+                <DashboardLayout>
+                  <AdminAppealReview />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
 
-        {/* Manager Dashboard */}
-        <Route
-          path='/manager'
-          element={
-            <RoleProtectedRoute allowedRoles={['manager']}>
-              <DashboardLayout>
-                <ManagerDashboard />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
+          {/* Manager Dashboard */}
+          <Route
+            path='/manager'
+            element={
+              <RoleProtectedRoute allowedRoles={['manager']}>
+                <DashboardLayout>
+                  <ManagerDashboard />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
 
-        {/* Pharmacist Dashboard */}
-        <Route
-          path='/pharmacist'
-          element={
-            <RoleProtectedRoute allowedRoles={['pharmacist']}>
-              <DashboardLayout>
-                <PharmacistDashboard />
-              </DashboardLayout>
-            </RoleProtectedRoute>
-          }
-        />
+          {/* Pharmacist Dashboard */}
+          <Route
+            path='/pharmacist'
+            element={
+              <RoleProtectedRoute allowedRoles={['pharmacist']}>
+                <DashboardLayout>
+                  <PharmacistDashboard />
+                </DashboardLayout>
+              </RoleProtectedRoute>
+            }
+          />
 
-        {/* Cashier Routes - Nested */}
-        <Route
-          path='/cashier'
-          element={
-            <RoleProtectedRoute allowedRoles={['cashier']}>
-              <DashboardLayout />
-            </RoleProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to='overview' replace />} />
-          <Route path='overview' element={<CashierOverview />} />
-          <Route path='stock' element={<StockCheck />} />
-          <Route path='receipts' element={<Receipts />} />
-          <Route path='settings' element={<CashierSettings />} />
-          <Route path='payments/pending' element={<PendingPayments />} />
-          <Route path='returns' element={<Returns />} />
-          <Route path='transactions' element={<Transactions />} />
-          <Route path='pos' element={<POSOperations />} />
-          <Route path='sessions' element={<SessionManagement />} />
-          <Route path='shift-summary' element={<ShiftSummary />} />
-          <Route path='sales' element={<FinancialOperations />} />
+          {/* Cashier Routes - Nested */}
+          <Route
+            path='/cashier'
+            element={
+              <RoleProtectedRoute allowedRoles={['cashier']}>
+                <DashboardLayout />
+              </RoleProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to='overview' replace />} />
+            <Route path='overview' element={<CashierOverview />} />
+            <Route path='stock' element={<StockCheck />} />
+            <Route path='receipts' element={<Receipts />} />
+            <Route path='settings' element={<CashierSettings />} />
+            <Route path='payments/pending' element={<PendingPayments />} />
+            <Route path='returns' element={<Returns />} />
+            <Route path='transactions' element={<Transactions />} />
+            <Route path='pos' element={<POSOperations />} />
+            <Route path='sessions' element={<SessionManagement />} />
+            <Route path='shift-summary' element={<ShiftSummary />} />
+            <Route path='sales' element={<FinancialOperations />} />
+          </Route>
+
+          {/* Catch-all */}
+          <Route path='*' element={<Navigate to='/' replace />} />
         </Route>
-
-        {/* Catch-all */}
-        <Route path='*' element={<Navigate to='/' replace />} />
       </Route>
     </Routes>
   );

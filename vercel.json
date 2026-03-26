@@ -1,8 +1,8 @@
 {
-  "framework": null,
-  "buildCommand": "cd program && npm install && npm run build",
-  "outputDirectory": "program/dist",
-  "installCommand": "cd program && npm install",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "rewrites": [
     {
       "source": "/(.*)",
@@ -36,7 +36,7 @@
       ]
     },
     {
-      "source": "/static/(.*)",
+      "source": "/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
