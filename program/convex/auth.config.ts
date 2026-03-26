@@ -2,7 +2,28 @@ import { defineAuthConfig } from "@convex-dev/auth/server";
 
 export default defineAuthConfig({
   providers: [
-    // OAuth Providers - credentials will be loaded from environment variables
+    // Email/Password Provider (Active)
+    {
+      id: "credentials",
+      type: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (credentials) => {
+        // This is handled by our custom mutations
+        return null;
+      },
+    },
+
+    /* 
+    ╔════════════════════════════════════════════════════════════════╗
+    ║  OAUTH PROVIDERS - COMING SOON                                 ║
+    ║  Uncomment and configure when ready to add OAuth support       ║
+    ╚════════════════════════════════════════════════════════════════╝
+    */
+    
+    /*
     {
       id: "google",
       type: "oauth",
@@ -53,6 +74,7 @@ export default defineAuthConfig({
         image: profile.avatar_url,
       }),
     },
+    */
   ],
   
   // Email configuration for password reset and verification

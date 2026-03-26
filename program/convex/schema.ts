@@ -42,6 +42,9 @@ export default defineSchema({
     clerkId: v.optional(v.string()), // Keep for reference during migration
     mustResetPassword: v.optional(v.boolean()),
     migrationCompletedAt: v.optional(v.number()),
+    
+    // Email/Password Authentication
+    passwordHash: v.optional(v.string()), // Bcrypt hashed password
   })
     .index('by_email', ['email'])
     .index('by_tokenIdentifier', ['tokenIdentifier'])

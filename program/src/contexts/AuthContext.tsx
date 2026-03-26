@@ -39,7 +39,7 @@ interface AuthContextValue {
   pharmacyId?: string;
   pharmacyName?: string;
   pharmacyStatus?: string;
-  isSyncing: boolean;
+  isLoading: boolean;
 }
 
 interface SignupData {
@@ -70,13 +70,16 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // Query current user from Convex
   const dbUser = useQuery(api.users.queries.getCurrentUser);
 
   // Mutations
+  const signInMutation = useMutation(api.auth.mutations.signInWithEmail);
+  const signUpMutation = useMutation(api.auth.mutations.signUpWithEmail);
+  const signOutMutation = useMutation(api.auth.mutations.signOut);
   const requestPasswordResetMutation = useMutation(api.auth.mutations.requestPasswordReset);
   const resetPasswordMutation = useMutation(api.auth.mutations.resetPassword);
 
@@ -88,68 +91,86 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [dbUser]);
 
   const login = async (email: string, password: string) => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     
     try {
-      // With Convex Auth, login is handled via OAuth or the auth API
-      // For email/password, we'll redirect to the login page
-      // This is a placeholder for the actual implementation
-      console.log('[AuthContext] Login initiated for:', email);
+      const result = await signInMutation({ email, password });
       
-      // TODO: Implement actual Convex Auth login
-      // This will be implemented when we have the full Convex Auth setup
-      
-      toast.success('Login functionality coming soon with Convex Auth');
+      if (result.success) {
+        // Store session token
+        localStorage.setItem('sessionToken', result.sessionToken);
+        
+        toast.success('Signed in successfully');
+        
+        // Navigate based on role
+        const homePath = getHomePath(result.role);
+        navigate(homePath);
+      }
     } catch (err: any) {
       console.error('[AuthContext] Login error:', err);
-      setError(err.message || 'Login failed');
-      toast.error(err.message || 'Login failed');
+      const errorMessage = err.message || 'Login failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    setLoading(true);
+    setIsLoading(true);
     
     try {
-      // TODO: Implement Convex Auth logout
-      console.log('[AuthContext] Logout initiated');
+      const sessionToken = localStorage.getItem('sessionToken');
+      await signOutMutation({ sessionToken: sessionToken || undefined });
       
-      // For now, just navigate to login
+      // Clear session
+      localStorage.removeItem('sessionToken');
+      
+      toast.success('Signed out successfully');
       navigate('/auth/login');
-      toast.success('Logged out successfully');
     } catch (err: any) {
       console.error('[AuthContext] Logout error:', err);
       toast.error('Logout failed');
+      
+      // Still clear local session
+      localStorage.removeItem('sessionToken');
+      navigate('/auth/login');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const signup = async (userData: SignupData) => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     
     try {
-      // TODO: Implement Convex Auth signup
-      console.log('[AuthContext] Signup initiated for:', userData.email);
+      const result = await signUpMutation({
+        email: userData.email,
+        password: userData.password,
+        full_name: userData.full_name,
+        pharmacyDetails: userData.pharmacyDetails,
+      });
       
-      toast.success('Signup functionality coming soon with Convex Auth');
+      if (result.success) {
+        toast.success(result.message);
+        navigate('/auth/verify-email', { state: { email: userData.email } });
+      }
     } catch (err: any) {
       console.error('[AuthContext] Signup error:', err);
-      setError(err.message || 'Signup failed');
-      toast.error(err.message || 'Signup failed');
+      const errorMessage = err.message || 'Signup failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const requestPasswordReset = async (email: string) => {
-    setLoading(true);
+    setIsLoading(true);
     
     try {
       const result = await requestPasswordResetMutation({ email });
@@ -159,15 +180,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     } catch (err: any) {
       console.error('[AuthContext] Password reset request error:', err);
-      toast.error(err.message || 'Failed to request password reset');
+      const errorMessage = err.message || 'Failed to request password reset';
+      toast.error(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const resetPassword = async (token: string, email: string, newPassword: string) => {
-    setLoading(true);
+    setIsLoading(true);
     
     try {
       const result = await resetPasswordMutation({ token, email, newPassword });
@@ -178,10 +200,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     } catch (err: any) {
       console.error('[AuthContext] Password reset error:', err);
-      toast.error(err.message || 'Failed to reset password');
+      const errorMessage = err.message || 'Failed to reset password';
+      toast.error(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
+    }
+  };
+
+  const getHomePath = (role: string): string => {
+    switch (role) {
+      case 'admin':
+        return '/admin';
+      case 'manager':
+        return '/manager';
+      case 'pharmacist':
+        return '/pharmacist';
+      case 'cashier':
+        return '/cashier/overview';
+      case 'owner':
+        return '/dashboard/owner';
+      default:
+        return '/auth/pending-approval';
     }
   };
 
@@ -217,7 +257,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     pharmacyId: dbUser?.pharmacyId,
     pharmacyName: dbUser?.pharmacy?.name,
     pharmacyStatus: dbUser?.pharmacy?.status,
-    isSyncing,
+    isLoading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

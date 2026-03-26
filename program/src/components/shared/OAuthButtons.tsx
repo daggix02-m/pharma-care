@@ -1,94 +1,97 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { useSignIn, useSignUp } from '@clerk/clerk-react';
-import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Lock, Clock } from 'lucide-react';
 
 interface OAuthButtonsProps {
   mode: 'login' | 'signup';
 }
 
 export function OAuthButtons({ mode }: OAuthButtonsProps) {
-  const { signIn } = useSignIn();
-  const { signUp } = useSignUp();
-  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
-
-  const handleOAuth = async (strategy: string) => {
-    try {
-      setLoadingProvider(strategy);
-
-      const callbackUrl = '/auth/sso-callback';
-
-      if (mode === 'login') {
-        if (!signIn) return;
-        await signIn.authenticateWithRedirect({
-          strategy: strategy as any,
-          redirectUrl: callbackUrl,
-          redirectUrlComplete: callbackUrl,
-        });
-      } else {
-        if (!signUp) return;
-        await signUp.authenticateWithRedirect({
-          strategy: strategy as any,
-          redirectUrl: callbackUrl,
-          redirectUrlComplete: callbackUrl,
-        });
-      }
-    } catch (err: any) {
-      setLoadingProvider(null);
-      toast.error(err.errors?.[0]?.message || 'Failed to authenticate');
-    }
-  };
-
   return (
-    <div className='space-y-3'>
-      <Button
-        type='button'
-        size='lg'
-        variant='outline'
-        className='w-full h-12 bg-card hover:bg-muted text-foreground font-semibold rounded-xl border-input'
-        onClick={() => handleOAuth('oauth_google')}
-        disabled={loadingProvider !== null}
-      >
-        {loadingProvider === 'oauth_google' ? (
-          <Loader2 className='mr-2 h-4 w-4 animate-spin text-foreground' />
-        ) : (
-          <GoogleIcon className='mr-3 h-5 w-5' />
-        )}
-        Continue with Google
-      </Button>
+    <div className='space-y-4'>
+      {/* Google OAuth - Coming Soon */}
+      <div className='relative group'>
+        <Button
+          type='button'
+          size='lg'
+          variant='outline'
+          disabled
+          className='w-full h-12 bg-muted/50 border-input opacity-60 cursor-not-allowed'
+        >
+          <GoogleIcon className='mr-3 h-5 w-5 opacity-50' />
+          <span className='text-muted-foreground'>
+            {mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
+          </span>
+          <Lock className='ml-2 h-4 w-4 text-muted-foreground' />
+        </Button>
+      </div>
 
-      <Button
-        type='button'
-        size='lg'
-        variant='outline'
-        className='w-full h-12 bg-card hover:bg-muted text-foreground font-semibold rounded-xl border-input'
-        onClick={() => handleOAuth('oauth_apple')}
-        disabled={loadingProvider !== null}
-      >
-        {loadingProvider === 'oauth_apple' ? (
-          <Loader2 className='mr-2 h-4 w-4 animate-spin text-foreground' />
-        ) : (
-          <AppleIcon className='mr-3 h-5 w-5' />
-        )}
-        Continue with Apple
-      </Button>
+      {/* GitHub OAuth - Coming Soon */}
+      <div className='relative group'>
+        <Button
+          type='button'
+          size='lg'
+          variant='outline'
+          disabled
+          className='w-full h-12 bg-muted/50 border-input opacity-60 cursor-not-allowed'
+        >
+          <GithubIcon className='mr-3 h-5 w-5 opacity-50' />
+          <span className='text-muted-foreground'>
+            {mode === 'login' ? 'Sign in with GitHub' : 'Sign up with GitHub'}
+          </span>
+          <Lock className='ml-2 h-4 w-4 text-muted-foreground' />
+        </Button>
+      </div>
 
-      <Button
-        type='button'
-        size='lg'
-        variant='outline'
-        className='w-full h-12 bg-card hover:bg-muted text-foreground font-semibold rounded-xl border-input'
-        onClick={() => handleOAuth('oauth_github')}
-        disabled={loadingProvider !== null}
-      >
-        {loadingProvider === 'oauth_github' ? (
-          <Loader2 className='mr-2 h-4 w-4 animate-spin text-foreground' />
-        ) : (
-          <GithubIcon className='mr-3 h-5 w-5' />
-        )}
-        Continue with GitHub
-      </Button>
+      {/* Apple OAuth - Coming Soon */}
+      <div className='relative group'>
+        <Button
+          type='button'
+          size='lg'
+          variant='outline'
+          disabled
+          className='w-full h-12 bg-muted/50 border-input opacity-60 cursor-not-allowed'
+        >
+          <AppleIcon className='mr-3 h-5 w-5 opacity-50' />
+          <span className='text-muted-foreground'>
+            {mode === 'login' ? 'Sign in with Apple' : 'Sign up with Apple'}
+          </span>
+          <Lock className='ml-2 h-4 w-4 text-muted-foreground' />
+        </Button>
+      </div>
+
+      {/* Coming Soon Banner - PharmaCare Theme */}
+      <div className='relative mt-4 p-4 bg-secondary/20 border border-secondary/30 rounded-xl'>
+        <div className='flex items-center gap-3'>
+          <div className='p-2 bg-secondary rounded-lg'>
+            <Clock className='h-5 w-5 text-secondary-foreground' />
+          </div>
+          <div className='flex-1'>
+            <p className='text-sm font-semibold text-secondary-foreground'>
+              Social Login Coming Soon
+            </p>
+            <p className='text-xs text-secondary-foreground/70 mt-0.5'>
+              We're working on adding Google, GitHub, and Apple authentication. 
+              Stay tuned for updates!
+            </p>
+          </div>
+        </div>
+        
+        {/* Decorative elements */}
+        <div className='absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-pulse' />
+      </div>
+
+      {/* Alternative divider */}
+      <div className='relative my-6'>
+        <div className='absolute inset-0 flex items-center'>
+          <div className='w-full border-t border-border' />
+        </div>
+        <div className='relative flex justify-center text-xs uppercase'>
+          <span className='bg-card px-2 text-muted-foreground font-medium'>
+            Or continue with email
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
