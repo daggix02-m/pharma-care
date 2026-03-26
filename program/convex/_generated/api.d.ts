@@ -16,6 +16,8 @@ import type * as admin_siteSettings from "../admin/siteSettings.js";
 import type * as admin_testimonials from "../admin/testimonials.js";
 import type * as ai_mutations from "../ai/mutations.js";
 import type * as ai_queries from "../ai/queries.js";
+import type * as auth_mutations from "../auth/mutations.js";
+import type * as auth_queries from "../auth/queries.js";
 import type * as cashier_mutations from "../cashier/mutations.js";
 import type * as cashier_queries from "../cashier/queries.js";
 import type * as cron from "../cron.js";
@@ -51,6 +53,8 @@ declare const fullApi: ApiFromModules<{
   "admin/testimonials": typeof admin_testimonials;
   "ai/mutations": typeof ai_mutations;
   "ai/queries": typeof ai_queries;
+  "auth/mutations": typeof auth_mutations;
+  "auth/queries": typeof auth_queries;
   "cashier/mutations": typeof cashier_mutations;
   "cashier/queries": typeof cashier_queries;
   cron: typeof cron;
