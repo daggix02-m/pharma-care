@@ -2,11 +2,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_CONVEX_URL?: string;
-  readonly VITE_CLERK_PUBLISHABLE_KEY?: string;
-  readonly VITE_CLERK_SIGN_IN_URL?: string;
-  readonly VITE_CLERK_SIGN_UP_URL?: string;
-  readonly VITE_CLERK_AFTER_SIGN_IN_URL?: string;
-  readonly VITE_CLERK_AFTER_SIGN_OUT_URL?: string;
 }
 
 interface ImportMeta {

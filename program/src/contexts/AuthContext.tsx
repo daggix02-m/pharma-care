@@ -40,6 +40,7 @@ interface AuthContextValue {
   pharmacyName?: string;
   pharmacyStatus?: string;
   isLoading: boolean;
+  sessionToken: string | null;
 }
 
 interface SignupData {
@@ -72,9 +73,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(localStorage.getItem('sessionToken'));
+
+  // Listen for session token changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setSessionToken(localStorage.getItem('sessionToken'));
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Query current user from Convex
-  const dbUser = useQuery(api.users.queries.getCurrentUser);
+  const dbUser = useQuery(
+    api.users.queries.getCurrentUser,
+    sessionToken ? { sessionToken } : 'skip'
+  );
 
   // Mutations
   const signInMutation = useMutation(api.auth.mutations.signInWithEmail);
@@ -103,9 +118,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         toast.success('Signed in successfully');
         
-        // Navigate based on role
+        // Navigate based on role - use window.location for full page reload
+        // This ensures Convex queries re-fetch with the new session
         const homePath = getHomePath(result.role);
-        navigate(homePath);
+        window.location.href = homePath;
       }
     } catch (err: any) {
       console.error('[AuthContext] Login error:', err);
@@ -129,14 +145,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.removeItem('sessionToken');
       
       toast.success('Signed out successfully');
-      navigate('/auth/login');
+      window.location.href = '/auth/login';
     } catch (err: any) {
       console.error('[AuthContext] Logout error:', err);
       toast.error('Logout failed');
       
       // Still clear local session
       localStorage.removeItem('sessionToken');
-      navigate('/auth/login');
+      window.location.href = '/auth/login';
     } finally {
       setIsLoading(false);
     }
@@ -156,7 +172,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       if (result.success) {
         toast.success(result.message);
-        navigate('/auth/verify-email', { state: { email: userData.email } });
+        // Store email in sessionStorage since we can't pass state with window.location
+        sessionStorage.setItem('pendingVerificationEmail', userData.email);
+        window.location.href = '/auth/verify-email';
       }
     } catch (err: any) {
       console.error('[AuthContext] Signup error:', err);
@@ -196,7 +214,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       if (result.success) {
         toast.success(result.message);
-        navigate('/auth/login');
+        window.location.href = '/auth/login';
       }
     } catch (err: any) {
       console.error('[AuthContext] Password reset error:', err);
@@ -219,7 +237,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       case 'cashier':
         return '/cashier/overview';
       case 'owner':
-        return '/dashboard/owner';
+        return '/owner';
       default:
         return '/auth/pending-approval';
     }
@@ -258,6 +276,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     pharmacyName: dbUser?.pharmacy?.name,
     pharmacyStatus: dbUser?.pharmacy?.status,
     isLoading,
+    sessionToken: localStorage.getItem('sessionToken'),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

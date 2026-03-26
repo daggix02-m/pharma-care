@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   DollarSign,
   TrendingUp,
@@ -16,9 +17,16 @@ import {
 
 export function FinancialOperations() {
   const [view, setView] = useState('daily');
+  const { sessionToken } = useAuth();
 
-  const dailySales = useQuery(api.cashier.queries.getSalesSummary);
-  const salesSummary = useQuery(api.cashier.queries.getSalesSummary);
+  const dailySales = useQuery(
+    api.cashier.queries.getSalesSummary,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const salesSummary = useQuery(
+    api.cashier.queries.getSalesSummary,
+    sessionToken ? { sessionToken } : 'skip'
+  );
 
   if (dailySales === undefined) {
     return (

@@ -15,6 +15,7 @@ import { Search } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../../convex/_generated/dataModel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Product {
   medicine_id: Id<'medicines'>;
@@ -32,11 +33,13 @@ interface Product {
 
 export function StockCheck() {
   const [searchTerm, setSearchTerm] = useState('');
+  const { sessionToken } = useAuth();
 
   const products =
-    (useQuery(api.cashier.queries.searchMedicines, searchTerm ? { query: searchTerm } : 'skip') as
-      | Product[]
-      | undefined) || [];
+    (useQuery(
+      api.cashier.queries.searchMedicines,
+      sessionToken && searchTerm ? { sessionToken, query: searchTerm } : 'skip'
+    ) as Product[] | undefined) || [];
 
   const filteredProducts = products.filter((product) =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())

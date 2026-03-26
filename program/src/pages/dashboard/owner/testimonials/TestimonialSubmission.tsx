@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/contexts/AuthContext';
 
 function StarRating({
   rating,
@@ -55,15 +56,25 @@ function StarRating({
 }
 
 export function TestimonialSubmission() {
+  const { sessionToken } = useAuth();
   const [content, setContent] = useState('');
   const [rating, setRating] = useState(5);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const submissionStatus = useQuery(api.owner.testimonials.canSubmitTestimonial);
-  const guidelines = useQuery(api.owner.testimonials.getTestimonialGuidelines);
-  const myTestimonials = useQuery(api.owner.testimonials.getMyTestimonials);
+  const submissionStatus = useQuery(
+    api.owner.testimonials.canSubmitTestimonial,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const guidelines = useQuery(
+    api.owner.testimonials.getTestimonialGuidelines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const myTestimonials = useQuery(
+    api.owner.testimonials.getMyTestimonials,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const submitTestimonial = useMutation(api.owner.testimonials.submitTestimonial);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

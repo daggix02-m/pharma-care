@@ -1,23 +1,14 @@
 // @ts-ignore
 import { query } from '../_generated/server';
 import { v } from 'convex/values';
+import { requireManager } from '../lib/auth';
 
 export const getDashboardStats = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -26,7 +17,7 @@ export const getDashboardStats = query({
 
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query('medicines').collect(); // In a real app, we'd use indexes
+    const medicines = await ctx.db.query('medicines').collect();
 
     const pharmacyMedicines = medicines.filter((m: any) => branchIds.includes(m.branchId));
 
@@ -52,21 +43,11 @@ export const getDashboardStats = query({
 });
 
 export const getStaffMembers = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const staff = await ctx.db
       .query('users')
@@ -78,21 +59,11 @@ export const getStaffMembers = query({
 });
 
 export const getBranches = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -104,21 +75,11 @@ export const getBranches = query({
 });
 
 export const getAllMedicines = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -134,7 +95,10 @@ export const getAllMedicines = query({
 });
 
 export const getMedicineDetails = query({
-  args: { id: v.id('medicines') },
+  args: { 
+    id: v.id('medicines'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
     const medicine = await ctx.db.get(args.id);
     return medicine;
@@ -142,7 +106,10 @@ export const getMedicineDetails = query({
 });
 
 export const getSalesByBranch = query({
-  args: { branchId: v.id('branches') },
+  args: { 
+    branchId: v.id('branches'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
     const sales = await ctx.db
       .query('sales')
@@ -153,21 +120,12 @@ export const getSalesByBranch = query({
 });
 
 export const getSales = query({
-  args: { branchId: v.optional(v.id('branches')) },
+  args: { 
+    branchId: v.optional(v.id('branches')),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     let q = ctx.db.query('sales');
     if (args.branchId) {
@@ -191,7 +149,10 @@ export const getSales = query({
 });
 
 export const getSalesSummary = query({
-  args: { branchId: v.optional(v.string()) },
+  args: { 
+    branchId: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (_ctx: any, _args: any) => {
     // Mock for now
     return [
@@ -207,7 +168,10 @@ export const getSalesSummary = query({
 });
 
 export const getInventorySummary = query({
-  args: { branchId: v.optional(v.string()) },
+  args: { 
+    branchId: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (_ctx: any, _args: any) => {
     return [
       { name: 'Tablets', value: 45 },
@@ -219,7 +183,10 @@ export const getInventorySummary = query({
 });
 
 export const getTopSelling = query({
-  args: { branchId: v.optional(v.string()) },
+  args: { 
+    branchId: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (_ctx: any, _args: any) => {
     return [
       { name: 'Paracetamol 500mg', sales: 124, revenue: 1240 },
@@ -231,23 +198,15 @@ export const getTopSelling = query({
 });
 
 export const getNotifications = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) return [];
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const notifications = await ctx.db
       .query('notifications')
-      .withIndex('by_user', (q: any) => q.eq('userId', user._id))
+      .withIndex('by_user', (q: any) => q.eq('userId', manager._id))
       .order('desc')
       .collect();
 
@@ -256,7 +215,10 @@ export const getNotifications = query({
 });
 
 export const getBranchOverview = query({
-  args: { branchId: v.optional(v.id('branches')) },
+  args: { 
+    branchId: v.optional(v.id('branches')),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
     if (!args.branchId) {
       return null;
@@ -267,21 +229,12 @@ export const getBranchOverview = query({
 });
 
 export const getMedicinesByBranch = query({
-  args: { branchId: v.id('branches') },
+  args: { 
+    branchId: v.id('branches'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     // Verify: branch belongs to this manager's pharmacy
     const branch = await ctx.db.get(args.branchId);
@@ -297,21 +250,11 @@ export const getMedicinesByBranch = query({
 });
 
 export const getPendingBranches = query({
-  args: {},
-  handler: async (ctx: any, _args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager' || !manager.pharmacyId) {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     return await ctx.db
       .query('branches')
@@ -323,21 +266,12 @@ export const getPendingBranches = query({
 });
 
 export const getBranchMedicineStats = query({
-  args: { branchId: v.id('branches') },
+  args: { 
+    branchId: v.id('branches'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     // Verify: branch belongs to this manager's pharmacy
     const branch = await ctx.db.get(args.branchId);
@@ -363,21 +297,12 @@ export const getBranchMedicineStats = query({
 });
 
 export const searchMedicines = query({
-  args: { query: v.string() },
+  args: { 
+    query: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     if (!args.query.trim()) return [];
 
@@ -400,21 +325,12 @@ export const searchMedicines = query({
 });
 
 export const getMedicinesByCategory = query({
-  args: { category: v.string() },
+  args: { 
+    category: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -433,21 +349,12 @@ export const getMedicinesByCategory = query({
 });
 
 export const getAuditTrail = query({
-  args: { limit: v.optional(v.number()) },
+  args: { 
+    limit: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     let logsQuery = ctx.db
       .query('audit_logs')
@@ -465,21 +372,12 @@ export const getAuditTrail = query({
 });
 
 export const getReportsSales = query({
-  args: { period: v.optional(v.string()) },
+  args: { 
+    period: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -532,21 +430,11 @@ export const getReportsSales = query({
 });
 
 export const getReportsInventory = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -580,21 +468,11 @@ export const getReportsInventory = query({
 });
 
 export const getReportsStaffActivity = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const staff = await ctx.db
       .query('users')
@@ -628,21 +506,11 @@ export const getReportsStaffActivity = query({
 });
 
 export const getRefundPolicy = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || !manager.pharmacyId) {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const pharmacy = await ctx.db.get(manager.pharmacyId);
     if (!pharmacy) {
@@ -668,7 +536,10 @@ export const getRefundPolicy = query({
 });
 
 export const getPharmacyByCode = query({
-  args: { code: v.string() },
+  args: { 
+    code: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
     const pharmacies = await ctx.db.query('pharmacies').collect();
     const pharmacy = pharmacies.find(
@@ -690,21 +561,11 @@ export const getPharmacyByCode = query({
 });
 
 export const getMyPharmacy = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager' || !manager.pharmacyId) {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const pharmacy = await ctx.db.get(manager.pharmacyId);
     if (!pharmacy) {
@@ -724,21 +585,12 @@ export const getMyPharmacy = query({
 });
 
 export const getStaffActivityLogs = query({
-  args: { staffId: v.id('users') },
+  args: { 
+    staffId: v.id('users'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const staffMember = await ctx.db.get(args.staffId);
     if (!staffMember || staffMember.pharmacyId !== manager.pharmacyId) {
@@ -757,21 +609,12 @@ export const getStaffActivityLogs = query({
 });
 
 export const getSalesByPeriod = query({
-  args: { period: v.string() },
+  args: { 
+    period: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -826,21 +669,11 @@ export const getSalesByPeriod = query({
 });
 
 export const getExpiringMedicines = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')
@@ -863,21 +696,11 @@ export const getExpiringMedicines = query({
 });
 
 export const getLowStockMedicines = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const manager = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Unauthorized: Manager only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const manager = await requireManager(ctx, args.sessionToken);
 
     const branches = await ctx.db
       .query('branches')

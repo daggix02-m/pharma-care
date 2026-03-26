@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ManagerFlagAppeal {
   id: string;
@@ -63,8 +64,12 @@ export function AdminAppealReview() {
   const [reviewingCard, setReviewingCard] = useState<string | null>(null);
   const [reviewReason, setReviewReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { sessionToken } = useAuth();
 
-  const pendingAppeals = useQuery(api.admin.queries.getPendingAppeals, {});
+  const pendingAppeals = useQuery(
+    api.admin.queries.getPendingAppeals,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const reviewManagerFlag = useMutation(api.admin.mutations.reviewManagerFlagAppeal);
   const reviewAdminAction = useMutation(api.admin.mutations.reviewAdminActionAppeal);
 

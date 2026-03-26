@@ -34,6 +34,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Medicine {
   _id: Id<'medicines'>;
@@ -123,10 +124,23 @@ export function PharmacistDashboard() {
 }
 
 function OverviewTab() {
-  const stats = useQuery(api.pharmacist.queries.getDashboardStats);
-  const medicines = useQuery(api.pharmacist.queries.getMedicines);
-  const expiringMedicines = useQuery(api.pharmacist.queries.getExpiringMedicines);
-  const lowStockMedicines = useQuery(api.pharmacist.queries.getLowStockMedicines);
+  const { sessionToken } = useAuth();
+  const stats = useQuery(
+    api.pharmacist.queries.getDashboardStats,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const medicines = useQuery(
+    api.pharmacist.queries.getMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const expiringMedicines = useQuery(
+    api.pharmacist.queries.getExpiringMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const lowStockMedicines = useQuery(
+    api.pharmacist.queries.getLowStockMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const loading =
     stats === undefined ||
     medicines === undefined ||
@@ -252,7 +266,11 @@ function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
 }
 
 function MedicinesTab() {
-  const medicines = useQuery(api.pharmacist.queries.getMedicines);
+  const { sessionToken } = useAuth();
+  const medicines = useQuery(
+    api.pharmacist.queries.getMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const loading = medicines === undefined;
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -390,7 +408,11 @@ function MedicinesTab() {
 }
 
 function ExpiryAlertsTab() {
-  const medicines = useQuery(api.pharmacist.queries.getMedicines);
+  const { sessionToken } = useAuth();
+  const medicines = useQuery(
+    api.pharmacist.queries.getMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const filteredMedicines = useMemo(() => {
     if (!medicines) return [];
     const thirtyDays = Date.now() + 30 * 24 * 60 * 60 * 1000;
@@ -439,7 +461,11 @@ function ExpiryAlertsTab() {
 }
 
 function StockRequestsTab() {
-  const requests = useQuery(api.pharmacist.queries.getStockRequests);
+  const { sessionToken } = useAuth();
+  const requests = useQuery(
+    api.pharmacist.queries.getStockRequests,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   if (!requests) return <Skeleton className='h-96 rounded-2xl' />;
 
   return (
@@ -482,7 +508,11 @@ function StockRequestsTab() {
 }
 
 function ReportsTab() {
-  const medicines = useQuery(api.pharmacist.queries.getMedicines);
+  const { sessionToken } = useAuth();
+  const medicines = useQuery(
+    api.pharmacist.queries.getMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   if (!medicines) return <Skeleton className='h-96 rounded-2xl' />;
 
   return (

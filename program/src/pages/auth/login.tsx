@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,21 +25,8 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const navigate = useNavigate();
-  const { login, isAuthenticated, user } = useAuth();
+  const { login } = useAuth();
   const formRef = usePageTransition();
-
-  // Redirect if already logged in
-  if (isAuthenticated && user) {
-    const role = user.role;
-    if (role === 'admin') navigate('/admin');
-    else if (role === 'manager') navigate('/manager');
-    else if (role === 'pharmacist') navigate('/pharmacist');
-    else if (role === 'cashier') navigate('/cashier/overview');
-    else if (role === 'owner') navigate('/dashboard/owner');
-    else navigate('/auth/pending-approval');
-    return null;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -16,6 +16,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Id } from '../../../../convex/_generated/dataModel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Sale {
   _id: Id<'sales'>;
@@ -45,13 +46,17 @@ export function Returns() {
   const [returnReason, setReturnReason] = useState('');
   const [returnCondition, setReturnCondition] = useState('good');
   const [processing, setProcessing] = useState(false);
+  const { sessionToken } = useAuth();
 
-  const sales = useQuery(api.cashier.queries.getReturnableSales) as Sale[] | undefined;
+  const sales = useQuery(
+    api.cashier.queries.getReturnableSales,
+    sessionToken ? { sessionToken } : 'skip'
+  ) as Sale[] | undefined;
   const salesList = sales || [];
 
   const returnableItemsQuery = useQuery(
     api.cashier.queries.getReturnableItems,
-    selectedSale ? { saleId: selectedSale._id } : 'skip'
+    sessionToken && selectedSale ? { sessionToken, saleId: selectedSale._id } : 'skip'
   );
   const returnableItems = (returnableItemsQuery || []) as ReturnableItem[];
 

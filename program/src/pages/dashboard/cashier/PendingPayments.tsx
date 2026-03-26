@@ -16,6 +16,7 @@ import {
   Loader2,
   Package,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PendingPayment {
   _id: Id<'sales'>;
@@ -32,7 +33,11 @@ export function PendingPayments() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [referenceNumber, setReferenceNumber] = useState('');
 
-  const paymentsQuery = useQuery(api.cashier.queries.getPendingPayments);
+  const { sessionToken } = useAuth();
+  const paymentsQuery = useQuery(
+    api.cashier.queries.getPendingPayments,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const payments: PendingPayment[] = (paymentsQuery as PendingPayment[] | undefined) || [];
 
   const processPayment = useMutation(api.cashier.mutations.processPayment);

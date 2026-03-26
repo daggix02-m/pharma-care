@@ -57,6 +57,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 const PAGE_SIZE = 15;
 
@@ -123,8 +124,15 @@ export function ManagerDashboard() {
 }
 
 function OverviewTab() {
-  const stats = useQuery(api.manager.queries.getDashboardStats);
-  const salesByPeriod = useQuery(api.manager.queries.getSalesByPeriod, { period: '7days' });
+  const { sessionToken } = useAuth();
+  const stats = useQuery(
+    api.manager.queries.getDashboardStats,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const salesByPeriod = useQuery(
+    api.manager.queries.getSalesByPeriod,
+    sessionToken ? { sessionToken, period: '7days' } : 'skip'
+  );
   const loading = stats === undefined || salesByPeriod === undefined;
 
   if (loading) {
@@ -237,8 +245,15 @@ interface Branch {
 }
 
 function BranchesTab() {
-  const branches = useQuery(api.manager.queries.getBranches);
-  const pendingBranches = useQuery(api.manager.queries.getPendingBranches);
+  const { sessionToken } = useAuth();
+  const branches = useQuery(
+    api.manager.queries.getBranches,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const pendingBranches = useQuery(
+    api.manager.queries.getPendingBranches,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const loading = branches === undefined || pendingBranches === undefined;
 
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -524,8 +539,15 @@ interface StaffMember {
 }
 
 function StaffTab() {
-  const allStaff = useQuery(api.manager.queries.getStaffMembers);
-  const branches = useQuery(api.manager.queries.getBranches);
+  const { sessionToken } = useAuth();
+  const allStaff = useQuery(
+    api.manager.queries.getStaffMembers,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const branches = useQuery(
+    api.manager.queries.getBranches,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const loading = allStaff === undefined || branches === undefined;
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -985,7 +1007,11 @@ interface AuditLog {
 }
 
 function AuditTrailTab() {
-  const logs = useQuery(api.manager.queries.getAuditTrail);
+  const { sessionToken } = useAuth();
+  const logs = useQuery(
+    api.manager.queries.getAuditTrail,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const loading = logs === undefined;
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType] = useState('all');
@@ -1075,7 +1101,11 @@ function AuditTrailTab() {
 }
 
 function SettingsTab() {
-  const pharmacyData = useQuery(api.manager.queries.getMyPharmacy);
+  const { sessionToken } = useAuth();
+  const pharmacyData = useQuery(
+    api.manager.queries.getMyPharmacy,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const loading = pharmacyData === undefined;
   if (loading) return <Skeleton className='h-96 rounded-2xl' />;
 

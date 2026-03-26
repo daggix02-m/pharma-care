@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { AdminBroadcastDialog } from '@/components/shared/messaging';
 import { DiagnosticViewModal } from '@/components/shared';
 import { LandingPageManagement } from './landing-page/LandingPageManagement';
+import { useAuth } from '@/contexts/AuthContext';
 
 type AdminTab =
   | 'overview'
@@ -175,14 +176,39 @@ export function AdminDashboard() {
 }
 
 function OverviewSection() {
-  const pharmacies = useQuery(api.admin.queries.getPharmacies);
-  const branches = useQuery(api.admin.queries.getBranches);
-  const managers = useQuery(api.admin.queries.getAllManagers);
-  const subscriptionPlans = useQuery(api.admin.queries.getSubscriptionPlans);
-  const subscriptionAnalytics = useQuery(api.admin.queries.getSubscriptionAnalytics);
-  const flaggedAccounts = useQuery(api.admin.queries.getFlaggedAccounts);
-  const pendingAppeals = useQuery(api.admin.queries.getPendingAppeals);
-  const aiEscalations = useQuery(api.ai.queries.getEscalationStats);
+  const { sessionToken } = useAuth();
+  const pharmacies = useQuery(
+    api.admin.queries.getPharmacies,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const branches = useQuery(
+    api.admin.queries.getBranches,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const managers = useQuery(
+    api.admin.queries.getAllManagers,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const subscriptionPlans = useQuery(
+    api.admin.queries.getSubscriptionPlans,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const subscriptionAnalytics = useQuery(
+    api.admin.queries.getSubscriptionAnalytics,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const flaggedAccounts = useQuery(
+    api.admin.queries.getFlaggedAccounts,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const pendingAppeals = useQuery(
+    api.admin.queries.getPendingAppeals,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const aiEscalations = useQuery(
+    api.ai.queries.getEscalationStats,
+    sessionToken ? { sessionToken } : 'skip'
+  );
 
   const isLoading =
     pharmacies === undefined ||
@@ -539,11 +565,18 @@ function OverviewSection() {
 }
 
 function ApprovalsSection() {
+  const { sessionToken } = useAuth();
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const pendingManagers = useQuery(api.admin.queries.getPendingManagers);
-  const pendingBranches = useQuery(api.admin.queries.getPendingBranches);
+  const pendingManagers = useQuery(
+    api.admin.queries.getPendingManagers,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const pendingBranches = useQuery(
+    api.admin.queries.getPendingBranches,
+    sessionToken ? { sessionToken } : 'skip'
+  );
 
   const approveBranch = useMutation(api.admin.mutations.approveBranch);
   const rejectBranch = useMutation(api.admin.mutations.rejectBranch);
@@ -686,14 +719,24 @@ function ApprovalsSection() {
 }
 
 function PharmaciesSection() {
+  const { sessionToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [expandedPharmacyId, setExpandedPharmacyId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const pharmacies = useQuery(api.admin.queries.getPharmacies);
-  const branches = useQuery(api.admin.queries.getBranches);
-  const managers = useQuery(api.admin.queries.getAllManagers);
+  const pharmacies = useQuery(
+    api.admin.queries.getPharmacies,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const branches = useQuery(
+    api.admin.queries.getBranches,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const managers = useQuery(
+    api.admin.queries.getAllManagers,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const deletePharmacy = useMutation(api.admin.mutations.deletePharmacy);
 
   const isLoading = pharmacies === undefined || branches === undefined || managers === undefined;
@@ -984,6 +1027,7 @@ function PharmaciesSection() {
 }
 
 function FeedbacksSection() {
+  const { sessionToken } = useAuth();
   const [activeTab, setActiveTab] = useState<'inbox' | 'trash'>('inbox');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -993,13 +1037,16 @@ function FeedbacksSection() {
 
   const messages = useQuery(
     api.admin.feedbacks.getMessages,
-    activeTab === 'inbox' ? { status: statusFilter, searchQuery } : 'skip'
+    sessionToken && activeTab === 'inbox' ? { sessionToken, status: statusFilter, searchQuery } : 'skip'
   );
   const trashedMessages = useQuery(
     api.admin.feedbacks.getTrashedMessages,
-    activeTab === 'trash' ? {} : 'skip'
+    sessionToken && activeTab === 'trash' ? { sessionToken } : 'skip'
   );
-  const unreadCount = useQuery(api.admin.feedbacks.getUnreadCount);
+  const unreadCount = useQuery(
+    api.admin.feedbacks.getUnreadCount,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const markAsRead = useMutation(api.admin.feedbacks.markAsRead);
   const markAsUnread = useMutation(api.admin.feedbacks.markAsUnread);
   const replyToMessage = useMutation(api.admin.feedbacks.replyToMessage);
@@ -1339,7 +1386,11 @@ function FeedbacksSection() {
 }
 
 function AuditLogsSection() {
-  const logs = useQuery(api.admin.queries.getAuditLogs);
+  const { sessionToken } = useAuth();
+  const logs = useQuery(
+    api.admin.queries.getAuditLogs,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   if (!logs)
     return (
       <div className='flex justify-center py-20'>
@@ -1381,7 +1432,11 @@ function AuditLogsSection() {
 }
 
 function SettingsSection() {
-  const settings = useQuery(api.admin.siteSettings.getSiteSettingsAdmin);
+  const { sessionToken } = useAuth();
+  const settings = useQuery(
+    api.admin.siteSettings.getSiteSettingsAdmin,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const updateSettings = useMutation(api.admin.siteSettings.updateSiteSettings);
   const toggleTestMode = useMutation(api.admin.siteSettings.toggleTestMode);
   const sendTestEmail = useMutation(api.admin.siteSettings.sendTestEmail);

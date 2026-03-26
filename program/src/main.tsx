@@ -6,7 +6,6 @@ import './index.css';
 
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { ThemeProvider } from './components/theme/ThemeProvider';
-import { AuthProvider } from './contexts/AuthContext';
 
 // Diagnostic logging
 console.log('[Main] React version:', React.version);
@@ -28,11 +27,9 @@ function Main() {
     <React.StrictMode>
       <ErrorBoundary>
         <ConvexProvider client={convex}>
-          <AuthProvider>
-            <ThemeProvider>
-              <App />
-            </ThemeProvider>
-          </AuthProvider>
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>
         </ConvexProvider>
       </ErrorBoundary>
     </React.StrictMode>

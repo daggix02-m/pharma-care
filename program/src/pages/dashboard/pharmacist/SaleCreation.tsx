@@ -21,6 +21,7 @@ import {
   Zap,
   History,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Medicine {
   _id: Id<'medicines'>;
@@ -56,7 +57,11 @@ interface PaymentData {
 }
 
 export function SaleCreation() {
-  const medicines = useQuery(api.pharmacist.queries.getMedicines) || [];
+  const { sessionToken } = useAuth();
+  const medicines = useQuery(
+    api.pharmacist.queries.getMedicines,
+    sessionToken ? { sessionToken } : 'skip'
+  ) || [];
   const loading = medicines === undefined;
   const createSaleMutation = useMutation(api.pharmacist.mutations.createSale);
 

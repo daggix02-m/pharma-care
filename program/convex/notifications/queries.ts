@@ -1,21 +1,14 @@
 // @ts-ignore
 import { query } from '../_generated/server';
+import { v } from 'convex/values';
+import { requireAuth } from '../lib/auth';
 
 export const getNotifications = query({
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) {
-      throw new Error('User not found');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requireAuth(ctx, args.sessionToken);
 
     const notifications = await ctx.db
       .query('notifications')
@@ -28,20 +21,11 @@ export const getNotifications = query({
 });
 
 export const getUnreadCount = query({
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) {
-      throw new Error('User not found');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requireAuth(ctx, args.sessionToken);
 
     const notifications = await ctx.db
       .query('notifications')

@@ -7,6 +7,7 @@ import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 import { Receipt, Search, Printer, Eye, DollarSign, Calendar, CreditCard } from 'lucide-react';
 import { Id } from '../../../../convex/_generated/dataModel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ReceiptItem {
   medicineId: Id<'medicines'>;
@@ -32,8 +33,12 @@ interface ReceiptData {
 export function Receipts() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
+  const { sessionToken } = useAuth();
 
-  const receiptsQuery = useQuery(api.cashier.queries.getTransactions);
+  const receiptsQuery = useQuery(
+    api.cashier.queries.getTransactions,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const receipts = (receiptsQuery || []) as ReceiptData[];
 
   const filteredReceipts = receipts.filter((r) => {

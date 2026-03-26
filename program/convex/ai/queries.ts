@@ -1,23 +1,15 @@
 // @ts-ignore
 import { query } from '../_generated/server';
 import { v } from 'convex/values';
+import { requireAdmin, requireAuth } from '../lib/auth';
 
 export const getConversation = query({
-  args: { userId: v.id('users') },
+  args: { 
+    userId: v.id('users'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) {
-      throw new Error('User not found');
-    }
+    const user = await requireAuth(ctx, args.sessionToken);
 
     if (user._id !== args.userId) {
       throw new Error('Unauthorized: Not your conversation');
@@ -52,21 +44,12 @@ export const getConversation = query({
 });
 
 export const getConversationById = query({
-  args: { conversationId: v.id('ai_conversations') },
+  args: { 
+    conversationId: v.id('ai_conversations'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) {
-      throw new Error('User not found');
-    }
+    const user = await requireAuth(ctx, args.sessionToken);
 
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) {
@@ -85,21 +68,10 @@ export const getEscalations = query({
   args: {
     status: v.optional(v.string()),
     pharmacyId: v.optional(v.id('pharmacies')),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) {
-      throw new Error('User not found');
-    }
+    const user = await requireAuth(ctx, args.sessionToken);
 
     let escalationsQuery = ctx.db.query('ai_escalations');
 
@@ -162,20 +134,11 @@ export const getEscalations = query({
 });
 
 export const getEscalationStats = query({
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || user.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requireAdmin(ctx, args.sessionToken);
 
     const allEscalations = await ctx.db.query('ai_escalations').collect();
 
@@ -202,21 +165,10 @@ export const getEscalationStats = query({
 export const getAIFeedback = query({
   args: {
     conversationId: v.id('ai_conversations'),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user) {
-      throw new Error('User not found');
-    }
+    const user = await requireAuth(ctx, args.sessionToken);
 
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) {

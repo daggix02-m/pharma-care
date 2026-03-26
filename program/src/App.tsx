@@ -2,7 +2,6 @@ import * as React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
-import { SignedIn } from '@clerk/clerk-react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 // Layouts
@@ -175,37 +174,31 @@ const AppRoutes = React.memo(function AppRoutes() {
         <Route
           path='/owner'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['owner']}>
-                <DashboardLayout>
-                  <OwnerDashboard />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['owner']}>
+              <DashboardLayout>
+                <OwnerDashboard />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
         <Route
           path='/owner/appeals'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['owner']}>
-                <DashboardLayout>
-                  <OwnerAppealHistory />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['owner']}>
+              <DashboardLayout>
+                <OwnerAppealHistory />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
         <Route
           path='/owner/testimonials'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['owner']}>
-                <DashboardLayout>
-                  <TestimonialSubmission />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['owner']}>
+              <DashboardLayout>
+                <TestimonialSubmission />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
 
@@ -213,37 +206,31 @@ const AppRoutes = React.memo(function AppRoutes() {
         <Route
           path='/admin'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['admin']}>
-                <DashboardLayout>
-                  <AdminDashboard />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout>
+                <AdminDashboard />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
         <Route
           path='/admin/pharmacies/:pharmacyId'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['admin']}>
-                <DashboardLayout>
-                  <PharmacyDetailPage />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout>
+                <PharmacyDetailPage />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
         <Route
           path='/admin/appeals'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['admin']}>
-                <DashboardLayout>
-                  <AdminAppealReview />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout>
+                <AdminAppealReview />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
 
@@ -251,13 +238,11 @@ const AppRoutes = React.memo(function AppRoutes() {
         <Route
           path='/manager'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['manager']}>
-                <DashboardLayout>
-                  <ManagerDashboard />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['manager']}>
+              <DashboardLayout>
+                <ManagerDashboard />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
 
@@ -265,13 +250,11 @@ const AppRoutes = React.memo(function AppRoutes() {
         <Route
           path='/pharmacist'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['pharmacist']}>
-                <DashboardLayout>
-                  <PharmacistDashboard />
-                </DashboardLayout>
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['pharmacist']}>
+              <DashboardLayout>
+                <PharmacistDashboard />
+              </DashboardLayout>
+            </RoleProtectedRoute>
           }
         />
 
@@ -279,11 +262,9 @@ const AppRoutes = React.memo(function AppRoutes() {
         <Route
           path='/cashier'
           element={
-            <SignedIn>
-              <RoleProtectedRoute allowedRoles={['cashier']}>
-                <DashboardLayout />
-              </RoleProtectedRoute>
-            </SignedIn>
+            <RoleProtectedRoute allowedRoles={['cashier']}>
+              <DashboardLayout />
+            </RoleProtectedRoute>
           }
         >
           <Route index element={<Navigate to='overview' replace />} />

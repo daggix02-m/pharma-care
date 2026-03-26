@@ -299,13 +299,14 @@ export const TopBar = React.memo(function TopBar({ className }: TopBarProps) {
   const headerRef = React.useRef<HTMLElement>(null);
 
   // Fetch pending counts for admin - only query when user is admin
+  const { sessionToken } = useAuth();
   const pendingManagers = useQuery(
     api.admin.queries.getPendingManagers,
-    userRole === 'admin' ? {} : undefined
+    userRole === 'admin' && sessionToken ? { sessionToken } : 'skip'
   );
   const pendingBranches = useQuery(
     api.admin.queries.getPendingBranches,
-    userRole === 'admin' ? {} : undefined
+    userRole === 'admin' && sessionToken ? { sessionToken } : 'skip'
   );
 
   // Memoized computations

@@ -139,16 +139,16 @@ function formatTimeAgo(timestamp: number): string {
 export const NotificationBell = React.memo(function NotificationBell() {
   const [isOpen, setIsOpen] = React.useState(false);
   const bellRef = React.useRef<HTMLButtonElement>(null);
-  const { user } = useAuth();
+  const { user, sessionToken } = useAuth();
 
   // Real-time Convex queries
   const notifications = useQuery(
     api.notifications.queries.getNotifications,
-    user?._id ? undefined : 'skip'
+    sessionToken ? { sessionToken } : 'skip'
   );
   const unreadCount = useQuery(
     api.notifications.queries.getUnreadCount,
-    user?._id ? undefined : 'skip'
+    sessionToken ? { sessionToken } : 'skip'
   );
 
   // Mutations

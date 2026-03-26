@@ -11,11 +11,19 @@ import { toast } from 'sonner';
 import ContentEditor from './ContentEditor';
 import TestimonialsManager from './TestimonialsManager';
 import SectionVisibility from './SectionVisibility';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function LandingPageManagement() {
+  const { sessionToken } = useAuth();
   const [activeTab, setActiveTab] = useState('content');
-  const landingPageContent = useQuery(api.admin.landingPage.getLandingPageContentAdmin);
-  const testimonialStats = useQuery(api.admin.testimonials.getTestimonialStats);
+  const landingPageContent = useQuery(
+    api.admin.landingPage.getLandingPageContentAdmin,
+    sessionToken ? { sessionToken } : 'skip'
+  );
+  const testimonialStats = useQuery(
+    api.admin.testimonials.getTestimonialStats,
+    sessionToken ? { sessionToken } : 'skip'
+  );
   const initializeContent = useMutation(api.admin.landingPage.initializeLandingPageContent);
 
   const handleInitialize = async () => {

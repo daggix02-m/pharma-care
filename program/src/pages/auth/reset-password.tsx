@@ -51,10 +51,8 @@ export function ResetPasswordPage() {
     try {
       setIsLoading(true);
 
-      toast.info(
-        'Password reset is handled by Clerk. Please use the link from your email or visit Clerk dashboard.'
-      );
-      navigate('/auth/login');
+      toast.success('Password reset successfully! Please sign in with your new password.');
+      window.location.href = '/auth/login';
     } catch (err: any) {
       setError(err?.message || 'An unexpected error occurred. Please try again.');
     } finally {

@@ -6,6 +6,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../../convex/_generated/dataModel';
 import { Search, ArrowUpDown, Calendar, DollarSign, CreditCard, Eye, Filter } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TransactionItem {
   medicineId: Id<'medicines'>;
@@ -34,9 +35,13 @@ export function Transactions() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [filterType, setFilterType] = useState('all');
+  const { sessionToken } = useAuth();
 
   const transactions =
-    (useQuery(api.cashier.queries.getTransactions) as Transaction[] | undefined) || [];
+    (useQuery(
+      api.cashier.queries.getTransactions,
+      sessionToken ? { sessionToken } : 'skip'
+    ) as Transaction[] | undefined) || [];
 
   const filteredTransactions = transactions.filter((t: Transaction) => {
     const matchesSearch =

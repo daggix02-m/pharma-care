@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DashboardStats {
   totalDailySales: number;
@@ -24,9 +25,11 @@ interface DashboardStats {
 
 export function CashierOverview() {
   const navigate = useNavigate();
-  const dashboardStats = useQuery(api.cashier.queries.getDashboardStats) as
-    | DashboardStats
-    | undefined;
+  const { sessionToken } = useAuth();
+  const dashboardStats = useQuery(
+    api.cashier.queries.getDashboardStats,
+    sessionToken ? { sessionToken } : 'skip'
+  ) as DashboardStats | undefined;
 
   const [metrics, setMetrics] = useState({
     todaySales: 0,

@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useSignupStore } from '@/store/useSignupStore';
-import { useSignUp } from '@clerk/clerk-react';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import {
@@ -171,8 +170,10 @@ const Step2AdminProfile = () => {
     validateCurrentStep,
     goToNextStep,
     goToPreviousStep,
+    pharmacyDetails,
   } = useSignupStore();
-  const { isLoaded, signUp } = useSignUp();
+  const signUpMutation = useMutation(api.auth.mutations.signUpWithEmail);
+  const sendVerificationEmail = useMutation(api.auth.mutations.sendVerificationEmail);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -192,26 +193,33 @@ const Step2AdminProfile = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateCurrentStep(2) || !isLoaded) return;
+    if (!validateCurrentStep(2)) return;
     setIsLoading(true);
 
     try {
-      const signUpAttempt = await signUp.create({
-        emailAddress: managerInfo.email,
+      // Call Convex signUp mutation
+      await signUpMutation({
+        email: managerInfo.email,
         password: managerInfo.password,
-        firstName: managerInfo.fullName.split(' ')[0],
-        lastName: managerInfo.fullName.split(' ').slice(1).join(' ') || '.',
+        full_name: managerInfo.fullName,
+        pharmacyDetails: {
+          name: pharmacyDetails.pharmacyName,
+          licenseNumber: pharmacyDetails.licenseCode,
+          location: pharmacyDetails.locations,
+        },
       });
 
-      await signUpAttempt.prepareEmailAddressVerification({ strategy: 'email_code' });
+      // Store email and password in sessionStorage for verification step
+      sessionStorage.setItem('pendingVerificationEmail', managerInfo.email);
+      sessionStorage.setItem('tempPassword', managerInfo.password);
+
+      // Send verification email
+      await sendVerificationEmail({ email: managerInfo.email });
+
       toast.success('Verification code sent to your email.');
       goToNextStep();
     } catch (err: any) {
-      if (err.errors) {
-        toast.error(err.errors[0].message);
-      } else {
-        toast.error('Registration failed. Please try again.');
-      }
+      toast.error(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -345,17 +353,16 @@ const Step2AdminProfile = () => {
 
 // ─── Step 3: Verification ───────────────────────────────────────────────────────
 const Step3Verification = () => {
-  const { managerInfo, pharmacyDetails } = useSignupStore();
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
-  const { isLoaded, signUp, setActive } = useSignUp();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Add pharmacy creation mutation
-  const createPharmacy = useMutation(api.admin.mutations.createPharmacyAndBranch);
-  const addBranch = useMutation(api.admin.mutations.addBranch);
+  // Convex auth mutations
+  const verifyMutation = useMutation(api.auth.mutations.verifyEmail);
+  const signInMutation = useMutation(api.auth.mutations.signInWithEmail);
+  const sendVerificationEmail = useMutation(api.auth.mutations.sendVerificationEmail);
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -372,59 +379,59 @@ const Step3Verification = () => {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isLoaded || code.length !== 6) return;
+    if (code.length !== 6) return;
     setIsLoading(true);
 
     try {
-      const completeSignUp = await signUp.attemptEmailAddressVerification({ code });
+      // Get email from sessionStorage
+      const email = sessionStorage.getItem('pendingVerificationEmail');
+      const tempPassword = sessionStorage.getItem('tempPassword');
 
-      if (completeSignUp.status !== 'complete') {
-        throw new Error('Verification incomplete. Please try again.');
+      if (!email || !tempPassword) {
+        throw new Error('Session expired. Please start registration again.');
       }
 
-      await setActive({ session: completeSignUp.createdSessionId });
+      // Verify email with Convex
+      await verifyMutation({ email, token: code });
+
       toast.success('Email verified successfully!');
 
-      // Register the pharmacy in Convex now that user is verified & logged in
-      toast.info('Creating your pharmacy workspace...', { duration: 3000 });
+      // Auto-login after verification
+      const result = await signInMutation({ email, password: tempPassword });
 
-      const pharmacyId = await createPharmacy({
-        name: pharmacyDetails.pharmacyName,
-        licenseCode: pharmacyDetails.licenseCode,
-        staffCount: 1, // Start with 1 (the owner/admin)
-        subscriptionTier: 'basic',
-        status: 'active',
-      });
-
-      if (pharmacyId) {
-        await addBranch({
-          pharmacyId: pharmacyId,
-          name: 'Main Branch',
-          locations: pharmacyDetails.locations,
-        });
+      // Store session token
+      if (result.sessionToken) {
+        localStorage.setItem('sessionToken', result.sessionToken);
       }
 
-      toast.success('Workspace ready!');
-      navigate('/admin');
+      // Clean up sessionStorage
+      sessionStorage.removeItem('pendingVerificationEmail');
+      sessionStorage.removeItem('tempPassword');
+
+      toast.success('Welcome! Redirecting to your dashboard...');
+      // Use window.location for full page reload to ensure auth state is fresh
+      window.location.href = '/admin';
     } catch (err: any) {
-      if (err.errors) {
-        toast.error(err.errors[0].message);
-      } else {
-        toast.error(err.message || 'Verification failed. Please check the code and try again.');
-      }
+      toast.error(err.message || 'Verification failed. Please check the code and try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleResendCode = async () => {
-    if (!isLoaded || isResending) return;
+    if (isResending) return;
     setIsResending(true);
     try {
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-      toast.success(`A new verification code was sent to ${managerInfo.email}`);
+      // Get email from sessionStorage
+      const email = sessionStorage.getItem('pendingVerificationEmail');
+      if (!email) {
+        throw new Error('Session expired. Please start registration again.');
+      }
+
+      await sendVerificationEmail({ email });
+      toast.success(`A new verification code was sent to ${email}`);
     } catch (err: any) {
-      toast.error(err.errors?.[0]?.message || 'Failed to resend code');
+      toast.error(err.message || 'Failed to resend code');
     } finally {
       setTimeout(() => setIsResending(false), 3000);
     }
@@ -441,7 +448,9 @@ const Step3Verification = () => {
         <p className='text-sm text-muted-foreground font-body'>
           Enter the 6-digit verification code sent to
           <br />
-          <span className='font-bold text-foreground'>{managerInfo.email}</span>
+          <span className='font-bold text-foreground'>
+            {sessionStorage.getItem('pendingVerificationEmail') || ''}
+          </span>
         </p>
       </div>
 
@@ -494,7 +503,6 @@ const Step3Verification = () => {
 // ─── Main Page Component ────────────────────────────────────────────────────────
 export function SignupPage() {
   const { currentStep, resetSignup } = useSignupStore();
-  useSignUp();
 
   useEffect(() => {
     resetSignup();

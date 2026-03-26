@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -43,15 +44,20 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export function TestimonialsManager() {
+  const { sessionToken } = useAuth();
   const [selectedTestimonial, setSelectedTestimonial] = useState<any>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const testimonials = useQuery(api.admin.testimonials.getTestimonials, {
-    status: statusFilter === 'all' ? undefined : statusFilter,
-  });
-  const stats = useQuery(api.admin.testimonials.getTestimonialStats);
+  const testimonials = useQuery(
+    api.admin.testimonials.getTestimonials,
+    sessionToken ? { sessionToken, status: statusFilter === 'all' ? undefined : statusFilter } : 'skip'
+  );
+  const stats = useQuery(
+    api.admin.testimonials.getTestimonialStats,
+    sessionToken ? { sessionToken } : 'skip'
+  );
 
   const approveTestimonial = useMutation(api.admin.testimonials.approveTestimonial);
   const rejectTestimonial = useMutation(api.admin.testimonials.rejectTestimonial);

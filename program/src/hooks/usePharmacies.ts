@@ -74,14 +74,16 @@ const filterPharmaciesByManager = (
  * - Early returns for loading states
  */
 export function usePharmacies(): UsePharmaciesReturn {
-  const { pharmacyId, userId, userRole } = useAuth();
+  const { pharmacyId, userId, userRole, sessionToken } = useAuth();
 
   const isAdmin = userRole === 'admin';
 
-  // Select correct query based on role
-  // Using conditional query selection to avoid fetching unnecessary data
+  // Select correct query based on role with session token
   const pharmaciesData = useQuery(
-    isAdmin ? api.admin.queries.getPharmacies : api.manager.queries.getBranches
+    isAdmin
+      ? api.admin.queries.getPharmacies
+      : api.manager.queries.getBranches,
+    sessionToken ? { sessionToken } : 'skip'
   );
 
   // Memoize normalized pharmacies to prevent recalculation on every render

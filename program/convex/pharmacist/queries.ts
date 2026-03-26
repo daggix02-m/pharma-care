@@ -1,21 +1,14 @@
 // @ts-ignore
 import { query } from '../_generated/server';
 import { v } from 'convex/values';
+import { requirePharmacist } from '../lib/auth';
 
 export const getDashboardStats = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || user.role !== 'pharmacist') throw new Error('Unauthorized: Pharmacist only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requirePharmacist(ctx, args.sessionToken);
 
     if (!user.branchId) {
       return {
@@ -59,19 +52,13 @@ export const getDashboardStats = query({
 });
 
 export const getMedicines = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requirePharmacist(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || user.role !== 'pharmacist' || !user.branchId) {
+    if (!user.branchId) {
       return [];
     }
 
@@ -83,26 +70,23 @@ export const getMedicines = query({
 });
 
 export const getMedicineById = query({
-  args: { id: v.id('medicines') },
+  args: { 
+    id: v.id('medicines'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
     return await ctx.db.get(args.id);
   },
 });
 
 export const getSoldItemsHistory = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requirePharmacist(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || !user.branchId) return [];
+    if (!user.branchId) return [];
 
     const sales = await ctx.db
       .query('sales')
@@ -127,19 +111,13 @@ export const getSoldItemsHistory = query({
 });
 
 export const getStockRequests = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requirePharmacist(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || !user.branchId) return [];
+    if (!user.branchId) return [];
 
     const requests = await ctx.db
       .query('stock_requests')
@@ -160,19 +138,13 @@ export const getStockRequests = query({
 });
 
 export const getExpiringMedicines = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requirePharmacist(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || user.role !== 'pharmacist' || !user.branchId) {
+    if (!user.branchId) {
       return [];
     }
 
@@ -191,19 +163,13 @@ export const getExpiringMedicines = query({
 });
 
 export const getLowStockMedicines = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await requirePharmacist(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!user || user.role !== 'pharmacist' || !user.branchId) {
+    if (!user.branchId) {
       return [];
     }
 

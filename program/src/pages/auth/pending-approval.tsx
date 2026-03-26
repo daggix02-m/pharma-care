@@ -48,7 +48,7 @@ export function PendingApprovalPage() {
         localStorage.removeItem('pendingRequestType');
         setTimeout(() => {
           if (mountedRef.current) {
-            navigate('/auth/login');
+            window.location.href = '/auth/login';
           }
         }, 2500);
       }

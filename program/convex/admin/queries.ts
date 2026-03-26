@@ -1,23 +1,14 @@
 // @ts-ignore
 import { query } from '../_generated/server';
 import { v } from 'convex/values';
+import { requireAdmin } from '../lib/auth';
 
 export const getDashboardStats = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    // We can verify if the user is an admin before proceeding
-    // This is optional if your frontend handles routing, but good for backend security
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     const pharmacies = await ctx.db.query('pharmacies').collect();
     const branches = await ctx.db.query('branches').collect();
@@ -34,15 +25,21 @@ export const getDashboardStats = query({
 });
 
 export const getPharmacies = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
     return await ctx.db.query('pharmacies').collect();
   },
 });
 
 export const getBranches = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
     const branches = await ctx.db.query('branches').collect();
     // Resolve pharmacy names for the UI
     return Promise.all(
@@ -58,8 +55,11 @@ export const getBranches = query({
 });
 
 export const getPendingBranches = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
     const branches = await ctx.db
       .query('branches')
       .filter((q: any) => q.eq(q.field('status'), 'pending'))
@@ -83,8 +83,11 @@ export const getPendingBranches = query({
 });
 
 export const getAllManagers = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
     return await ctx.db
       .query('users')
       .filter((q: any) => q.eq(q.field('role'), 'manager'))
@@ -93,8 +96,11 @@ export const getAllManagers = query({
 });
 
 export const getPendingManagers = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
     return await ctx.db
       .query('users')
       .filter((q: any) =>
@@ -105,8 +111,11 @@ export const getPendingManagers = query({
 });
 
 export const getAuditLogs = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
     const logs = await ctx.db.query('audit_logs').order('desc').collect();
     return Promise.all(
       logs.map(async (log: any) => {
@@ -122,19 +131,11 @@ export const getAuditLogs = query({
 });
 
 export const getDashboardBranches = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     const branches = await ctx.db.query('branches').collect();
 
@@ -149,19 +150,11 @@ export const getDashboardBranches = query({
 });
 
 export const getDashboardUsers = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     const users = await ctx.db.query('users').collect();
 
@@ -181,19 +174,11 @@ export const getDashboardUsers = query({
 });
 
 export const getDashboardSales = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     const sales = await ctx.db.query('sales').collect();
 
@@ -235,19 +220,12 @@ export const getDashboardSales = query({
 });
 
 export const getBranchById = query({
-  args: { id: v.id('branches') },
+  args: {
+    id: v.id('branches'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+    await requireAdmin(ctx, args.sessionToken);
 
     const branch = await ctx.db.get(args.id);
     if (!branch) {
@@ -267,19 +245,11 @@ export const getBranchById = query({
 });
 
 export const getActivatedManagers = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     const managers = await ctx.db
       .query('users')
@@ -304,19 +274,12 @@ export const getActivatedManagers = query({
 });
 
 export const getManagersByBranch = query({
-  args: { branchId: v.id('branches') },
+  args: {
+    branchId: v.id('branches'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+    await requireAdmin(ctx, args.sessionToken);
 
     const branch = await ctx.db.get(args.branchId);
     if (!branch) {
@@ -335,19 +298,11 @@ export const getManagersByBranch = query({
 });
 
 export const getSubscriptionPlans = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     return await ctx.db
       .query('subscription_plans')
@@ -357,19 +312,12 @@ export const getSubscriptionPlans = query({
 });
 
 export const getSubscriptionHistory = query({
-  args: { pharmacyId: v.id('pharmacies') },
+  args: {
+    pharmacyId: v.id('pharmacies'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+    await requireAdmin(ctx, args.sessionToken);
 
     const history = await ctx.db
       .query('subscription_history')
@@ -392,19 +340,11 @@ export const getSubscriptionHistory = query({
 });
 
 export const getSubscriptionAnalytics = query({
-  args: {},
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
     const pharmacies = await ctx.db.query('pharmacies').collect();
     const subscriptionHistory = await ctx.db.query('subscription_history').collect();
@@ -459,19 +399,12 @@ export const getSubscriptionAnalytics = query({
 });
 
 export const getPharmacySubscriptionDetails = query({
-  args: { pharmacyId: v.id('pharmacies') },
+  args: {
+    pharmacyId: v.id('pharmacies'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
+    await requireAdmin(ctx, args.sessionToken);
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) {
@@ -516,28 +449,21 @@ export const getPharmacySubscriptionDetails = query({
 
 // v4.0: Get pharmacy detail with all sections
 export const getPharmacyDetail = query({
-  args: { pharmacyId: v.id('pharmacies') },
-  handler: async ({ db, auth }, args) => {
-    const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    pharmacyId: v.id('pharmacies'),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
-    const user = await db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
-
-    const pharmacy = await db.get(args.pharmacyId);
+    const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) throw new Error('Pharmacy not found');
 
     // Get owner details
-    const owner = await db.get(pharmacy.ownerId);
+    const owner = await ctx.db.get(pharmacy.ownerId);
 
     // Get all managers
-    const managers = await db
+    const managers = await ctx.db
       .query('users')
       .filter((q: any) =>
         q.eq(q.field('pharmacyId'), args.pharmacyId).eq(q.field('role'), 'manager')
@@ -545,7 +471,7 @@ export const getPharmacyDetail = query({
       .collect();
 
     // Get all staff
-    const staff = await db
+    const staff = await ctx.db
       .query('users')
       .filter((q: any) =>
         q.eq(q.field('pharmacyId'), args.pharmacyId).neq(q.field('role'), 'manager')
@@ -553,13 +479,13 @@ export const getPharmacyDetail = query({
       .collect();
 
     // Get branches
-    const branches = await db
+    const branches = await ctx.db
       .query('branches')
       .filter((q: any) => q.eq(q.field('pharmacyId'), args.pharmacyId))
       .collect();
 
     // Get recent audit logs
-    const auditLogs = await db
+    const auditLogs = await ctx.db
       .query('audit_logs')
       .filter((q: any) => q.eq(q.field('entityId'), args.pharmacyId.toString()))
       .order('desc')
@@ -578,28 +504,20 @@ export const getPharmacyDetail = query({
 
 // v4.0: Get flagged accounts
 export const getFlaggedAccounts = query({
-  args: {},
-  handler: async ({ db, auth }) => {
-    const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
-    const user = await db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
-
-    const users = await db
+    const users = await ctx.db
       .query('users')
       .filter((q: any) => q.eq(q.field('adminFlagged'), true))
       .collect();
 
     return Promise.all(
       users.map(async (user: any) => {
-        const pharmacy = user.pharmacyId ? ((await db.get(user.pharmacyId)) as any) : null;
+        const pharmacy = user.pharmacyId ? ((await ctx.db.get(user.pharmacyId)) as any) : null;
         return {
           ...user,
           pharmacyName: pharmacy?.name,
@@ -611,21 +529,14 @@ export const getFlaggedAccounts = query({
 
 // v4.0: Get diagnostic sessions for a pharmacy
 export const getDiagnosticSessions = query({
-  args: { pharmacyId: v.id('pharmacies') },
-  handler: async ({ db, auth }, args) => {
-    const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    pharmacyId: v.id('pharmacies'),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
-    const user = await db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
-
-    const sessions = await db
+    const sessions = await ctx.db
       .query('diagnostic_sessions')
       .filter((q: any) => q.eq(q.field('targetPharmacyId'), args.pharmacyId))
       .order('desc')
@@ -633,8 +544,8 @@ export const getDiagnosticSessions = query({
 
     return Promise.all(
       sessions.map(async (session: any) => {
-        const admin = (await db.get(session.adminId)) as any;
-        const targetUser = (await db.get(session.targetUserId)) as any;
+        const admin = (await ctx.db.get(session.adminId)) as any;
+        const targetUser = (await ctx.db.get(session.targetUserId)) as any;
         return {
           ...session,
           adminName: admin?.full_name || 'Unknown',
@@ -647,21 +558,13 @@ export const getDiagnosticSessions = query({
 
 // v4.0: Get pending appeals for admin review
 export const getPendingAppeals = query({
-  args: {},
-  handler: async ({ db, auth }) => {
-    const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
 
-    const user = await db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (user?.role !== 'admin') throw new Error('Unauthorized: Admin only');
-
-    const managerFlagAppeals = await db
+    const managerFlagAppeals = await ctx.db
       .query('manager_flags')
       .filter((q: any) =>
         q.and(q.eq(q.field('status'), 'flagged'), q.neq(q.field('ownerResponse'), undefined))
@@ -670,10 +573,10 @@ export const getPendingAppeals = query({
 
     const managerFlagAppealsWithDetails = await Promise.all(
       managerFlagAppeals.map(async (flag: any) => {
-        const manager = (await db.get(flag.managerId)) as any;
-        const flaggedBy = (await db.get(flag.flaggedBy)) as any;
-        const pharmacy = manager?.pharmacyId ? ((await db.get(manager.pharmacyId)) as any) : null;
-        const owner = pharmacy?.ownerId ? ((await db.get(pharmacy.ownerId)) as any) : null;
+        const manager = (await ctx.db.get(flag.managerId)) as any;
+        const flaggedBy = (await ctx.db.get(flag.flaggedBy)) as any;
+        const pharmacy = manager?.pharmacyId ? ((await ctx.db.get(manager.pharmacyId)) as any) : null;
+        const owner = pharmacy?.ownerId ? ((await ctx.db.get(pharmacy.ownerId)) as any) : null;
 
         return {
           id: flag._id,
@@ -695,7 +598,7 @@ export const getPendingAppeals = query({
       })
     );
 
-    const adminActions = await db
+    const adminActions = await ctx.db
       .query('admin_actions')
       .filter((q: any) =>
         q.and(q.eq(q.field('actionStatus'), 'active'), q.eq(q.field('ownerNotified'), true))
@@ -704,12 +607,12 @@ export const getPendingAppeals = query({
 
     const adminActionAppeals = await Promise.all(
       adminActions.map(async (action: any) => {
-        const targetUser = (await db.get(action.targetUserId)) as any;
-        const performedBy = (await db.get(action.performedBy)) as any;
+        const targetUser = (await ctx.db.get(action.targetUserId)) as any;
+        const performedBy = (await ctx.db.get(action.performedBy)) as any;
         const pharmacy = action.targetPharmacyId
-          ? ((await db.get(action.targetPharmacyId)) as any)
+          ? ((await ctx.db.get(action.targetPharmacyId)) as any)
           : null;
-        const owner = pharmacy?.ownerId ? ((await db.get(pharmacy.ownerId)) as any) : null;
+        const owner = pharmacy?.ownerId ? ((await ctx.db.get(pharmacy.ownerId)) as any) : null;
 
         return {
           id: action._id,

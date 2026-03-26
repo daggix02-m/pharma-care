@@ -1,22 +1,14 @@
 // @ts-ignore
 import { query } from '../_generated/server';
 import { v } from 'convex/values';
+import { requireOwner } from '../lib/auth';
 
 export const getMyMessages = query({
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const owner = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!owner || owner.role !== 'owner') {
-      throw new Error('Unauthorized: Owner only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const owner = await requireOwner(ctx, args.sessionToken);
 
     const pharmacyId = owner.pharmacyId;
     if (!pharmacyId) {
@@ -34,21 +26,12 @@ export const getMyMessages = query({
 });
 
 export const getMessageStatus = query({
-  args: { messageId: v.id('owner_messages') },
+  args: { 
+    messageId: v.id('owner_messages'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const owner = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!owner || owner.role !== 'owner') {
-      throw new Error('Unauthorized: Owner only');
-    }
+    const owner = await requireOwner(ctx, args.sessionToken);
 
     const message = await ctx.db.get(args.messageId);
     if (!message) {
@@ -64,20 +47,11 @@ export const getMessageStatus = query({
 });
 
 export const getPendingActions = query({
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const owner = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!owner || owner.role !== 'owner') {
-      throw new Error('Unauthorized: Owner only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const owner = await requireOwner(ctx, args.sessionToken);
 
     const pharmacyId = owner.pharmacyId;
     if (!pharmacyId) {
@@ -114,20 +88,11 @@ export const getPendingActions = query({
 });
 
 export const getAppealHistory = query({
-  handler: async (ctx: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const owner = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
-      )
-      .unique();
-
-    if (!owner || owner.role !== 'owner') {
-      throw new Error('Unauthorized: Owner only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const owner = await requireOwner(ctx, args.sessionToken);
 
     const pharmacyId = owner.pharmacyId;
     if (!pharmacyId) {

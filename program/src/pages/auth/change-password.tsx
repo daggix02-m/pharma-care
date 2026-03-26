@@ -73,11 +73,12 @@ export function ChangePasswordPage() {
       sessionStorage.removeItem('temp_password');
 
       const role = localStorage.getItem('userRole') || 'manager';
-      if (role === 'admin') navigate('/admin/overview');
-      else if (role === 'manager') navigate('/manager/overview');
-      else if (role === 'pharmacist') navigate('/pharmacist/overview');
-      else if (role === 'cashier') navigate('/cashier/overview');
-      else navigate('/manager/overview');
+      let homePath = '/manager/overview';
+      if (role === 'admin') homePath = '/admin/overview';
+      else if (role === 'manager') homePath = '/manager/overview';
+      else if (role === 'pharmacist') homePath = '/pharmacist/overview';
+      else if (role === 'cashier') homePath = '/cashier/overview';
+      window.location.href = homePath;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.');
     } finally {

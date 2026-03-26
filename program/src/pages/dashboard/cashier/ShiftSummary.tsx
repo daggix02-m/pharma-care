@@ -1,5 +1,6 @@
 import { useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +39,11 @@ interface ShiftSummaryData {
 }
 
 export function ShiftSummary() {
-  const summary = useQuery(api.cashier.queries.getShiftSummary) as ShiftSummaryData | undefined;
+  const { sessionToken } = useAuth();
+  const summary = useQuery(
+    api.cashier.queries.getShiftSummary,
+    sessionToken ? { sessionToken } : 'skip'
+  ) as ShiftSummaryData | undefined;
 
   const isLoading = summary === undefined;
 

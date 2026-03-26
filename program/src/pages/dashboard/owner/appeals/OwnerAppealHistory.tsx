@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ManagerFlagAppeal {
   id: string;
@@ -47,8 +48,12 @@ interface AdminActionAppeal {
 export function OwnerAppealHistory() {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'all' | 'manager_flags' | 'admin_actions'>('all');
+  const { sessionToken } = useAuth();
 
-  const appealHistory = useQuery(api.owner.queries.getAppealHistory);
+  const appealHistory = useQuery(
+    api.owner.queries.getAppealHistory,
+    sessionToken ? { sessionToken } : 'skip'
+  );
 
   const toggleCard = (id: string) => {
     setExpandedCards((prev) => {

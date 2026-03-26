@@ -18,6 +18,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Id } from '../../../../convex/_generated/dataModel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Session {
   sessionId: Id<'users'>;
@@ -48,7 +49,11 @@ export function SessionManagement() {
   const [notes, setNotes] = useState('');
 
   // Fetch sessions from Convex
-  const sessionData = useQuery(api.cashier.queries.getSessions) as Session[] | undefined;
+  const { sessionToken } = useAuth();
+  const sessionData = useQuery(
+    api.cashier.queries.getSessions,
+    sessionToken ? { sessionToken } : 'skip'
+  ) as Session[] | undefined;
   const sessionLoading = sessionData === undefined;
 
   const activeSession = Array.isArray(sessionData)

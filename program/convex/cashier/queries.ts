@@ -1,18 +1,13 @@
 import { query } from '../_generated/server';
 import { v } from 'convex/values';
+import { requireCashier } from '../lib/auth';
 
 export const getDashboardStats = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') throw new Error('Unauthorized: Cashier only');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const sales = await ctx.db
       .query('sales')
@@ -33,17 +28,13 @@ export const getDashboardStats = query({
 });
 
 export const getProducts = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier' || !user.branchId) {
+    if (!user.branchId) {
       throw new Error('Unauthorized: Cashier only');
     }
 
@@ -56,19 +47,11 @@ export const getProducts = query({
 });
 
 export const getDailySales = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -81,17 +64,14 @@ export const getDailySales = query({
 });
 
 export const searchMedicines = query({
-  args: { query: v.string() },
+  args: { 
+    query: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    const user = await requireCashier(ctx, args.sessionToken);
 
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier' || !user.branchId) {
+    if (!user.branchId) {
       throw new Error('Unauthorized: Cashier only');
     }
 
@@ -129,19 +109,11 @@ export const searchMedicines = query({
 });
 
 export const getTransactions = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     return await ctx.db
       .query('sales')
@@ -152,19 +124,12 @@ export const getTransactions = query({
 });
 
 export const getTransactionDetails = query({
-  args: { transactionId: v.id('sales') },
+  args: { 
+    transactionId: v.id('sales'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const sale = await ctx.db.get(args.transactionId);
     if (!sale || sale.cashierId !== user._id) {
@@ -187,19 +152,12 @@ export const getTransactionDetails = query({
 });
 
 export const getReceipt = query({
-  args: { saleId: v.id('sales') },
+  args: { 
+    saleId: v.id('sales'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const sale = await ctx.db.get(args.saleId);
     if (!sale) throw new Error('Sale not found');
@@ -228,19 +186,11 @@ export const getReceipt = query({
 });
 
 export const getReturnableSales = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const today = new Date();
     today.setDate(today.getDate() - 7); // Last 7 days
@@ -253,19 +203,12 @@ export const getReturnableSales = query({
 });
 
 export const getReturnableItems = query({
-  args: { saleId: v.id('sales') },
+  args: { 
+    saleId: v.id('sales'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const sale = await ctx.db.get(args.saleId);
     if (!sale || sale.cashierId !== user._id) {
@@ -287,19 +230,11 @@ export const getReturnableItems = query({
 });
 
 export const getSalesSummary = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const sales = await ctx.db
       .query('sales')
@@ -397,19 +332,10 @@ export const getPaymentsReport = query({
   args: {
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+    const user = await requireCashier(ctx, args.sessionToken);
 
     let sales = await ctx.db
       .query('sales')
@@ -449,19 +375,10 @@ export const getReturnsReport = query({
   args: {
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, _args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     // For now, return empty report (returns feature to be implemented)
     return {
@@ -473,19 +390,11 @@ export const getReturnsReport = query({
 });
 
 export const getSessions = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     // For now, return current user's sales as sessions (to be enhanced)
     await ctx.db
@@ -524,19 +433,11 @@ export const getSessions = query({
 });
 
 export const getShiftSummary = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -595,19 +496,11 @@ export const getShiftSummary = query({
 });
 
 export const getPendingPayments = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCashier(ctx, args.sessionToken);
 
     // For now, return empty (pending payments to be implemented)
     return [];
@@ -615,19 +508,12 @@ export const getPendingPayments = query({
 });
 
 export const getPaymentDetails = query({
-  args: { saleId: v.id('sales') },
+  args: { 
+    saleId: v.id('sales'),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
-
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== 'cashier') {
-      throw new Error('Unauthorized: Cashier only');
-    }
+    const user = await requireCashier(ctx, args.sessionToken);
 
     const sale = await ctx.db.get(args.saleId);
     if (!sale || sale.cashierId !== user._id) {
