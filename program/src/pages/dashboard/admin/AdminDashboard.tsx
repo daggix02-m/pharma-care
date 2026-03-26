@@ -37,7 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { AdminBroadcastDialog } from '@/components/shared/messaging';
-import { DiagnosticViewModal } from '@/components/shared/DiagnosticViewModal.index';
+import { DiagnosticViewModal } from '@/components/shared';
 import { LandingPageManagement } from './landing-page/LandingPageManagement';
 
 type AdminTab =

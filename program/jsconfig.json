@@ -1,9 +1,0 @@
-{
-  "compilerOptions": {
-    "baseUrl": "src",       // sets "src" as the base for absolute imports
-    "paths": {
-      "@/*": ["*"]          // allows using @/ for all files inside src
-    }
-  },
-  "include": ["src"]
-}
