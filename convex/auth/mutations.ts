@@ -7,6 +7,36 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function generateVerificationCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function sendEmailViaResend(args: {
+  to: string;
+  subject: string;
+  html: string;
+  apiKey: string;
+  testMode?: boolean;
+}) {
+  if (args.testMode) {
+    return;
+  }
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${args.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "PharmaCare <noreply@pharmacare.io>",
+      to: args.to,
+      subject: args.subject,
+      html: args.html,
+    }),
+  });
+}
+
 async function hashPasswordWithSecret(
   password: string,
   secret: string,
@@ -102,11 +132,16 @@ export const signUpWithEmail = mutation({
         name: v.string(),
         licenseNumber: v.string(),
         location: v.string(),
+        pharmacyEmail: v.optional(v.string()),
       }),
     ),
   },
   handler: async (ctx, args) => {
     const normalizedEmail = normalizeEmail(args.email);
+
+    if (!args.pharmacyDetails) {
+      throw new Error("Pharmacy details are required for owner registration");
+    }
 
     // Check if user already exists
     const existingUser = await ctx.db
@@ -133,7 +168,7 @@ export const signUpWithEmail = mutation({
       name: args.full_name,
       full_name: args.full_name,
       passwordHash,
-      role: "pending",
+      role: "owner",
       status: "pending",
       adminFlagged: false,
       adminLocked: false,
@@ -142,30 +177,43 @@ export const signUpWithEmail = mutation({
       passwordLastChanged: Date.now(),
     });
 
-    // Create pharmacy if details provided
-    if (args.pharmacyDetails) {
-      await ctx.db.insert("pharmacies", {
-        name: args.pharmacyDetails.name,
-        licenseCode: args.pharmacyDetails.licenseNumber,
-        staffCount: 1,
-        subscriptionTier: "basic",
-        status: "pending",
-        ownerId: userId,
-      });
-    }
+    const pharmacyId = await ctx.db.insert("pharmacies", {
+      name: args.pharmacyDetails.name,
+      pharmacyEmail: args.pharmacyDetails.pharmacyEmail
+        ? normalizeEmail(args.pharmacyDetails.pharmacyEmail)
+        : undefined,
+      licenseCode: args.pharmacyDetails.licenseNumber,
+      staffCount: 1,
+      subscriptionTier: "basic",
+      status: "pending",
+      ownerId: userId,
+    });
+
+    await ctx.db.patch(userId, {
+      pharmacyId,
+    });
 
     // Generate email verification token
-    const verifyToken = generateRandomString(32);
+    const verifyToken = generateVerificationCode();
     await ctx.db.insert("authVerificationTokens", {
       identifier: normalizedEmail,
       token: verifyToken,
       expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
     });
 
-    // TODO: Send verification email via Resend
-    console.log(
-      `Email verification token for ${normalizedEmail}: ${verifyToken}`,
-    );
+    const settings = await ctx.db.query("site_settings").first();
+    if (settings?.resendApiKey) {
+      const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
+        normalizedEmail,
+      )}&token=${encodeURIComponent(verifyToken)}`;
+      await sendEmailViaResend({
+        to: normalizedEmail,
+        subject: "Verify your PharmaCare account",
+        html: `<p>Hello ${args.full_name},</p><p>Welcome to PharmaCare. Verify your email to continue your pharmacy application.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
+        apiKey: settings.resendApiKey,
+        testMode: settings.testMode,
+      });
+    }
 
     // Log the signup
     await ctx.db.insert("audit_logs", {
@@ -180,8 +228,9 @@ export const signUpWithEmail = mutation({
     return {
       success: true,
       userId,
+      pharmacyId,
       message:
-        "Account created successfully. Please check your email to verify your account.",
+        "Owner account submitted. Verify your email and wait for admin approval.",
     };
   },
 });
@@ -358,9 +407,19 @@ export const requestPasswordReset = mutation({
       expires: expiresAt,
     });
 
-    // TODO: Send email via Resend
-    // This will be implemented when Resend API key is available
-    console.log(`Password reset token for ${normalizedEmail}: ${resetToken}`);
+    const settings = await ctx.db.query("site_settings").first();
+    if (settings?.resendApiKey) {
+      const resetLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/reset-password?email=${encodeURIComponent(
+        normalizedEmail,
+      )}&token=${encodeURIComponent(resetToken)}`;
+      await sendEmailViaResend({
+        to: normalizedEmail,
+        subject: "Reset your PharmaCare password",
+        html: `<p>We received a password reset request.</p><p><a href="${resetLink}">Set a new password</a></p>`,
+        apiKey: settings.resendApiKey,
+        testMode: settings.testMode,
+      });
+    }
 
     return {
       success: true,
@@ -556,7 +615,7 @@ export const sendVerificationEmail = mutation({
       return { success: true, message: "Email already verified" };
     }
 
-    const verifyToken = generateRandomString(32);
+    const verifyToken = generateVerificationCode();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     await ctx.db.insert("authVerificationTokens", {
@@ -565,10 +624,19 @@ export const sendVerificationEmail = mutation({
       expires: expiresAt,
     });
 
-    // TODO: Send email via Resend
-    console.log(
-      `Email verification token for ${normalizedEmail}: ${verifyToken}`,
-    );
+    const settings = await ctx.db.query("site_settings").first();
+    if (settings?.resendApiKey) {
+      const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
+        normalizedEmail,
+      )}&token=${encodeURIComponent(verifyToken)}`;
+      await sendEmailViaResend({
+        to: normalizedEmail,
+        subject: "Your PharmaCare verification link",
+        html: `<p>Click the link below to verify your email:</p><p><a href="${verifyLink}">Verify Email</a></p>`,
+        apiKey: settings.resendApiKey,
+        testMode: settings.testMode,
+      });
+    }
 
     return { success: true, message: "Verification email sent" };
   },

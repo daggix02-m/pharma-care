@@ -132,7 +132,10 @@ const DashboardLogo = React.memo(function DashboardLogo({
   const homePath = getHomePath(userRole);
 
   return (
-    <Link to={homePath} className="flex items-center gap-3 group">
+    <Link
+      to={homePath}
+      className="flex items-center gap-2 sm:gap-3 group min-w-0"
+    >
       <div className="relative w-10 h-10 flex items-center justify-center overflow-hidden">
         <img
           src="/favicon.png"
@@ -140,11 +143,11 @@ const DashboardLogo = React.memo(function DashboardLogo({
           className="h-10 w-10 object-contain"
         />
       </div>
-      <div className="flex flex-col">
-        <span className="text-[15px] font-display font-bold tracking-tight text-foreground leading-none">
+      <div className="flex flex-col min-w-0">
+        <span className="text-[14px] sm:text-[15px] font-display font-bold tracking-tight text-foreground leading-none truncate max-w-[130px] sm:max-w-[220px]">
           {pharmacyName}
         </span>
-        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mt-0.5">
+        <span className="hidden sm:block text-[10px] text-muted-foreground uppercase tracking-widest font-medium mt-0.5">
           Management System
         </span>
       </div>
@@ -409,7 +412,7 @@ export const TopBar = React.memo(function TopBar({ className }: TopBarProps) {
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           {/* Left: Logo & Brand */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-3 sm:gap-6 min-w-0">
             <DashboardLogo pharmacyName={pharmacyName} userRole={userRole} />
 
             {/* Desktop Nav Links - Brutalist minimalist style */}

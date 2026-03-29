@@ -170,13 +170,13 @@ export function PharmacyDetailPage() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-[hsl(var(--medical-teal))]/5">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b shadow-sm">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex items-start justify-between gap-6">
+        <div className="container mx-auto px-4 sm:px-6 py-5 sm:py-6">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 sm:gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
                 <Building2 className="h-8 w-8 text-[hsl(var(--medical-teal))]" />
                 <div>
-                  <h1 className="text-3xl font-bold tracking-tight">
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight break-words">
                     {data.pharmacy.name}
                   </h1>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -186,7 +186,7 @@ export function PharmacyDetailPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 mt-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-3 sm:mt-4">
                 <Badge
                   variant={
                     data.pharmacy.status === "active"
@@ -214,7 +214,7 @@ export function PharmacyDetailPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 onClick={() => setMessageDialog(true)}
                 variant="outline"
@@ -241,7 +241,7 @@ export function PharmacyDetailPage() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="space-y-4 max-w-7xl">
           <CollapsibleSection
             id="overview"
@@ -306,7 +306,11 @@ export function PharmacyDetailPage() {
             expanded={expandedSections.has("subscription")}
             onToggle={() => toggleSection("subscription")}
           >
-            <SubscriptionBillingSection pharmacy={data.pharmacy} />
+            <SubscriptionBillingSection
+              pharmacy={data.pharmacy}
+              subscriptionHistory={data.subscriptionHistory || []}
+              subscriptionPlans={data.subscriptionPlans || []}
+            />
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -326,7 +330,11 @@ export function PharmacyDetailPage() {
             expanded={expandedSections.has("history")}
             onToggle={() => toggleSection("history")}
           >
-            <HistoryPageSection pharmacyId={pharmacyId ?? ""} />
+            <HistoryPageSection
+              pharmacyId={pharmacyId ?? ""}
+              auditLogs={data.auditLogs || []}
+              subscriptionHistory={data.subscriptionHistory || []}
+            />
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -336,7 +344,9 @@ export function PharmacyDetailPage() {
             expanded={expandedSections.has("diagnostic")}
             onToggle={() => toggleSection("diagnostic")}
           >
-            <DiagnosticSessionsSection pharmacyId={pharmacyId ?? ""} />
+            <DiagnosticSessionsSection
+              sessions={data.diagnosticSessions || []}
+            />
           </CollapsibleSection>
         </div>
       </div>

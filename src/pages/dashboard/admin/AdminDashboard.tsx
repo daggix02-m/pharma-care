@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { toast } from "sonner";
 import gsap from "gsap";
 import {
@@ -11,9 +12,7 @@ import {
   Users,
   Search,
   Loader2,
-  Plus,
   Trash2,
-  ShieldCheck,
   Activity,
   MapPin,
   Mail,
@@ -35,6 +34,16 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { AdminBroadcastDialog } from "@/components/shared/messaging";
 import { DiagnosticViewModal } from "@/components/shared";
@@ -83,6 +92,7 @@ interface Manager {
 
 export function AdminDashboard() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const requestedTab = searchParams.get("tab");
   const validTabs: AdminTab[] = [
     "overview",
@@ -137,6 +147,7 @@ export function AdminDashboard() {
             variant="outline"
             size="sm"
             className="h-9 rounded-lg gap-2 text-[13px]"
+            onClick={() => navigate("/admin?tab=settings")}
           >
             <Activity className="w-4 h-4 text-primary" />
             System Status
@@ -209,24 +220,29 @@ function OverviewSection() {
   );
 
   // Destructure data from combined query
-  const {
-    stats,
-    recentPharmacies,
-    pharmacies,
-    branches,
-    managers,
-    subscriptionPlans,
-    flaggedAccounts,
-    pendingAppeals,
-  } = overview || {};
+  const { stats, subscriptionPlans, flaggedAccounts, pendingAppeals } =
+    overview || {};
 
   // Keep AI escalations separate (different service)
   const aiEscalations = useQuery(
     api.ai.queries.getEscalationStats,
     sessionToken ? { sessionToken } : "skip",
   );
+  const recentAuditLogs = useQuery(
+    api.admin.queries.getAuditLogs,
+    sessionToken ? { sessionToken } : "skip",
+  );
 
-  const isLoading = overview === undefined || aiEscalations === undefined;
+  const isLoading =
+    overview === undefined ||
+    aiEscalations === undefined ||
+    recentAuditLogs === undefined;
+
+  const formatActionLabel = (action: string) =>
+    action
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
 
   // OPTIMIZATION: Use pre-calculated stats from backend
   // Backend already calculated these in getAdminOverview query
@@ -258,9 +274,9 @@ function OverviewSection() {
       totalBranches: stats?.totalBranches || 0,
       activeBranches: stats?.activeBranches || 0,
       totalManagers: stats?.totalManagers || 0,
-      activeManagers: 0, // Calculate if needed
+      activeManagers: stats?.activeManagers || 0,
       totalPlans: stats?.totalPlans || 0,
-      monthlyRevenue: 0, // Add to backend if needed
+      monthlyRevenue: stats?.monthlyRevenue || 0,
       activeSubscriptions: stats?.activePharmacies || 0,
       flaggedCount: stats?.flaggedCount || 0,
       pendingAppealsCount: stats?.appealsCount || 0,
@@ -469,7 +485,7 @@ function OverviewSection() {
                   <p className="text-[10px] text-muted-foreground">pending</p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
                 <div className="text-center p-2 rounded-lg bg-muted/30">
                   <Phone className="w-4 h-4 mx-auto mb-1 text-emerald-600" />
                   <p className="text-[10px] text-muted-foreground">Phone</p>
@@ -536,47 +552,32 @@ function OverviewSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center gap-4 p-4 rounded-xl border border-border/40">
-                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-                  <Plus className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-medium">
-                    New pharmacy registration
-                  </p>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-tight">
-                    Just now
-                  </p>
-                </div>
+            {recentAuditLogs.length > 0 ? (
+              <div className="space-y-2">
+                {recentAuditLogs.slice(0, 3).map((log: any) => (
+                  <div
+                    key={log._id}
+                    className="flex items-center gap-4 p-4 rounded-xl border border-border/40"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                      <Activity className="w-4.5 h-4.5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[13px] font-medium">
+                        {formatActionLabel(log.action || "activity")}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-tight">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-4 p-4 rounded-xl border border-border/40">
-                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-                  <ShieldCheck className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-medium">
-                    Branch approval processed
-                  </p>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-tight">
-                    14 minutes ago
-                  </p>
-                </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                No recent activity
               </div>
-              <div className="flex items-center gap-4 p-4 rounded-xl border border-border/40">
-                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-                  <Users className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-medium">
-                    Manager account updated
-                  </p>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-tight">
-                    2 hours ago
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -588,21 +589,21 @@ function ApprovalsSection() {
   const { sessionToken } = useAuth();
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const pendingManagers = useQuery(
-    api.admin.queries.getPendingManagers,
-    sessionToken ? { sessionToken } : "skip",
-  );
-  const pendingBranches = useQuery(
-    api.admin.queries.getPendingBranches,
-    sessionToken ? { sessionToken } : "skip",
+  const pendingApplications = useQuery(
+    api.admin.queries.getPendingPharmacyApplications,
+    sessionToken ? { sessionToken, search: searchQuery } : "skip",
   );
 
-  const approveBranch = useMutation(api.admin.mutations.approveBranch);
-  const rejectBranch = useMutation(api.admin.mutations.rejectBranch);
+  const approveApplication = useMutation(
+    api.admin.mutations.approvePharmacyApplication,
+  );
+  const rejectApplication = useMutation(
+    api.admin.mutations.rejectPharmacyApplication,
+  );
 
-  const isLoading =
-    pendingManagers === undefined || pendingBranches === undefined;
+  const isLoading = pendingApplications === undefined;
 
   if (isLoading) {
     return (
@@ -614,72 +615,38 @@ function ApprovalsSection() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {pendingManagers.length > 0 && (
-        <Card className="minimal-card border-primary/10">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">
-              Manager Requests
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y divide-border/40">
-              {pendingManagers.map((manager: any) => (
-                <div
-                  key={manager._id}
-                  className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center font-bold text-primary">
-                      {manager.full_name?.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[14px]">
-                        {manager.full_name}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground">
-                        {manager.email}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      toast.info("Review pharmacy registration first")
-                    }
-                    className="rounded-lg h-8 text-[12px]"
-                  >
-                    Details
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="minimal-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold">
-            Branch Approvals
+            Pharmacy Applications
           </CardTitle>
           <Badge variant="secondary" className="rounded-full px-2.5">
-            {pendingBranches.length}
+            {pendingApplications.length}
           </Badge>
         </CardHeader>
         <CardContent>
-          {pendingBranches.length === 0 ? (
+          <div className="relative mb-4 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+            <Input
+              placeholder="Search by owner or pharmacy email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-10 rounded-xl"
+            />
+          </div>
+
+          {pendingApplications.length === 0 ? (
             <div className="text-center py-12">
               <Store className="w-8 h-8 text-muted-foreground/20 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
-                All clear. No pending branches.
+                All clear. No pending pharmacy applications.
               </p>
             </div>
           ) : (
             <div className="grid gap-4">
-              {pendingBranches.map((branch: any) => (
+              {pendingApplications.map((application: any) => (
                 <div
-                  key={branch._id}
+                  key={application.pharmacyId}
                   className="flex items-center justify-between p-5 rounded-2xl border border-border/40 bg-secondary/10 hover:bg-secondary/20 transition-colors"
                 >
                   <div className="flex items-center gap-4">
@@ -687,10 +654,16 @@ function ApprovalsSection() {
                       <Store className="w-6 h-6 text-primary" />
                     </div>
                     <div>
-                      <p className="font-bold text-[15px]">{branch.name}</p>
+                      <p className="font-bold text-[15px]">
+                        {application.pharmacyName}
+                      </p>
                       <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5" />{" "}
-                        {branch.address || "No address provided"}
+                        <Mail className="w-3.5 h-3.5" />
+                        {application.ownerEmail || "No owner email"}
+                      </p>
+                      <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5" />
+                        {application.pharmacyEmail || "No pharmacy email"}
                       </p>
                     </div>
                   </div>
@@ -700,19 +673,31 @@ function ApprovalsSection() {
                       size="icon"
                       className="rounded-full h-10 w-10 text-destructive hover:bg-destructive/5"
                       onClick={async () => {
-                        setRejectingId(branch._id);
+                        const reason = window.prompt(
+                          "Rejection reason (required):",
+                          "Application does not meet requirements",
+                        );
+                        if (!reason?.trim()) {
+                          toast.error("Rejection reason is required");
+                          return;
+                        }
+                        setRejectingId(application.pharmacyId);
                         try {
-                          await rejectBranch({ id: branch._id });
-                          toast.success("Branch rejected");
+                          await rejectApplication({
+                            pharmacyId: application.pharmacyId,
+                            reason,
+                            sessionToken: sessionToken || undefined,
+                          });
+                          toast.success("Application rejected");
                         } catch (err) {
-                          toast.error("Failed to reject branch");
+                          toast.error("Failed to reject application");
                         } finally {
                           setRejectingId(null);
                         }
                       }}
-                      disabled={rejectingId === branch._id}
+                      disabled={rejectingId === application.pharmacyId}
                     >
-                      {rejectingId === branch._id ? (
+                      {rejectingId === application.pharmacyId ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <XCircle className="w-5 h-5" />
@@ -722,19 +707,22 @@ function ApprovalsSection() {
                       size="sm"
                       className="rounded-xl h-10 px-5 gap-2"
                       onClick={async () => {
-                        setApprovingId(branch._id);
+                        setApprovingId(application.pharmacyId);
                         try {
-                          await approveBranch({ id: branch._id });
-                          toast.success("Branch approved");
+                          await approveApplication({
+                            pharmacyId: application.pharmacyId,
+                            sessionToken: sessionToken || undefined,
+                          });
+                          toast.success("Application approved");
                         } catch (err) {
-                          toast.error("Failed to approve branch");
+                          toast.error("Failed to approve application");
                         } finally {
                           setApprovingId(null);
                         }
                       }}
-                      disabled={approvingId === branch._id}
+                      disabled={approvingId === application.pharmacyId}
                     >
-                      {approvingId === branch._id ? (
+                      {approvingId === application.pharmacyId ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <CheckCircle className="w-4 h-4" />
@@ -951,7 +939,7 @@ function PharmaciesSection() {
                     {pharmacy.address && (
                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-2">
                         <MapPin className="w-3 h-3" />
-                        <span className="truncate max-w-[300px]">
+                        <span className="truncate max-w-full sm:max-w-[300px]">
                           {pharmacy.address}
                         </span>
                       </div>
@@ -1102,6 +1090,12 @@ function FeedbacksSection() {
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [replyText, setReplyText] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const [confirmState, setConfirmState] = useState<
+    | { type: "move"; id: Id<"contact_messages"> }
+    | { type: "delete"; id: Id<"contact_messages_trash"> }
+    | { type: "empty" }
+    | null
+  >(null);
 
   const messages = useQuery(
     api.admin.feedbacks.getMessages,
@@ -1118,7 +1112,6 @@ function FeedbacksSection() {
     sessionToken ? { sessionToken } : "skip",
   );
   const markAsRead = useMutation(api.admin.feedbacks.markAsRead);
-  const markAsUnread = useMutation(api.admin.feedbacks.markAsUnread);
   const replyToMessage = useMutation(api.admin.feedbacks.replyToMessage);
   const moveToTrash = useMutation(api.admin.feedbacks.moveToTrash);
   const restoreFromTrash = useMutation(api.admin.feedbacks.restoreFromTrash);
@@ -1144,8 +1137,7 @@ function FeedbacksSection() {
     }
   };
 
-  const handleDelete = async (messageId: string) => {
-    if (!confirm("Move this message to trash?")) return;
+  const handleDelete = async (messageId: Id<"contact_messages">) => {
     try {
       await moveToTrash({ messageId });
       toast.success("Message moved to trash");
@@ -1157,7 +1149,7 @@ function FeedbacksSection() {
     }
   };
 
-  const handleRestore = async (trashId: string) => {
+  const handleRestore = async (trashId: Id<"contact_messages_trash">) => {
     try {
       await restoreFromTrash({ trashId });
       toast.success("Message restored");
@@ -1166,9 +1158,9 @@ function FeedbacksSection() {
     }
   };
 
-  const handlePermanentDelete = async (trashId: string) => {
-    if (!confirm("Permanently delete this message? This cannot be undone."))
-      return;
+  const handlePermanentDelete = async (
+    trashId: Id<"contact_messages_trash">,
+  ) => {
     try {
       await permanentDelete({ trashId });
       toast.success("Message permanently deleted");
@@ -1178,8 +1170,6 @@ function FeedbacksSection() {
   };
 
   const handleEmptyTrash = async () => {
-    if (!confirm("Empty trash? All messages will be permanently deleted."))
-      return;
     try {
       const result = await emptyTrash();
       toast.success(`Trash emptied. ${result.deletedCount} messages deleted.`);
@@ -1204,7 +1194,7 @@ function FeedbacksSection() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -1220,7 +1210,7 @@ function FeedbacksSection() {
             ) : null}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant={activeTab === "inbox" ? "default" : "outline"}
             size="sm"
@@ -1275,7 +1265,7 @@ function FeedbacksSection() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={handleEmptyTrash}
+              onClick={() => setConfirmState({ type: "empty" })}
               className="rounded-lg"
             >
               <Trash2 className="w-4 h-4 mr-2" />
@@ -1347,7 +1337,10 @@ function FeedbacksSection() {
                               className="h-8 w-8 text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(message._id);
+                                setConfirmState({
+                                  type: "move",
+                                  id: message._id as Id<"contact_messages">,
+                                });
                               }}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1361,7 +1354,9 @@ function FeedbacksSection() {
                               className="h-8"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleRestore(message._id);
+                                handleRestore(
+                                  message._id as Id<"contact_messages_trash">,
+                                );
                               }}
                             >
                               Restore
@@ -1372,7 +1367,10 @@ function FeedbacksSection() {
                               className="h-8 w-8 text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handlePermanentDelete(message._id);
+                                setConfirmState({
+                                  type: "delete",
+                                  id: message._id as Id<"contact_messages_trash">,
+                                });
                               }}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1490,6 +1488,55 @@ function FeedbacksSection() {
           </Card>
         </div>
       )}
+
+      <AlertDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmState(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmState?.type === "move" && "Move message to trash?"}
+              {confirmState?.type === "delete" && "Permanently delete message?"}
+              {confirmState?.type === "empty" && "Empty trash?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmState?.type === "move" &&
+                "You can restore this message from trash later."}
+              {confirmState?.type === "delete" &&
+                "This action cannot be undone."}
+              {confirmState?.type === "empty" &&
+                "All trashed messages will be permanently deleted."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                confirmState?.type === "move"
+                  ? ""
+                  : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              }
+              onClick={async () => {
+                if (!confirmState) return;
+                const action = confirmState;
+                setConfirmState(null);
+                if (action.type === "move") {
+                  await handleDelete(action.id);
+                } else if (action.type === "delete") {
+                  await handlePermanentDelete(action.id);
+                } else {
+                  await handleEmptyTrash();
+                }
+              }}
+            >
+              {confirmState?.type === "move" ? "Move to Trash" : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

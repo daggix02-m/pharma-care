@@ -1,7 +1,8 @@
 // @ts-ignore
-import { mutation } from '../_generated/server';
-import { v } from 'convex/values';
-import { hasPermission, Permission } from '../lib/permissions';
+import { mutation } from "../_generated/server";
+import { v } from "convex/values";
+import { hasPermission, Permission } from "../lib/permissions";
+import { requireAdmin } from "../lib/auth";
 
 export const submitPharmacyApplication = mutation({
   args: {
@@ -21,40 +22,48 @@ export const submitPharmacyApplication = mutation({
   },
   handler: async (ctx: any, args: any) => {
     // 1. Create the pending user (Clerk will finish setup later but we need an ID)
-    const userId = await ctx.db.insert('users', {
+    const userId = await ctx.db.insert("users", {
       clerkId: `pending_${Date.now()}`, // Temporary clerkId
-      tokenIdentifier: 'pending',
+      tokenIdentifier: "pending",
       full_name: args.manager.fullName,
       email: args.manager.email,
-      role: 'manager',
-      status: 'pending',
+      role: "manager",
+      status: "pending",
     });
 
     // 2. Create the pending pharmacy
-    const pharmacyId = await ctx.db.insert('pharmacies', {
+    const pharmacyId = await ctx.db.insert("pharmacies", {
       name: args.pharmacy.pharmacyName,
       licenseCode: args.pharmacy.licenseCode,
       staffCount: parseInt(args.pharmacy.staffCount, 10) || 1,
       subscriptionTier: args.subscription,
-      status: 'pending',
+      status: "pending",
       ownerId: userId,
     });
 
     // 3. Create the first main branch based on the first location/name
-    const branchNames = args.pharmacy.branchNames.split(',').map((n: string) => n.trim());
-    const locations = args.pharmacy.locations.split(',').map((l: string) => l.trim());
+    const branchNames = args.pharmacy.branchNames
+      .split(",")
+      .map((n: string) => n.trim());
+    const locations = args.pharmacy.locations
+      .split(",")
+      .map((l: string) => l.trim());
 
     // Iterate through submitted branch names and construct the branches
     // Usually, the first branch is the 'Main' branch.
-    for (let i = 0; i < Math.max(branchNames.length, locations.length, 1); i++) {
+    for (
+      let i = 0;
+      i < Math.max(branchNames.length, locations.length, 1);
+      i++
+    ) {
       const bName = branchNames[i] || `Branch ${i + 1}`;
-      const bLoc = locations[i] || '';
+      const bLoc = locations[i] || "";
 
-      const branchId = await ctx.db.insert('branches', {
+      const branchId = await ctx.db.insert("branches", {
         pharmacyId: pharmacyId,
         name: bName,
         address: bLoc,
-        status: 'pending',
+        status: "pending",
         managerId: userId,
       });
 
@@ -69,40 +78,101 @@ export const submitPharmacyApplication = mutation({
 });
 
 export const approveBranch = mutation({
-  args: { id: v.id('branches') },
+  args: { id: v.id("branches") },
   handler: async (ctx: any, args: any) => {
     const branch = await ctx.db.get(args.id);
-    if (!branch) throw new Error('Branch not found');
+    if (!branch) throw new Error("Branch not found");
 
-    await ctx.db.patch(args.id, { status: 'active' });
+    await ctx.db.patch(args.id, { status: "active" });
 
     if (branch.pharmacyId) {
-      await ctx.db.patch(branch.pharmacyId, { status: 'active' });
+      await ctx.db.patch(branch.pharmacyId, { status: "active" });
     }
 
     if (branch.managerId) {
-      await ctx.db.patch(branch.managerId, { status: 'active' });
+      await ctx.db.patch(branch.managerId, { status: "active" });
     }
 
     return { success: true };
   },
 });
 
+export const approvePharmacyApplication = mutation({
+  args: {
+    pharmacyId: v.id("pharmacies"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const pharmacy = await ctx.db.get(args.pharmacyId);
+    if (!pharmacy) throw new Error("Pharmacy not found");
+
+    const owner = await ctx.db.get(pharmacy.ownerId);
+    if (!owner) throw new Error("Owner not found");
+
+    await ctx.db.patch(args.pharmacyId, { status: "active" });
+    await ctx.db.patch(owner._id, { status: "active", role: "owner" });
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "approve_pharmacy_application",
+      entityId: args.pharmacyId,
+      entityType: "pharmacy",
+      details: `Approved pharmacy application for ${pharmacy.name}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, pharmacyId: args.pharmacyId, ownerId: owner._id };
+  },
+});
+
+export const rejectPharmacyApplication = mutation({
+  args: {
+    pharmacyId: v.id("pharmacies"),
+    reason: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const pharmacy = await ctx.db.get(args.pharmacyId);
+    if (!pharmacy) throw new Error("Pharmacy not found");
+
+    const owner = await ctx.db.get(pharmacy.ownerId);
+    if (!owner) throw new Error("Owner not found");
+
+    await ctx.db.patch(args.pharmacyId, { status: "rejected" });
+    await ctx.db.patch(owner._id, { status: "rejected" });
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "reject_pharmacy_application",
+      entityId: args.pharmacyId,
+      entityType: "pharmacy",
+      details: `Rejected pharmacy application for ${pharmacy.name}: ${args.reason}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true, pharmacyId: args.pharmacyId, ownerId: owner._id };
+  },
+});
+
 export const rejectBranch = mutation({
-  args: { id: v.id('branches') },
+  args: { id: v.id("branches") },
   handler: async (ctx: any, args: any) => {
     const branch = await ctx.db.get(args.id);
-    if (!branch) throw new Error('Branch not found');
+    if (!branch) throw new Error("Branch not found");
 
-    await ctx.db.patch(args.id, { status: 'rejected' });
+    await ctx.db.patch(args.id, { status: "rejected" });
 
     // Automatically reject manager and pharmacy if they came in together
     if (branch.pharmacyId) {
-      await ctx.db.patch(branch.pharmacyId, { status: 'rejected' });
+      await ctx.db.patch(branch.pharmacyId, { status: "rejected" });
     }
 
     if (branch.managerId) {
-      await ctx.db.patch(branch.managerId, { status: 'rejected' });
+      await ctx.db.patch(branch.managerId, { status: "rejected" });
     }
 
     return { success: true };
@@ -110,33 +180,33 @@ export const rejectBranch = mutation({
 });
 
 export const activateBranch = mutation({
-  args: { id: v.id('branches') },
+  args: { id: v.id("branches") },
   handler: async (ctx: any, args: any) => {
-    await ctx.db.patch(args.id, { status: 'active' });
+    await ctx.db.patch(args.id, { status: "active" });
     return { success: true };
   },
 });
 
 export const deactivateBranch = mutation({
-  args: { id: v.id('branches') },
+  args: { id: v.id("branches") },
   handler: async (ctx: any, args: any) => {
-    await ctx.db.patch(args.id, { status: 'deactivated' });
+    await ctx.db.patch(args.id, { status: "deactivated" });
     return { success: true };
   },
 });
 
 export const activateManager = mutation({
-  args: { id: v.id('users') },
+  args: { id: v.id("users") },
   handler: async (ctx: any, args: any) => {
-    await ctx.db.patch(args.id, { status: 'active' });
+    await ctx.db.patch(args.id, { status: "active" });
     return { success: true };
   },
 });
 
 export const deactivateManager = mutation({
-  args: { id: v.id('users') },
+  args: { id: v.id("users") },
   handler: async (ctx: any, args: any) => {
-    await ctx.db.patch(args.id, { status: 'deactivated' });
+    await ctx.db.patch(args.id, { status: "deactivated" });
     return { success: true };
   },
 });
@@ -145,25 +215,25 @@ export const createPharmacy = mutation({
   args: { name: v.string() },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
-    const pharmacyId = await ctx.db.insert('pharmacies', {
+    const pharmacyId = await ctx.db.insert("pharmacies", {
       name: args.name,
-      licenseCode: 'ADMIN_CREATED',
+      licenseCode: "ADMIN_CREATED",
       staffCount: 0,
-      subscriptionTier: 'enterprise',
-      status: 'active',
+      subscriptionTier: "enterprise",
+      status: "active",
       ownerId: admin._id,
     });
     return pharmacyId;
@@ -171,7 +241,7 @@ export const createPharmacy = mutation({
 });
 
 export const deletePharmacy = mutation({
-  args: { id: v.id('pharmacies') },
+  args: { id: v.id("pharmacies") },
   handler: async (ctx: any, args: any) => {
     // Check for branches first? For now mirror the API logic
     await ctx.db.delete(args.id);
@@ -180,7 +250,7 @@ export const deletePharmacy = mutation({
 });
 
 export const deleteManager = mutation({
-  args: { id: v.id('users') },
+  args: { id: v.id("users") },
   handler: async (ctx: any, args: any) => {
     await ctx.db.delete(args.id);
     return { success: true };
@@ -188,7 +258,7 @@ export const deleteManager = mutation({
 });
 
 export const deleteBranch = mutation({
-  args: { id: v.id('branches') },
+  args: { id: v.id("branches") },
   handler: async (ctx: any, args: any) => {
     await ctx.db.delete(args.id);
     return { success: true };
@@ -197,7 +267,7 @@ export const deleteBranch = mutation({
 
 export const updatePharmacy = mutation({
   args: {
-    id: v.id('pharmacies'),
+    id: v.id("pharmacies"),
     data: v.object({
       name: v.optional(v.string()),
       licenseCode: v.optional(v.string()),
@@ -208,32 +278,32 @@ export const updatePharmacy = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const pharmacy = await ctx.db.get(args.id);
     if (!pharmacy) {
-      throw new Error('Pharmacy not found');
+      throw new Error("Pharmacy not found");
     }
 
     await ctx.db.patch(args.id, args.data);
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'update_pharmacy',
+      action: "update_pharmacy",
       entityId: args.id,
-      entityType: 'pharmacy',
-      details: 'Pharmacy updated by admin',
+      entityType: "pharmacy",
+      details: "Pharmacy updated by admin",
       timestamp: Date.now(),
     });
 
@@ -243,42 +313,42 @@ export const updatePharmacy = mutation({
 
 export const updateBranch = mutation({
   args: {
-    id: v.id('branches'),
+    id: v.id("branches"),
     data: v.object({
       name: v.optional(v.string()),
       address: v.optional(v.string()),
-      managerId: v.optional(v.id('users')),
+      managerId: v.optional(v.id("users")),
       status: v.optional(v.string()),
     }),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const branch = await ctx.db.get(args.id);
     if (!branch) {
-      throw new Error('Branch not found');
+      throw new Error("Branch not found");
     }
 
     await ctx.db.patch(args.id, args.data);
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'update_branch',
+      action: "update_branch",
       entityId: args.id,
-      entityType: 'branch',
-      details: 'Branch updated by admin',
+      entityType: "branch",
+      details: "Branch updated by admin",
       timestamp: Date.now(),
     });
 
@@ -288,40 +358,40 @@ export const updateBranch = mutation({
 
 export const resetManagerPassword = mutation({
   args: {
-    managerId: v.id('users'),
+    managerId: v.id("users"),
     newPassword: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const manager = await ctx.db.get(args.managerId);
     if (!manager) {
-      throw new Error('Manager not found');
+      throw new Error("Manager not found");
     }
 
     // Note: Password reset is handled by Clerk
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'password_reset',
+      action: "password_reset",
       entityId: args.managerId,
-      entityType: 'user',
+      entityType: "user",
       details: `Password reset for manager: ${manager.email}`,
       timestamp: Date.now(),
     });
 
-    return { success: true, message: 'Password reset initiated via Clerk' };
+    return { success: true, message: "Password reset initiated via Clerk" };
   },
 });
 
@@ -338,24 +408,24 @@ export const createSubscriptionPlan = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
-    const planId = await ctx.db.insert('subscription_plans', {
+    const planId = await ctx.db.insert("subscription_plans", {
       name: args.name,
       code: args.code,
       price: args.price,
-      currency: args.currency || 'ETB',
+      currency: args.currency || "ETB",
       features: args.features,
       maxBranches: args.maxBranches,
       maxUsers: args.maxUsers,
@@ -363,11 +433,11 @@ export const createSubscriptionPlan = mutation({
       isActive: true,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'create_subscription_plan',
+      action: "create_subscription_plan",
       entityId: planId,
-      entityType: 'subscription_plan',
+      entityType: "subscription_plan",
       details: `Created subscription plan: ${args.name}`,
       timestamp: Date.now(),
     });
@@ -378,7 +448,7 @@ export const createSubscriptionPlan = mutation({
 
 export const updateSubscriptionPlan = mutation({
   args: {
-    id: v.id('subscription_plans'),
+    id: v.id("subscription_plans"),
     data: v.object({
       name: v.optional(v.string()),
       price: v.optional(v.number()),
@@ -392,31 +462,31 @@ export const updateSubscriptionPlan = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const plan = await ctx.db.get(args.id);
     if (!plan) {
-      throw new Error('Subscription plan not found');
+      throw new Error("Subscription plan not found");
     }
 
     await ctx.db.patch(args.id, args.data);
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'update_subscription_plan',
+      action: "update_subscription_plan",
       entityId: args.id,
-      entityType: 'subscription_plan',
+      entityType: "subscription_plan",
       details: `Updated subscription plan: ${plan.name}`,
       timestamp: Date.now(),
     });
@@ -426,43 +496,45 @@ export const updateSubscriptionPlan = mutation({
 });
 
 export const deleteSubscriptionPlan = mutation({
-  args: { id: v.id('subscription_plans') },
+  args: { id: v.id("subscription_plans") },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const plan = await ctx.db.get(args.id);
     if (!plan) {
-      throw new Error('Subscription plan not found');
+      throw new Error("Subscription plan not found");
     }
 
     const pharmaciesUsingPlan = await ctx.db
-      .query('pharmacies')
-      .filter((q: any) => q.eq(q.field('subscriptionTier'), plan.code))
+      .query("pharmacies")
+      .filter((q: any) => q.eq(q.field("subscriptionTier"), plan.code))
       .collect();
 
     if (pharmaciesUsingPlan.length > 0) {
-      throw new Error('Cannot delete plan. Pharmacies are currently using this subscription tier.');
+      throw new Error(
+        "Cannot delete plan. Pharmacies are currently using this subscription tier.",
+      );
     }
 
     await ctx.db.delete(args.id);
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'delete_subscription_plan',
+      action: "delete_subscription_plan",
       entityId: args.id,
-      entityType: 'subscription_plan',
+      entityType: "subscription_plan",
       details: `Deleted subscription plan: ${plan.name}`,
       timestamp: Date.now(),
     });
@@ -473,56 +545,59 @@ export const deleteSubscriptionPlan = mutation({
 
 export const updatePharmacySubscription = mutation({
   args: {
-    pharmacyId: v.id('pharmacies'),
+    pharmacyId: v.id("pharmacies"),
     newTier: v.string(),
     reason: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) {
-      throw new Error('Pharmacy not found');
+      throw new Error("Pharmacy not found");
     }
 
     const newPlan = await ctx.db
-      .query('subscription_plans')
-      .filter((q: any) => q.eq(q.field('code'), args.newTier))
+      .query("subscription_plans")
+      .filter((q: any) => q.eq(q.field("code"), args.newTier))
       .first();
 
     if (!newPlan) {
-      throw new Error('Subscription plan not found');
+      throw new Error("Subscription plan not found");
     }
 
     const oldTier = pharmacy.subscriptionTier;
 
-    let changeType = 'initial';
+    let changeType = "initial";
     if (oldTier && oldTier !== args.newTier) {
-      if (oldTier === 'basic' && (args.newTier === 'premium' || args.newTier === 'enterprise')) {
-        changeType = 'upgrade';
-      } else if (oldTier === 'premium' && args.newTier === 'enterprise') {
-        changeType = 'upgrade';
-      } else if (
-        oldTier === 'enterprise' &&
-        (args.newTier === 'premium' || args.newTier === 'basic')
+      if (
+        oldTier === "basic" &&
+        (args.newTier === "premium" || args.newTier === "enterprise")
       ) {
-        changeType = 'downgrade';
-      } else if (oldTier === 'premium' && args.newTier === 'basic') {
-        changeType = 'downgrade';
+        changeType = "upgrade";
+      } else if (oldTier === "premium" && args.newTier === "enterprise") {
+        changeType = "upgrade";
+      } else if (
+        oldTier === "enterprise" &&
+        (args.newTier === "premium" || args.newTier === "basic")
+      ) {
+        changeType = "downgrade";
+      } else if (oldTier === "premium" && args.newTier === "basic") {
+        changeType = "downgrade";
       } else {
-        changeType = 'renewal';
+        changeType = "renewal";
       }
     }
 
@@ -530,24 +605,24 @@ export const updatePharmacySubscription = mutation({
       subscriptionTier: args.newTier,
     });
 
-    await ctx.db.insert('subscription_history', {
+    await ctx.db.insert("subscription_history", {
       pharmacyId: args.pharmacyId,
       oldTier: oldTier || null,
       newTier: args.newTier,
       changeType,
       price: newPlan.price,
-      currency: newPlan.currency || 'ETB',
+      currency: newPlan.currency || "ETB",
       changedBy: admin._id,
       reason: args.reason,
       effectiveDate: Date.now(),
       createdAt: Date.now(),
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'update_subscription',
+      action: "update_subscription",
       entityId: args.pharmacyId,
-      entityType: 'pharmacy',
+      entityType: "pharmacy",
       details: `Updated pharmacy subscription from ${oldTier} to ${args.newTier}`,
       timestamp: Date.now(),
     });
@@ -557,40 +632,40 @@ export const updatePharmacySubscription = mutation({
 });
 
 export const getPharmacyPlanUsage = mutation({
-  args: { pharmacyId: v.id('pharmacies') },
+  args: { pharmacyId: v.id("pharmacies") },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) {
-      throw new Error('Pharmacy not found');
+      throw new Error("Pharmacy not found");
     }
 
     const subscriptionPlan = await ctx.db
-      .query('subscription_plans')
-      .filter((q: any) => q.eq(q.field('code'), pharmacy.subscriptionTier))
+      .query("subscription_plans")
+      .filter((q: any) => q.eq(q.field("code"), pharmacy.subscriptionTier))
       .first();
 
     const branches = await ctx.db
-      .query('branches')
-      .filter((q: any) => q.eq(q.field('pharmacyId'), args.pharmacyId))
+      .query("branches")
+      .filter((q: any) => q.eq(q.field("pharmacyId"), args.pharmacyId))
       .collect();
 
     const users = await ctx.db
-      .query('users')
-      .filter((q: any) => q.eq(q.field('pharmacyId'), args.pharmacyId))
+      .query("users")
+      .filter((q: any) => q.eq(q.field("pharmacyId"), args.pharmacyId))
       .collect();
 
     return {
@@ -608,35 +683,35 @@ export const getPharmacyPlanUsage = mutation({
 
 export const flagManager = mutation({
   args: {
-    managerId: v.id('users'),
+    managerId: v.id("users"),
     reason: v.string(),
     notes: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
     if (!admin || !hasPermission(admin, Permission.FLAG_MANAGERS)) {
-      throw new Error('Unauthorized: Admin only');
+      throw new Error("Unauthorized: Admin only");
     }
 
     const manager = await ctx.db.get(args.managerId);
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Manager not found');
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Manager not found");
     }
 
     await ctx.db.patch(args.managerId, {
       adminFlagged: true,
     });
 
-    await ctx.db.insert('manager_flags', {
+    await ctx.db.insert("manager_flags", {
       managerId: args.managerId,
       adminId: admin._id,
       reason: args.reason,
@@ -646,11 +721,11 @@ export const flagManager = mutation({
       resolvedAt: null,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'flag_manager',
+      action: "flag_manager",
       entityId: args.managerId,
-      entityType: 'user',
+      entityType: "user",
       details: `Flagged manager: ${manager.full_name} - ${args.reason}`,
       timestamp: Date.now(),
     });
@@ -661,29 +736,29 @@ export const flagManager = mutation({
 
 export const temporaryLockManager = mutation({
   args: {
-    managerId: v.id('users'),
+    managerId: v.id("users"),
     reason: v.string(),
     duration: v.number(),
     notes: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
     if (!admin || !hasPermission(admin, Permission.TEMPORARY_LOCK_MANAGERS)) {
-      throw new Error('Unauthorized: Admin only');
+      throw new Error("Unauthorized: Admin only");
     }
 
     const manager = await ctx.db.get(args.managerId);
-    if (!manager || manager.role !== 'manager') {
-      throw new Error('Manager not found');
+    if (!manager || manager.role !== "manager") {
+      throw new Error("Manager not found");
     }
 
     const lockPlacedAt = Date.now();
@@ -696,11 +771,11 @@ export const temporaryLockManager = mutation({
       lockExpiresAt,
     });
 
-    await ctx.db.insert('admin_actions', {
+    await ctx.db.insert("admin_actions", {
       adminId: admin._id,
-      actionType: 'temp_lock',
+      actionType: "temp_lock",
       targetUserId: args.managerId,
-      targetEntityType: 'user',
+      targetEntityType: "user",
       reason: args.reason,
       notes: args.notes || null,
       metadata: {
@@ -712,11 +787,11 @@ export const temporaryLockManager = mutation({
       expiresAt: lockExpiresAt,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'temp_lock_manager',
+      action: "temp_lock_manager",
       entityId: args.managerId,
-      entityType: 'user',
+      entityType: "user",
       details: `Locked manager for ${args.duration} hours: ${manager.full_name} - ${args.reason}`,
       timestamp: lockPlacedAt,
     });
@@ -727,39 +802,39 @@ export const temporaryLockManager = mutation({
 
 export const flagStaff = mutation({
   args: {
-    staffId: v.id('users'),
+    staffId: v.id("users"),
     reason: v.string(),
     notes: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const staff = await ctx.db.get(args.staffId);
-    if (!staff || !['cashier', 'pharmacist'].includes(staff.role)) {
-      throw new Error('Staff not found');
+    if (!staff || !["cashier", "pharmacist"].includes(staff.role)) {
+      throw new Error("Staff not found");
     }
 
     await ctx.db.patch(args.staffId, {
       adminFlagged: true,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'flag_staff',
+      action: "flag_staff",
       entityId: args.staffId,
-      entityType: 'user',
+      entityType: "user",
       details: `Flagged staff: ${staff.full_name} - ${args.reason}`,
       timestamp: Date.now(),
     });
@@ -770,29 +845,29 @@ export const flagStaff = mutation({
 
 export const temporaryLockStaff = mutation({
   args: {
-    staffId: v.id('users'),
+    staffId: v.id("users"),
     reason: v.string(),
     duration: v.number(),
     notes: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const staff = await ctx.db.get(args.staffId);
-    if (!staff || !['cashier', 'pharmacist'].includes(staff.role)) {
-      throw new Error('Staff not found');
+    if (!staff || !["cashier", "pharmacist"].includes(staff.role)) {
+      throw new Error("Staff not found");
     }
 
     const lockPlacedAt = Date.now();
@@ -805,11 +880,11 @@ export const temporaryLockStaff = mutation({
       lockExpiresAt,
     });
 
-    await ctx.db.insert('admin_actions', {
+    await ctx.db.insert("admin_actions", {
       adminId: admin._id,
-      actionType: 'temp_lock',
+      actionType: "temp_lock",
       targetUserId: args.staffId,
-      targetEntityType: 'user',
+      targetEntityType: "user",
       reason: args.reason,
       notes: args.notes || null,
       metadata: {
@@ -821,11 +896,11 @@ export const temporaryLockStaff = mutation({
       expiresAt: lockExpiresAt,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'temp_lock_staff',
+      action: "temp_lock_staff",
       entityId: args.staffId,
-      entityType: 'user',
+      entityType: "user",
       details: `Locked staff for ${args.duration} hours: ${staff.full_name} - ${args.reason}`,
       timestamp: lockPlacedAt,
     });
@@ -836,27 +911,27 @@ export const temporaryLockStaff = mutation({
 
 export const liftLock = mutation({
   args: {
-    userId: v.id('users'),
+    userId: v.id("users"),
     reason: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const user = await ctx.db.get(args.userId);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
 
     await ctx.db.patch(args.userId, {
@@ -868,11 +943,11 @@ export const liftLock = mutation({
       lockLiftedAt: Date.now(),
     });
 
-    await ctx.db.insert('admin_actions', {
+    await ctx.db.insert("admin_actions", {
       adminId: admin._id,
-      actionType: 'lift_lock',
+      actionType: "lift_lock",
       targetUserId: args.userId,
-      targetEntityType: 'user',
+      targetEntityType: "user",
       reason: args.reason,
       notes: null,
       metadata: {},
@@ -880,11 +955,11 @@ export const liftLock = mutation({
       expiresAt: null,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'lift_lock',
+      action: "lift_lock",
       entityId: args.userId,
-      entityType: 'user',
+      entityType: "user",
       details: `Lifted lock from user: ${user.full_name} - ${args.reason}`,
       timestamp: Date.now(),
     });
@@ -903,22 +978,22 @@ export const sendAdminBroadcast = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
     if (!admin || !hasPermission(admin, Permission.SEND_ADMIN_BROADCASTS)) {
-      throw new Error('Unauthorized: Admin only');
+      throw new Error("Unauthorized: Admin only");
     }
 
     const expiresAt = args.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000;
 
-    await ctx.db.insert('admin_broadcasts', {
+    await ctx.db.insert("admin_broadcasts", {
       adminId: admin._id,
       title: args.title,
       message: args.message,
@@ -929,11 +1004,11 @@ export const sendAdminBroadcast = mutation({
       isActive: true,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'send_broadcast',
+      action: "send_broadcast",
       entityId: null,
-      entityType: 'broadcast',
+      entityType: "broadcast",
       details: `Sent broadcast to ${args.targetAudience}: ${args.title}`,
       timestamp: Date.now(),
     });
@@ -944,39 +1019,39 @@ export const sendAdminBroadcast = mutation({
 
 export const suspendPharmacy = mutation({
   args: {
-    pharmacyId: v.id('pharmacies'),
+    pharmacyId: v.id("pharmacies"),
     reason: v.string(),
     notes: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
     if (!admin || !hasPermission(admin, Permission.SUSPEND_PHARMACIES)) {
-      throw new Error('Unauthorized: Admin only');
+      throw new Error("Unauthorized: Admin only");
     }
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) {
-      throw new Error('Pharmacy not found');
+      throw new Error("Pharmacy not found");
     }
 
     await ctx.db.patch(args.pharmacyId, {
-      status: 'suspended',
+      status: "suspended",
     });
 
-    await ctx.db.insert('admin_actions', {
+    await ctx.db.insert("admin_actions", {
       adminId: admin._id,
-      actionType: 'suspend_pharmacy',
+      actionType: "suspend_pharmacy",
       targetUserId: pharmacy.ownerId,
-      targetEntityType: 'pharmacy',
+      targetEntityType: "pharmacy",
       reason: args.reason,
       notes: args.notes || null,
       metadata: {},
@@ -984,11 +1059,11 @@ export const suspendPharmacy = mutation({
       expiresAt: null,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'suspend_pharmacy',
+      action: "suspend_pharmacy",
       entityId: args.pharmacyId,
-      entityType: 'pharmacy',
+      entityType: "pharmacy",
       details: `Suspended pharmacy: ${pharmacy.name} - ${args.reason}`,
       timestamp: Date.now(),
     });
@@ -999,30 +1074,30 @@ export const suspendPharmacy = mutation({
 
 export const startDiagnosticSession = mutation({
   args: {
-    targetUserId: v.id('users'),
+    targetUserId: v.id("users"),
     reason: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
     if (!admin || !hasPermission(admin, Permission.START_DIAGNOSTIC_SESSIONS)) {
-      throw new Error('Unauthorized: Admin only');
+      throw new Error("Unauthorized: Admin only");
     }
 
     const targetUser = await ctx.db.get(args.targetUserId);
     if (!targetUser) {
-      throw new Error('Target user not found');
+      throw new Error("Target user not found");
     }
 
-    const sessionId = await ctx.db.insert('diagnostic_sessions', {
+    const sessionId = await ctx.db.insert("diagnostic_sessions", {
       adminId: admin._id,
       targetUserId: args.targetUserId,
       reason: args.reason,
@@ -1033,11 +1108,11 @@ export const startDiagnosticSession = mutation({
       isActive: true,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'start_diagnostic',
+      action: "start_diagnostic",
       entityId: sessionId,
-      entityType: 'diagnostic_session',
+      entityType: "diagnostic_session",
       details: `Started diagnostic session for user: ${targetUser.full_name}`,
       timestamp: Date.now(),
     });
@@ -1048,26 +1123,26 @@ export const startDiagnosticSession = mutation({
 
 export const endDiagnosticSession = mutation({
   args: {
-    sessionId: v.id('diagnostic_sessions'),
+    sessionId: v.id("diagnostic_sessions"),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const session = await ctx.db.get(args.sessionId);
     if (!session) {
-      throw new Error('Session not found');
+      throw new Error("Session not found");
     }
 
     await ctx.db.patch(args.sessionId, {
@@ -1075,11 +1150,11 @@ export const endDiagnosticSession = mutation({
       isActive: false,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'end_diagnostic',
+      action: "end_diagnostic",
       entityId: args.sessionId,
-      entityType: 'diagnostic_session',
+      entityType: "diagnostic_session",
       details: `Ended diagnostic session`,
       timestamp: Date.now(),
     });
@@ -1099,46 +1174,50 @@ export const exportAuditLogs = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
-    let logsQuery = ctx.db.query('audit_logs');
+    let logsQuery = ctx.db.query("audit_logs");
 
     if (args.filters.startDate) {
-      logsQuery = logsQuery.filter((q: any) => q.gte(q.field('timestamp'), args.filters.startDate));
+      logsQuery = logsQuery.filter((q: any) =>
+        q.gte(q.field("timestamp"), args.filters.startDate),
+      );
     }
 
     if (args.filters.endDate) {
-      logsQuery = logsQuery.filter((q: any) => q.lte(q.field('timestamp'), args.filters.endDate));
+      logsQuery = logsQuery.filter((q: any) =>
+        q.lte(q.field("timestamp"), args.filters.endDate),
+      );
     }
 
     const logs = await logsQuery.collect();
 
-    const exportId = await ctx.db.insert('audit_log_exports', {
+    const exportId = await ctx.db.insert("audit_log_exports", {
       requestedBy: admin._id,
       filters: args.filters,
-      status: 'completed',
+      status: "completed",
       requestedAt: Date.now(),
       completedAt: Date.now(),
       logCount: logs.length,
       downloadUrl: null,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'export_audit_logs',
+      action: "export_audit_logs",
       entityId: exportId,
-      entityType: 'audit_log_export',
+      entityType: "audit_log_export",
       details: `Exported ${logs.length} audit logs`,
       timestamp: Date.now(),
     });
@@ -1149,41 +1228,41 @@ export const exportAuditLogs = mutation({
 
 export const resolveEscalation = mutation({
   args: {
-    escalationId: v.id('ai_escalations'),
+    escalationId: v.id("ai_escalations"),
     resolution: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const escalation = await ctx.db.get(args.escalationId);
     if (!escalation) {
-      throw new Error('Escalation not found');
+      throw new Error("Escalation not found");
     }
 
     await ctx.db.patch(args.escalationId, {
-      status: 'resolved',
+      status: "resolved",
       resolvedBy: admin._id,
       resolvedAt: Date.now(),
       resolution: args.resolution,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'resolve_escalation',
+      action: "resolve_escalation",
       entityId: args.escalationId,
-      entityType: 'ai_escalation',
+      entityType: "ai_escalation",
       details: `Resolved AI escalation: ${args.resolution}`,
       timestamp: Date.now(),
     });
@@ -1194,70 +1273,72 @@ export const resolveEscalation = mutation({
 
 export const reviewManagerFlagAppeal = mutation({
   args: {
-    flagId: v.id('manager_flags'),
+    flagId: v.id("manager_flags"),
     decision: v.string(), // "approve" (dismiss flag) or "reject" (keep flag)
     reason: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const flag = await ctx.db.get(args.flagId);
     if (!flag) {
-      throw new Error('Flag not found');
+      throw new Error("Flag not found");
     }
 
     const manager = await ctx.db.get(flag.managerId);
-    const pharmacy = manager?.pharmacyId ? await ctx.db.get(manager.pharmacyId) : null;
+    const pharmacy = manager?.pharmacyId
+      ? await ctx.db.get(manager.pharmacyId)
+      : null;
 
-    if (args.decision === 'approve') {
+    if (args.decision === "approve") {
       await ctx.db.patch(args.flagId, {
-        status: 'dismissed',
+        status: "dismissed",
       });
 
-      await ctx.db.insert('notifications', {
+      await ctx.db.insert("notifications", {
         userId: flag.managerId,
         pharmacyId: pharmacy?._id,
-        title: 'Flag Dismissed',
+        title: "Flag Dismissed",
         message: `Your flag has been dismissed following your appeal. Admin reason: ${args.reason}`,
-        type: 'success',
-        priority: 'medium',
+        type: "success",
+        priority: "medium",
         read: false,
         createdAt: Date.now(),
       });
     } else {
       await ctx.db.patch(args.flagId, {
-        status: 'reviewed',
+        status: "reviewed",
       });
 
-      await ctx.db.insert('notifications', {
+      await ctx.db.insert("notifications", {
         userId: flag.managerId,
         pharmacyId: pharmacy?._id,
-        title: 'Flag Appeal Rejected',
+        title: "Flag Appeal Rejected",
         message: `Your appeal has been reviewed and the flag remains. Admin reason: ${args.reason}`,
-        type: 'error',
-        priority: 'high',
+        type: "error",
+        priority: "high",
         read: false,
         createdAt: Date.now(),
       });
     }
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'review_manager_flag_appeal',
+      action: "review_manager_flag_appeal",
       entityId: args.flagId,
-      entityType: 'manager_flag',
+      entityType: "manager_flag",
       details: `Admin ${args.decision}d appeal with reason: ${args.reason}`,
       timestamp: Date.now(),
     });
@@ -1275,43 +1356,43 @@ export const createPharmacyAndBranch = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     // Create pharmacy
-    const pharmacyId = await ctx.db.insert('pharmacies', {
+    const pharmacyId = await ctx.db.insert("pharmacies", {
       name: args.name,
       licenseCode: args.licenseCode,
       staffCount: 0,
-      subscriptionTier: 'basic',
-      status: 'active',
+      subscriptionTier: "basic",
+      status: "active",
       ownerId: admin._id,
     });
 
     // Create the first branch
-    const branchId = await ctx.db.insert('branches', {
+    const branchId = await ctx.db.insert("branches", {
       pharmacyId: pharmacyId,
-      name: 'Main Branch',
+      name: "Main Branch",
       address: args.location,
-      status: 'active',
+      status: "active",
       managerId: null,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'create_pharmacy_and_branch',
+      action: "create_pharmacy_and_branch",
       entityId: pharmacyId,
-      entityType: 'pharmacy',
+      entityType: "pharmacy",
       details: `Created pharmacy and branch for ${args.name}`,
       timestamp: Date.now(),
     });
@@ -1322,43 +1403,43 @@ export const createPharmacyAndBranch = mutation({
 
 export const addBranch = mutation({
   args: {
-    pharmacyId: v.id('pharmacies'),
+    pharmacyId: v.id("pharmacies"),
     name: v.string(),
     address: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) {
-      throw new Error('Pharmacy not found');
+      throw new Error("Pharmacy not found");
     }
 
-    const branchId = await ctx.db.insert('branches', {
+    const branchId = await ctx.db.insert("branches", {
       pharmacyId: args.pharmacyId,
       name: args.name,
       address: args.address,
-      status: 'active',
+      status: "active",
       managerId: null,
     });
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'add_branch',
+      action: "add_branch",
       entityId: branchId,
-      entityType: 'branch',
+      entityType: "branch",
       details: `Added branch ${args.name} to pharmacy`,
       timestamp: Date.now(),
     });
@@ -1369,44 +1450,46 @@ export const addBranch = mutation({
 
 export const reviewAdminActionAppeal = mutation({
   args: {
-    actionId: v.id('admin_actions'),
+    actionId: v.id("admin_actions"),
     decision: v.string(), // "lift" (remove action) or "maintain" (keep action)
     reason: v.string(),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error('Unauthorized');
+    if (!identity) throw new Error("Unauthorized");
 
     const admin = await ctx.db
-      .query('users')
-      .withIndex('by_tokenIdentifier', (q: any) =>
-        q.eq('tokenIdentifier', identity.tokenIdentifier)
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q: any) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
-    if (!admin || admin.role !== 'admin') {
-      throw new Error('Unauthorized: Admin only');
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Unauthorized: Admin only");
     }
 
     const action = await ctx.db.get(args.actionId);
     if (!action) {
-      throw new Error('Action not found');
+      throw new Error("Action not found");
     }
 
-    const pharmacy = action.targetPharmacyId ? await ctx.db.get(action.targetPharmacyId) : null;
+    const pharmacy = action.targetPharmacyId
+      ? await ctx.db.get(action.targetPharmacyId)
+      : null;
     const owner = pharmacy?.ownerId ? await ctx.db.get(pharmacy.ownerId) : null;
 
-    if (args.decision === 'lift') {
+    if (args.decision === "lift") {
       await ctx.db.patch(args.actionId, {
-        actionStatus: 'lifted_by_admin',
+        actionStatus: "lifted_by_admin",
       });
 
-      if (action.actionType === 'flag_for_review') {
+      if (action.actionType === "flag_for_review") {
         await ctx.db.patch(action.targetUserId, {
           adminFlagged: false,
           adminFlagReason: undefined,
         });
-      } else if (action.actionType === 'temporary_lock') {
+      } else if (action.actionType === "temporary_lock") {
         await ctx.db.patch(action.targetUserId, {
           adminLocked: false,
           adminLockReason: undefined,
@@ -1415,34 +1498,34 @@ export const reviewAdminActionAppeal = mutation({
         });
       }
 
-      await ctx.db.insert('notifications', {
+      await ctx.db.insert("notifications", {
         userId: owner?._id || action.targetUserId,
         pharmacyId: pharmacy?._id,
-        title: 'Action Lifted',
+        title: "Action Lifted",
         message: `The admin action has been lifted following your appeal. Admin reason: ${args.reason}`,
-        type: 'success',
-        priority: 'medium',
+        type: "success",
+        priority: "medium",
         read: false,
         createdAt: Date.now(),
       });
     } else {
-      await ctx.db.insert('notifications', {
+      await ctx.db.insert("notifications", {
         userId: owner?._id || action.targetUserId,
         pharmacyId: pharmacy?._id,
-        title: 'Appeal Rejected',
+        title: "Appeal Rejected",
         message: `Your appeal has been reviewed and the action remains. Admin reason: ${args.reason}`,
-        type: 'error',
-        priority: 'high',
+        type: "error",
+        priority: "high",
         read: false,
         createdAt: Date.now(),
       });
     }
 
-    await ctx.db.insert('audit_logs', {
+    await ctx.db.insert("audit_logs", {
       userId: admin._id,
-      action: 'review_admin_action_appeal',
+      action: "review_admin_action_appeal",
       entityId: args.actionId,
-      entityType: 'admin_action',
+      entityType: "admin_action",
       details: `Admin ${args.decision}ed action with reason: ${args.reason}`,
       timestamp: Date.now(),
     });

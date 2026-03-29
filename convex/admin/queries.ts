@@ -105,6 +105,54 @@ export const getPendingBranches = query({
   },
 });
 
+export const getPendingPharmacyApplications = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+    search: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
+
+    const pharmacies = await ctx.db
+      .query("pharmacies")
+      .filter((q: any) => q.eq(q.field("status"), "pending"))
+      .take(200);
+
+    const rows = await Promise.all(
+      pharmacies.map(async (pharmacy: any) => {
+        const owner = pharmacy.ownerId
+          ? await ctx.db.get(pharmacy.ownerId)
+          : null;
+        return {
+          pharmacyId: pharmacy._id,
+          pharmacyName: pharmacy.name,
+          pharmacyEmail: pharmacy.pharmacyEmail,
+          licenseCode: pharmacy.licenseCode,
+          submittedAt: pharmacy._creationTime,
+          status: pharmacy.status,
+          ownerId: owner?._id,
+          ownerName: owner?.full_name || "Unknown",
+          ownerEmail: owner?.email || "",
+        };
+      }),
+    );
+
+    const search = (args.search || "").trim().toLowerCase();
+    if (!search) {
+      return rows;
+    }
+
+    return rows.filter((row: any) => {
+      return (
+        row.pharmacyName?.toLowerCase().includes(search) ||
+        row.pharmacyEmail?.toLowerCase().includes(search) ||
+        row.ownerName?.toLowerCase().includes(search) ||
+        row.ownerEmail?.toLowerCase().includes(search)
+      );
+    });
+  },
+});
+
 export const getAllManagers = query({
   args: {
     sessionToken: v.optional(v.string()),
@@ -575,6 +623,23 @@ export const getPharmacyDetail = query({
       .order("desc")
       .take(50);
 
+    const diagnosticSessions = await ctx.db
+      .query("diagnostic_sessions")
+      .filter((q: any) => q.eq(q.field("targetPharmacyId"), args.pharmacyId))
+      .order("desc")
+      .take(100);
+
+    const subscriptionHistory = await ctx.db
+      .query("subscription_history")
+      .withIndex("by_pharmacy", (q: any) => q.eq("pharmacyId", args.pharmacyId))
+      .order("desc")
+      .take(100);
+
+    const subscriptionPlans = await ctx.db
+      .query("subscription_plans")
+      .filter((q: any) => q.eq(q.field("isActive"), true))
+      .take(100);
+
     return {
       pharmacy,
       owner,
@@ -582,6 +647,9 @@ export const getPharmacyDetail = query({
       staff,
       branches,
       auditLogs,
+      diagnosticSessions,
+      subscriptionHistory,
+      subscriptionPlans,
     };
   },
 });
@@ -783,6 +851,7 @@ export const getAdminOverview = query({
       flaggedAccounts,
       managerFlagAppeals,
       adminActionAppeals,
+      subscriptions,
     ] = await Promise.all([
       ctx.db.query("pharmacies").take(1000),
       ctx.db.query("branches").take(1000),
@@ -806,7 +875,23 @@ export const getAdminOverview = query({
         .query("admin_actions")
         .filter((q: any) => q.eq(q.field("actionStatus"), "active"))
         .take(100),
+      ctx.db.query("subscription_history").take(1000),
     ]);
+
+    const activeManagers = managers.filter(
+      (m: any) => m.status === "active",
+    ).length;
+
+    const monthlyRevenue = subscriptions
+      .filter((s: any) => {
+        const createdAt = new Date(s.createdAt || 0);
+        const now = new Date();
+        return (
+          createdAt.getMonth() === now.getMonth() &&
+          createdAt.getFullYear() === now.getFullYear()
+        );
+      })
+      .reduce((sum: number, s: any) => sum + (s.price || 0), 0);
 
     const pendingAppeals = {
       managerFlagAppeals,
@@ -826,6 +911,8 @@ export const getAdminOverview = query({
         pendingBranches: branches.filter((b: any) => b.status === "pending")
           .length,
         totalManagers: managers.length,
+        activeManagers,
+        monthlyRevenue,
         totalPlans: subscriptionPlans.length,
         flaggedCount: flaggedAccounts.length,
         appealsCount: managerFlagAppeals.length + adminActionAppeals.length,

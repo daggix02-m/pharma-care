@@ -95,7 +95,7 @@ export function ContentEditor({ content }: ContentEditorProps) {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
-      <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6">
+      <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 h-auto">
         <TabsTrigger value="hero">Hero</TabsTrigger>
         <TabsTrigger value="services">Services</TabsTrigger>
         <TabsTrigger value="features">Features</TabsTrigger>
@@ -226,7 +226,7 @@ function HeroEditor({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="heroCtaText">Primary CTA</Label>
             <Input
@@ -585,7 +585,7 @@ function CTAEditor({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="ctaPrimaryButton">Primary Button</Label>
             <Input

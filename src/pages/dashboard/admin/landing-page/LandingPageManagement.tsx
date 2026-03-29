@@ -177,7 +177,7 @@ export function LandingPageManagement() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 lg:w-full">
           <TabsTrigger value="content" className="gap-2">
             <Layout className="h-4 w-4" />
             Content

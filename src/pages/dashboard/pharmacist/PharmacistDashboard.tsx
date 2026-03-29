@@ -10,6 +10,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -48,6 +58,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface Medicine {
   _id: Id<"medicines">;
@@ -313,6 +324,25 @@ function MedicinesTab() {
   const removeMedicineMutation = useMutation(
     api.pharmacist.mutations.removeMedicine,
   );
+  const addMedicineMutation = useMutation(api.pharmacist.mutations.addMedicine);
+  const updateMedicineStockMutation = useMutation(
+    api.pharmacist.mutations.updateMedicineStock,
+  );
+
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
+
+  const [newMedicine, setNewMedicine] = useState({
+    name: "",
+    category: "",
+    stock: "",
+    price: "",
+    manufacturer: "",
+    barcode: "",
+  });
+  const [editStockValue, setEditStockValue] = useState("");
 
   const categories = useMemo(() => {
     if (!medicines) return [] as string[];
@@ -362,6 +392,73 @@ function MedicinesTab() {
 
   if (loading) return <Skeleton className="h-96 rounded-2xl" />;
 
+  const handleAddMedicine = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (
+      !newMedicine.name.trim() ||
+      !newMedicine.category.trim() ||
+      !newMedicine.stock.trim() ||
+      !newMedicine.price.trim()
+    ) {
+      toast.error("Please fill all required medicine fields");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await addMedicineMutation({
+        name: newMedicine.name.trim(),
+        category: newMedicine.category.trim(),
+        stock: Number(newMedicine.stock),
+        price: Number(newMedicine.price),
+        manufacturer: newMedicine.manufacturer.trim() || undefined,
+        barcode: newMedicine.barcode.trim() || undefined,
+      });
+      toast.success("Medicine added");
+      setAddDialogOpen(false);
+      setNewMedicine({
+        name: "",
+        category: "",
+        stock: "",
+        price: "",
+        manufacturer: "",
+        barcode: "",
+      });
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to add medicine");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEditDialog = (medicine: Medicine) => {
+    setEditingMedicine(medicine);
+    setEditStockValue(String(medicine.stock));
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateStock = async () => {
+    if (!editingMedicine) return;
+    const stock = Number(editStockValue);
+    if (Number.isNaN(stock) || stock < 0) {
+      toast.error("Enter a valid stock value");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await updateMedicineStockMutation({ id: editingMedicine._id, stock });
+      toast.success("Stock updated");
+      setEditDialogOpen(false);
+      setEditingMedicine(null);
+      setEditStockValue("");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to update stock");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -388,7 +485,10 @@ function MedicinesTab() {
               ))}
             </SelectContent>
           </Select>
-          <Button className="rounded-xl h-11 px-6 gap-2">
+          <Button
+            className="rounded-xl h-11 px-6 gap-2"
+            onClick={() => setAddDialogOpen(true)}
+          >
             <Plus className="w-4 h-4" />
             Add Item
           </Button>
@@ -438,6 +538,7 @@ function MedicinesTab() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 rounded-lg"
+                      onClick={() => openEditDialog(medicine)}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -458,12 +559,163 @@ function MedicinesTab() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Medicine</DialogTitle>
+            <DialogDescription>
+              Create a new inventory medicine record.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddMedicine} className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="medicine-name">Name</Label>
+              <Input
+                id="medicine-name"
+                value={newMedicine.name}
+                onChange={(e) =>
+                  setNewMedicine((prev) => ({ ...prev, name: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="medicine-category">Category</Label>
+              <Input
+                id="medicine-category"
+                value={newMedicine.category}
+                onChange={(e) =>
+                  setNewMedicine((prev) => ({
+                    ...prev,
+                    category: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="medicine-stock">Stock</Label>
+                <Input
+                  id="medicine-stock"
+                  type="number"
+                  min={0}
+                  value={newMedicine.stock}
+                  onChange={(e) =>
+                    setNewMedicine((prev) => ({
+                      ...prev,
+                      stock: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="medicine-price">Price</Label>
+                <Input
+                  id="medicine-price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={newMedicine.price}
+                  onChange={(e) =>
+                    setNewMedicine((prev) => ({
+                      ...prev,
+                      price: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="medicine-manufacturer">Manufacturer</Label>
+                <Input
+                  id="medicine-manufacturer"
+                  value={newMedicine.manufacturer}
+                  onChange={(e) =>
+                    setNewMedicine((prev) => ({
+                      ...prev,
+                      manufacturer: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="medicine-barcode">Barcode</Label>
+                <Input
+                  id="medicine-barcode"
+                  value={newMedicine.barcode}
+                  onChange={(e) =>
+                    setNewMedicine((prev) => ({
+                      ...prev,
+                      barcode: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save Medicine"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Stock</DialogTitle>
+            <DialogDescription>
+              Update stock for {editingMedicine?.name || "selected medicine"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="edit-stock">Stock</Label>
+              <Input
+                id="edit-stock"
+                type="number"
+                min={0}
+                value={editStockValue}
+                onChange={(e) => setEditStockValue(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleUpdateStock}
+                disabled={saving}
+              >
+                {saving ? "Updating..." : "Update"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function ExpiryAlertsTab() {
   const { sessionToken } = useAuth();
+  const markMedicineForReturn = useMutation(
+    api.pharmacist.mutations.markMedicineForReturn,
+  );
   const medicines = useQuery(
     api.pharmacist.queries.getMedicines,
     sessionToken ? { sessionToken } : "skip",
@@ -507,6 +759,17 @@ function ExpiryAlertsTab() {
                   variant="destructive"
                   size="sm"
                   className="w-full rounded-lg h-8 text-[11px] font-bold uppercase tracking-wider"
+                  onClick={async () => {
+                    try {
+                      await markMedicineForReturn({
+                        id: m._id,
+                        reason: "Marked from expiry alerts",
+                      });
+                      toast.success(`${m.name} marked for return`);
+                    } catch (error: any) {
+                      toast.error(error?.message || "Failed to mark medicine");
+                    }
+                  }}
                 >
                   Mark for Return
                 </Button>
@@ -521,11 +784,56 @@ function ExpiryAlertsTab() {
 
 function StockRequestsTab() {
   const { sessionToken } = useAuth();
+  const medicines = useQuery(
+    api.pharmacist.queries.getMedicines,
+    sessionToken ? { sessionToken } : "skip",
+  );
+  const createStockRequest = useMutation(
+    api.pharmacist.mutations.createStockRequest,
+  );
+  const [newRequestOpen, setNewRequestOpen] = useState(false);
+  const [requestForm, setRequestForm] = useState({
+    medicineId: "",
+    quantity: "",
+    urgency: "normal",
+    notes: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const requests = useQuery(
     api.pharmacist.queries.getStockRequests,
     sessionToken ? { sessionToken } : "skip",
   );
-  if (!requests) return <Skeleton className="h-96 rounded-2xl" />;
+  if (!requests || !medicines) return <Skeleton className="h-96 rounded-2xl" />;
+
+  const handleCreateRequest = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!requestForm.medicineId || !requestForm.quantity) {
+      toast.error("Select a medicine and quantity");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await createStockRequest({
+        medicineId: requestForm.medicineId as Id<"medicines">,
+        quantity: Number(requestForm.quantity),
+        urgency: requestForm.urgency,
+        notes: requestForm.notes.trim() || undefined,
+      });
+      toast.success("Stock request submitted");
+      setNewRequestOpen(false);
+      setRequestForm({
+        medicineId: "",
+        quantity: "",
+        urgency: "normal",
+        notes: "",
+      });
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create stock request");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -533,7 +841,10 @@ function StockRequestsTab() {
         <h2 className="text-xl font-bold font-display">
           Replenishment Requests
         </h2>
-        <Button className="rounded-xl h-10 gap-2">
+        <Button
+          className="rounded-xl h-10 gap-2"
+          onClick={() => setNewRequestOpen(true)}
+        >
           <Plus className="w-4 h-4" />
           New Request
         </Button>
@@ -568,6 +879,98 @@ function StockRequestsTab() {
           ),
         )}
       </div>
+
+      <Dialog open={newRequestOpen} onOpenChange={setNewRequestOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Stock Request</DialogTitle>
+            <DialogDescription>
+              Submit a replenishment request for medicine stock.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateRequest} className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="request-medicine">Medicine</Label>
+              <select
+                id="request-medicine"
+                value={requestForm.medicineId}
+                onChange={(e) =>
+                  setRequestForm((prev) => ({
+                    ...prev,
+                    medicineId: e.target.value,
+                  }))
+                }
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select medicine</option>
+                {medicines.map((medicine: Medicine) => (
+                  <option key={medicine._id} value={medicine._id}>
+                    {medicine.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="request-quantity">Quantity</Label>
+                <Input
+                  id="request-quantity"
+                  type="number"
+                  min={1}
+                  value={requestForm.quantity}
+                  onChange={(e) =>
+                    setRequestForm((prev) => ({
+                      ...prev,
+                      quantity: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="request-urgency">Urgency</Label>
+                <select
+                  id="request-urgency"
+                  value={requestForm.urgency}
+                  onChange={(e) =>
+                    setRequestForm((prev) => ({
+                      ...prev,
+                      urgency: e.target.value,
+                    }))
+                  }
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="request-notes">Notes</Label>
+              <Textarea
+                id="request-notes"
+                rows={3}
+                value={requestForm.notes}
+                onChange={(e) =>
+                  setRequestForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setNewRequestOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Submitting..." : "Submit Request"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -579,6 +982,12 @@ function ReportsTab() {
     sessionToken ? { sessionToken } : "skip",
   );
   if (!medicines) return <Skeleton className="h-96 rounded-2xl" />;
+
+  const stockValuation = medicines.reduce((sum: number, medicine: any) => {
+    const price = typeof medicine.price === "number" ? medicine.price : 0;
+    const stock = typeof medicine.stock === "number" ? medicine.stock : 0;
+    return sum + price * stock;
+  }, 0);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -605,7 +1014,9 @@ function ReportsTab() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
               Total Assets
             </p>
-            <p className="text-4xl font-display font-bold">ETB 142k</p>
+            <p className="text-4xl font-display font-bold">
+              ETB {stockValuation.toLocaleString()}
+            </p>
           </div>
           <div className="pt-6 border-t border-border/40">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">

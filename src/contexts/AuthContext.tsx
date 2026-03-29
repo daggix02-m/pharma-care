@@ -26,6 +26,7 @@ interface AuthUser {
   mustResetPassword?: boolean;
   emailVerified?: boolean;
   image?: string;
+  status?: string;
 }
 
 interface AuthContextValue {

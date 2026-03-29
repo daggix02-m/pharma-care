@@ -620,25 +620,14 @@ function StaffTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<StaffMember | null>(null);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
-  const [newStaff, setNewStaff] = useState({
-    full_name: "",
-    email: "",
-    role: "pharmacist",
-    branchId: "",
-  });
   const [editForm, setEditForm] = useState({ full_name: "" });
 
   const updateStaffMutation = useMutation(api.manager.mutations.updateStaff);
   const removeStaffMutation = useMutation(api.manager.mutations.removeStaff);
-  const createStaffMutation = useMutation(api.manager.mutations.createStaff);
-  const createManagerMutation = useMutation(
-    api.manager.mutations.createManager,
-  );
 
   const filteredStaff = useMemo(() => {
     if (!allStaff) return [];
@@ -670,47 +659,6 @@ function StaffTab() {
       ).length,
     };
   }, [allStaff]);
-
-  const handleAddStaff = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (
-      !newStaff.full_name.trim() ||
-      !newStaff.email.trim() ||
-      !newStaff.branchId
-    ) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-    try {
-      setActionLoading("addStaff");
-      if (newStaff.role === "manager") {
-        await createManagerMutation({
-          full_name: newStaff.full_name.trim(),
-          email: newStaff.email.trim(),
-          branchId: newStaff.branchId,
-        });
-      } else {
-        await createStaffMutation({
-          full_name: newStaff.full_name.trim(),
-          email: newStaff.email.trim(),
-          role: newStaff.role,
-          branchId: newStaff.branchId,
-        });
-      }
-      toast.success("Staff member created successfully");
-      setShowAddDialog(false);
-      setNewStaff({
-        full_name: "",
-        email: "",
-        role: "pharmacist",
-        branchId: "",
-      });
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to create staff");
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const handleEditStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -791,21 +739,9 @@ function StaffTab() {
             Manage team and permissions
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setNewStaff({
-              full_name: "",
-              email: "",
-              role: "pharmacist",
-              branchId: (branches || [])[0]?._id,
-            });
-            setShowAddDialog(true);
-          }}
-          className="rounded-xl h-10 gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Add Staff
-        </Button>
+        <Badge variant="outline" className="text-xs">
+          Staff account creation is owner-only
+        </Badge>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -960,101 +896,6 @@ function StaffTab() {
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Add Staff Member</DialogTitle>
-            <DialogDescription>Create a new staff account</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAddStaff}>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="staff-name">Full Name</Label>
-                <Input
-                  id="staff-name"
-                  value={newStaff.full_name}
-                  onChange={(e) =>
-                    setNewStaff({ ...newStaff, full_name: e.target.value })
-                  }
-                  placeholder="Enter full name"
-                  className="rounded-xl h-11"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="staff-email">Email</Label>
-                <Input
-                  id="staff-email"
-                  type="email"
-                  value={newStaff.email}
-                  onChange={(e) =>
-                    setNewStaff({ ...newStaff, email: e.target.value })
-                  }
-                  placeholder="Enter email address"
-                  className="rounded-xl h-11"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="staff-role">Role</Label>
-                <Select
-                  value={newStaff.role}
-                  onValueChange={(value) =>
-                    setNewStaff({ ...newStaff, role: value })
-                  }
-                >
-                  <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="pharmacist">Pharmacist</SelectItem>
-                    <SelectItem value="cashier">Cashier</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="staff-branch">Branch</Label>
-                <Select
-                  value={newStaff.branchId}
-                  onValueChange={(value) =>
-                    setNewStaff({ ...newStaff, branchId: value })
-                  }
-                >
-                  <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    {(branches || []).map((branch: Branch) => (
-                      <SelectItem key={branch._id} value={branch._id}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter className="mt-8">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setShowAddDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="rounded-xl h-11 px-8"
-                disabled={actionLoading === "addStaff"}
-              >
-                {actionLoading === "addStaff" ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
-                Create Staff
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="rounded-2xl">

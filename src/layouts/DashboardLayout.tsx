@@ -48,13 +48,13 @@ export const DashboardLayout = React.memo(function DashboardLayout({
   }, [location.pathname, location.search]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       {/* Top Navigation Bar */}
       <TopBar />
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-auto">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="w-full max-w-full min-w-0 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden">
           {/* Breadcrumb Navigation */}
           <div
             className={cn(
@@ -67,7 +67,7 @@ export const DashboardLayout = React.memo(function DashboardLayout({
 
           {/* Page Content with Transition */}
           <PageTransition>
-            <div className="min-h-[calc(100vh-200px)]">
+            <div className="min-h-[calc(100vh-200px)] max-w-full min-w-0 overflow-x-hidden">
               {children || <Outlet />}
             </div>
           </PageTransition>

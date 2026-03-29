@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useSignupStore } from "@/store/useSignupStore";
 import { useMutation } from "convex/react";
@@ -109,6 +109,33 @@ const Step1PharmacyDetails = () => {
             {errors.pharmacyName && (
               <p className="text-red-500 text-[10px] font-bold ml-1 uppercase tracking-wide">
                 {errors.pharmacyName}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">
+              Pharmacy Email (Optional)
+            </Label>
+            <div className="relative">
+              <Input
+                value={pharmacyDetails.pharmacyEmail}
+                onChange={(e) =>
+                  setPharmacyDetails("pharmacyEmail", e.target.value)
+                }
+                placeholder="pharmacy@example.com"
+                className={cn(
+                  "h-12 ps-11 bg-card border-input focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-xl shadow-sm text-sm",
+                  errors.pharmacyEmail ? "border-red-500" : "",
+                )}
+              />
+              <div className="absolute inset-y-0 start-0 flex items-center ps-4 text-muted-foreground">
+                <MailIcon className="size-4" />
+              </div>
+            </div>
+            {errors.pharmacyEmail && (
+              <p className="text-red-500 text-[10px] font-bold ml-1 uppercase tracking-wide">
+                {errors.pharmacyEmail}
               </p>
             )}
           </div>
@@ -228,6 +255,7 @@ const Step2AdminProfile = () => {
           name: pharmacyDetails.pharmacyName,
           licenseNumber: pharmacyDetails.licenseCode,
           location: pharmacyDetails.locations,
+          pharmacyEmail: pharmacyDetails.pharmacyEmail || undefined,
         },
       });
 
@@ -259,9 +287,7 @@ const Step2AdminProfile = () => {
           <ChevronLeftIcon className="size-4" />
         </Button>
         <div>
-          <p className="text-sm font-bold text-foreground">
-            Administrator Account
-          </p>
+          <p className="text-sm font-bold text-foreground">Owner Account</p>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mt-0.5">
             Step 2 of 3
           </p>
@@ -440,9 +466,17 @@ const Step3Verification = () => {
       sessionStorage.removeItem("pendingVerificationEmail");
       sessionStorage.removeItem("tempPassword");
 
-      toast.success("Welcome! Redirecting to your dashboard...");
-      // Use window.location for full page reload to ensure auth state is fresh
-      window.location.href = "/admin";
+      toast.success("Registration submitted. Waiting for admin approval.");
+      localStorage.setItem("pendingEmail", email);
+      const pendingPharmacy = sessionStorage.getItem("pendingPharmacyDetails");
+      if (pendingPharmacy) {
+        const parsed = JSON.parse(pendingPharmacy);
+        if (parsed?.pharmacyName) {
+          localStorage.setItem("pendingPharmacyName", parsed.pharmacyName);
+        }
+      }
+      localStorage.setItem("pendingRequestType", "head_manager");
+      window.location.href = "/auth/pending-approval";
     } catch (err: any) {
       toast.error(
         err.message ||
@@ -565,7 +599,7 @@ export function SignupPage() {
       {/* Progress Indicator */}
       <div className="mb-10 w-full max-w-sm xl:max-w-md mx-auto pt-8 lg:pt-0">
         <div className="flex justify-between mb-2">
-          {["Pharmacy", "Admin", "Verify"].map((label, i) => {
+          {["Pharmacy", "Owner", "Verify"].map((label, i) => {
             const stepNumber = i + 1;
             const isActive = stepNumber === currentStep;
             const isCompleted = stepNumber < currentStep;

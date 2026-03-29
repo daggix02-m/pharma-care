@@ -220,6 +220,22 @@ const RoleProtectedRoute = React.memo(function RoleProtectedRoute({
     return <Navigate to="/auth/pharmacy-suspended" replace />;
   }
 
+  if (
+    userRole === "owner" &&
+    (user?.status === "pending" ||
+      user?.pharmacy?.status === "pending" ||
+      user?.pharmacy_status === "pending")
+  ) {
+    if (user?.email) {
+      localStorage.setItem("pendingEmail", user.email);
+    }
+    if (user?.pharmacy?.name) {
+      localStorage.setItem("pendingPharmacyName", user.pharmacy.name);
+    }
+    localStorage.setItem("pendingRequestType", "head_manager");
+    return <Navigate to="/auth/pending-approval" replace />;
+  }
+
   // Check password change requirement
   if (
     (user?.must_change_password || user?.mustResetPassword) &&
