@@ -195,7 +195,7 @@ export function AdminBroadcastDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden bg-white">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl p-0 overflow-hidden bg-white">
         <DialogHeader className="sr-only">
           <DialogTitle>Admin Broadcast Message</DialogTitle>
           <DialogDescription>
@@ -203,7 +203,7 @@ export function AdminBroadcastDialog({
             platform.
           </DialogDescription>
         </DialogHeader>
-        <div className="relative h-[700px] flex flex-col">
+        <div className="relative h-[88vh] sm:h-[700px] flex flex-col">
           <Button
             variant="ghost"
             size="icon"
@@ -219,7 +219,7 @@ export function AdminBroadcastDialog({
               <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-emerald-200/40 to-transparent rounded-full blur-3xl" />
               <div className="absolute bottom-0 left-0 w-80 h-80 bg-gradient-to-tr from-teal-200/40 to-transparent rounded-full blur-3xl" />
             </div>
-            <div className="relative h-full overflow-y-auto px-8 py-6">
+            <div className="relative h-full overflow-y-auto px-4 sm:px-8 py-5 sm:py-6">
               <div className="max-w-2xl mx-auto space-y-8">
                 <div
                   className={cn(
@@ -265,7 +265,7 @@ export function AdminBroadcastDialog({
                         value={targetAudience}
                         onValueChange={handleTargetAudienceChange}
                       >
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {TARGET_OPTIONS.map((option) => (
                             <div
                               key={option.value}
@@ -484,15 +484,15 @@ export function AdminBroadcastDialog({
             </div>
           </div>
 
-          <DialogFooter className="border-t border-slate-200 bg-white/95 backdrop-blur-sm px-6 py-4">
-            <div className="flex gap-3">
+          <DialogFooter className="border-t border-slate-200 bg-white/95 backdrop-blur-sm px-4 sm:px-6 py-4">
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
               <Button
                 variant="outline"
                 onClick={() =>
                   setStep(Math.max(1, (step - 1) as 1 | 2) as 1 | 2 | 3)
                 }
                 disabled={step === 1 || isSending}
-                className="flex-1"
+                className="w-full sm:flex-1"
               >
                 Back
               </Button>
@@ -512,7 +512,7 @@ export function AdminBroadcastDialog({
                   isSending
                 }
                 className={cn(
-                  "flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium transition-all duration-300",
+                  "w-full sm:flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium transition-all duration-300",
                   !canProceed() && step < 3 && "opacity-50",
                 )}
               >

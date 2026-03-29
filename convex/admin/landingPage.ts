@@ -169,7 +169,6 @@ const DEFAULT_LANDING_PAGE_CONTENT = {
     ],
     aboutStory:
       "PharmaCare was born from a simple observation: Ethiopian pharmacies needed better tools to manage their growing operations. What started as a solution for inventory management has grown into a comprehensive platform serving pharmacies nationwide. Today, we help independent pharmacies and multi-branch chains streamline their operations with modern, cloud-based technology designed specifically for the Ethiopian market.",
-    aboutStatsEnabled: false,
   },
   testimonials: {
     testimonialsTitle: "What Pharmacy Owners Say",

@@ -142,11 +142,11 @@ export function AdminDashboard() {
             Global management and system configuration
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="h-9 rounded-lg gap-2 text-[13px]"
+            className="h-9 rounded-lg gap-2 text-[13px] w-full sm:w-auto justify-center"
             onClick={() => navigate("/admin?tab=settings")}
           >
             <Activity className="w-4 h-4 text-primary" />
@@ -155,7 +155,7 @@ export function AdminDashboard() {
           <Button
             onClick={() => setDiagnosticDialogOpen(true)}
             size="sm"
-            className="h-9 rounded-lg gap-2 text-[13px] bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white"
+            className="h-9 rounded-lg gap-2 text-[13px] w-full sm:w-auto justify-center bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white"
           >
             <Activity className="w-4 h-4" />
             Diagnostic Session
@@ -163,7 +163,7 @@ export function AdminDashboard() {
           <Button
             onClick={() => setBroadcastDialogOpen(true)}
             size="sm"
-            className="h-9 rounded-lg gap-2 text-[13px] bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
+            className="h-9 rounded-lg gap-2 text-[13px] w-full sm:w-auto justify-center bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
           >
             <Megaphone className="w-4 h-4" />
             Broadcast
