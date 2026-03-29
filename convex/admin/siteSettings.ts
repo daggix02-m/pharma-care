@@ -1,21 +1,21 @@
-import { v } from 'convex/values';
-import { query, mutation } from '../_generated/server';
-import { internal } from '../_generated/api';
+import { v } from "convex/values";
+import { query, mutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 // Default settings
 const DEFAULT_SETTINGS = {
-  contactEmail: 'daggi.x02@gmail.com',
-  contactPhone: '+251 947471516',
-  contactAddress: 'Ethiopia, Addis Ababa',
-  emailProvider: 'resend',
-  resendApiKey: '',
+  contactEmail: "daggi.x02@gmail.com",
+  contactPhone: "+251 947471516",
+  contactAddress: "Ethiopia, Addis Ababa",
+  emailProvider: "resend",
+  resendApiKey: "",
   testMode: true,
 };
 
 // Get or create site settings (public - for landing page)
 export const getSiteSettings = query({
   handler: async (ctx) => {
-    const settings = await ctx.db.query('site_settings').first();
+    const settings = await ctx.db.query("site_settings").first();
 
     if (!settings) {
       // Return defaults if no settings exist
@@ -39,15 +39,18 @@ export const getSiteSettings = query({
 
 // Get full settings including API key (admin only)
 export const getSiteSettingsAdmin = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx) => {
-    const settings = await ctx.db.query('site_settings').first();
+    const settings = await ctx.db.query("site_settings").first();
 
     if (!settings) {
-      const newSettings = await ctx.db.insert('site_settings', {
+      return {
         ...DEFAULT_SETTINGS,
         updatedAt: Date.now(),
-      });
-      return { ...DEFAULT_SETTINGS, _id: newSettings };
+        isInitial: true,
+      };
     }
 
     return settings;
@@ -64,14 +67,14 @@ export const updateSiteSettings = mutation({
     testMode: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db.query('site_settings').first();
+    const existing = await ctx.db.query("site_settings").first();
 
     const settingsData = {
       contactEmail: args.contactEmail,
-      contactPhone: args.contactPhone || '',
-      contactAddress: args.contactAddress || '',
-      emailProvider: 'resend',
-      resendApiKey: args.resendApiKey || existing?.resendApiKey || '',
+      contactPhone: args.contactPhone || "",
+      contactAddress: args.contactAddress || "",
+      emailProvider: "resend",
+      resendApiKey: args.resendApiKey || existing?.resendApiKey || "",
       testMode: args.testMode,
       updatedAt: Date.now(),
     };
@@ -80,7 +83,7 @@ export const updateSiteSettings = mutation({
       await ctx.db.patch(existing._id, settingsData);
       return { ...settingsData, _id: existing._id };
     } else {
-      const newId = await ctx.db.insert('site_settings', settingsData);
+      const newId = await ctx.db.insert("site_settings", settingsData);
       return { ...settingsData, _id: newId };
     }
   },
@@ -92,10 +95,10 @@ export const toggleTestMode = mutation({
     testMode: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db.query('site_settings').first();
+    const existing = await ctx.db.query("site_settings").first();
 
     if (!existing) {
-      throw new Error('Site settings not found');
+      throw new Error("Site settings not found");
     }
 
     await ctx.db.patch(existing._id, {
@@ -113,10 +116,10 @@ export const sendTestEmail = mutation({
     to: v.string(),
   },
   handler: async (ctx, args) => {
-    const settings = await ctx.db.query('site_settings').first();
+    const settings = await ctx.db.query("site_settings").first();
 
     if (!settings || !settings.resendApiKey) {
-      throw new Error('Email service not configured');
+      throw new Error("Email service not configured");
     }
 
     return await ctx.runAction(internal.lib.email.sendTestEmail, {

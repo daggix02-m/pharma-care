@@ -1,53 +1,143 @@
-import * as React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import * as React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "sonner";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
 // Layouts
-import { DashboardLayout } from './layouts/DashboardLayout';
+import { DashboardLayout } from "./layouts/DashboardLayout";
 
 // Pages - Landing
-import LandingPage from './pages/landing/LandingPage';
-import AboutPage from './pages/landing/AboutPage';
-import ContactSuccess from './pages/landing/ContactSuccess';
+import LandingPage from "./pages/landing/LandingPage";
+import AboutPage from "./pages/landing/AboutPage";
+import ContactSuccess from "./pages/landing/ContactSuccess";
 
 // Pages - Auth
-import { LoginPage } from './pages/auth/login';
-import { SignupPage } from './pages/auth/signup';
-import { SSOCallbackPage } from './pages/auth/SSOCallbackPage';
-import { ForgotPasswordPage } from './pages/auth/forgot-password';
-import { ResetPasswordPage } from './pages/auth/reset-password';
-import { ChangePasswordPage } from './pages/auth/change-password';
-import { VerifyEmailPage } from './pages/auth/verify-email';
-import { PendingApprovalPage } from './pages/auth/pending-approval';
-import { PharmacyRequestConfirmPage } from './pages/auth/pharmacy-request-confirm';
-import { PharmacySuspendedPage } from './pages/auth/pharmacy-suspended';
+import { LoginPage } from "./pages/auth/login";
+import { SignupPage } from "./pages/auth/signup";
+import { SSOCallbackPage } from "./pages/auth/SSOCallbackPage";
+import { ForgotPasswordPage } from "./pages/auth/forgot-password";
+import { ResetPasswordPage } from "./pages/auth/reset-password";
+import { ChangePasswordPage } from "./pages/auth/change-password";
+import { VerifyEmailPage } from "./pages/auth/verify-email";
+import { PendingApprovalPage } from "./pages/auth/pending-approval";
+import { PharmacyRequestConfirmPage } from "./pages/auth/pharmacy-request-confirm";
+import { PharmacySuspendedPage } from "./pages/auth/pharmacy-suspended";
 
 // Pages - Dashboard - Lazy loaded for code splitting
-const OwnerDashboard = React.lazy(() => import('./pages/dashboard/owner/OwnerDashboard'));
-const OwnerAppealHistory = React.lazy(() => import('./pages/dashboard/owner/appeals/OwnerAppealHistory'));
-const TestimonialSubmission = React.lazy(() => import('./pages/dashboard/owner/testimonials/TestimonialSubmission'));
+const OwnerDashboard = React.lazy(() =>
+  import("./pages/dashboard/owner/OwnerDashboard").then((module) => ({
+    default: module.OwnerDashboard,
+  })),
+);
+const OwnerAppealHistory = React.lazy(() =>
+  import("./pages/dashboard/owner/appeals/OwnerAppealHistory").then(
+    (module) => ({
+      default: module.OwnerAppealHistory,
+    }),
+  ),
+);
+const TestimonialSubmission = React.lazy(() =>
+  import("./pages/dashboard/owner/testimonials/TestimonialSubmission").then(
+    (module) => ({
+      default: module.TestimonialSubmission,
+    }),
+  ),
+);
 
-const AdminDashboard = React.lazy(() => import('./pages/dashboard/admin/AdminDashboard'));
-const AdminAppealReview = React.lazy(() => import('./pages/dashboard/admin/appeals/AdminAppealReview'));
-const PharmacyDetailPage = React.lazy(() => import('./pages/dashboard/admin/pharmacy-detail/PharmacyDetailPage'));
+const AdminDashboard = React.lazy(() =>
+  import("./pages/dashboard/admin/AdminDashboard").then((module) => ({
+    default: module.AdminDashboard,
+  })),
+);
+const AdminAppealReview = React.lazy(() =>
+  import("./pages/dashboard/admin/appeals/AdminAppealReview").then(
+    (module) => ({
+      default: module.AdminAppealReview,
+    }),
+  ),
+);
+const PharmacyDetailPage = React.lazy(() =>
+  import("./pages/dashboard/admin/pharmacy-detail/PharmacyDetailPage").then(
+    (module) => ({
+      default: module.PharmacyDetailPage,
+    }),
+  ),
+);
 
-const ManagerDashboard = React.lazy(() => import('./pages/dashboard/manager/ManagerDashboard'));
+const ManagerDashboard = React.lazy(() =>
+  import("./pages/dashboard/manager/ManagerDashboard").then((module) => ({
+    default: module.ManagerDashboard,
+  })),
+);
 
-const PharmacistDashboard = React.lazy(() => import('./pages/dashboard/pharmacist/PharmacistDashboard'));
+const PharmacistDashboard = React.lazy(() =>
+  import("./pages/dashboard/pharmacist/PharmacistDashboard").then((module) => ({
+    default: module.PharmacistDashboard,
+  })),
+);
 
-const CashierOverview = React.lazy(() => import('./pages/dashboard/cashier/CashierOverview'));
-const CashierSettings = React.lazy(() => import('./pages/dashboard/cashier/Settings'));
-const StockCheck = React.lazy(() => import('./pages/dashboard/cashier/StockCheck'));
-const Receipts = React.lazy(() => import('./pages/dashboard/cashier/Receipts'));
-const PendingPayments = React.lazy(() => import('./pages/dashboard/cashier/PendingPayments'));
-const Returns = React.lazy(() => import('./pages/dashboard/cashier/Returns'));
-const Transactions = React.lazy(() => import('./pages/dashboard/cashier/Transactions'));
-const POSOperations = React.lazy(() => import('./pages/dashboard/cashier/POSOperations'));
-const FinancialOperations = React.lazy(() => import('./pages/dashboard/cashier/FinancialOperations'));
-const SessionManagement = React.lazy(() => import('./pages/dashboard/cashier/SessionManagement'));
-const ShiftSummary = React.lazy(() => import('./pages/dashboard/cashier/ShiftSummary'));
+const CashierOverview = React.lazy(() =>
+  import("./pages/dashboard/cashier/CashierOverview").then((module) => ({
+    default: module.CashierOverview,
+  })),
+);
+const CashierSettings = React.lazy(() =>
+  import("./pages/dashboard/cashier/Settings").then((module) => ({
+    default: module.Settings,
+  })),
+);
+const StockCheck = React.lazy(() =>
+  import("./pages/dashboard/cashier/StockCheck").then((module) => ({
+    default: module.StockCheck,
+  })),
+);
+const Receipts = React.lazy(() =>
+  import("./pages/dashboard/cashier/Receipts").then((module) => ({
+    default: module.Receipts,
+  })),
+);
+const PendingPayments = React.lazy(() =>
+  import("./pages/dashboard/cashier/PendingPayments").then((module) => ({
+    default: module.PendingPayments,
+  })),
+);
+const Returns = React.lazy(() =>
+  import("./pages/dashboard/cashier/Returns").then((module) => ({
+    default: module.Returns,
+  })),
+);
+const Transactions = React.lazy(() =>
+  import("./pages/dashboard/cashier/Transactions").then((module) => ({
+    default: module.Transactions,
+  })),
+);
+const POSOperations = React.lazy(() =>
+  import("./pages/dashboard/cashier/POSOperations").then((module) => ({
+    default: module.POSOperations,
+  })),
+);
+const FinancialOperations = React.lazy(() =>
+  import("./pages/dashboard/cashier/FinancialOperations").then((module) => ({
+    default: module.FinancialOperations,
+  })),
+);
+const SessionManagement = React.lazy(() =>
+  import("./pages/dashboard/cashier/SessionManagement").then((module) => ({
+    default: module.SessionManagement,
+  })),
+);
+const ShiftSummary = React.lazy(() =>
+  import("./pages/dashboard/cashier/ShiftSummary").then((module) => ({
+    default: module.ShiftSummary,
+  })),
+);
 
 // Optimized QueryClient configuration
 const queryClient = new QueryClient({
@@ -67,27 +157,33 @@ const queryClient = new QueryClient({
 // Brutalist loader component - memoized
 const GlobalLoader = React.memo(function GlobalLoader() {
   return (
-    <div className='min-h-screen flex items-center justify-center bg-background'>
-      <div className='text-center p-8'>
-        <img src='/logo.png' alt='PharmaCare' className='w-24 h-24 mx-auto mb-6 animate-pulse' />
-        <h2 className='text-3xl font-display font-bold tracking-tight mb-3 text-foreground'>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center p-8">
+        <img
+          src="/logo.png"
+          alt="PharmaCare"
+          width={96}
+          height={96}
+          className="w-24 h-24 mx-auto mb-6 animate-pulse"
+        />
+        <h2 className="text-3xl font-display font-bold tracking-tight mb-3 text-foreground">
           PharmaCare
         </h2>
-        <p className='text-muted-foreground font-mono text-sm uppercase tracking-widest'>
+        <p className="text-muted-foreground font-mono text-sm uppercase tracking-widest">
           Initialising...
         </p>
-        <div className='mt-6 flex justify-center gap-1'>
+        <div className="mt-6 flex justify-center gap-1">
           <div
-            className='w-2 h-2 bg-primary rounded-full animate-bounce'
-            style={{ animationDelay: '0ms' }}
+            className="w-2 h-2 bg-primary rounded-full animate-bounce"
+            style={{ animationDelay: "0ms" }}
           />
           <div
-            className='w-2 h-2 bg-primary rounded-full animate-bounce'
-            style={{ animationDelay: '150ms' }}
+            className="w-2 h-2 bg-primary rounded-full animate-bounce"
+            style={{ animationDelay: "150ms" }}
           />
           <div
-            className='w-2 h-2 bg-primary rounded-full animate-bounce'
-            style={{ animationDelay: '300ms' }}
+            className="w-2 h-2 bg-primary rounded-full animate-bounce"
+            style={{ animationDelay: "300ms" }}
           />
         </div>
       </div>
@@ -110,38 +206,46 @@ const RoleProtectedRoute = React.memo(function RoleProtectedRoute({
   }
 
   if (!isAuthenticated) {
-    return <Navigate to='/auth/login' replace />;
+    return <Navigate to="/auth/login" replace />;
   }
 
   const userRole = user?.role;
 
   // Check pharmacy suspension status
   if (
-    userRole !== 'admin' &&
+    userRole !== "admin" &&
     user?.pharmacy_status &&
-    (user.pharmacy_status === 'inactive' || user.pharmacy_status === 'deleted')
+    (user.pharmacy_status === "inactive" || user.pharmacy_status === "deleted")
   ) {
-    return <Navigate to='/auth/pharmacy-suspended' replace />;
+    return <Navigate to="/auth/pharmacy-suspended" replace />;
   }
 
   // Check password change requirement
-  if (user?.must_change_password && window.location.pathname !== '/auth/change-password') {
-    return <Navigate to='/auth/change-password' replace />;
+  if (
+    (user?.must_change_password || user?.mustResetPassword) &&
+    window.location.pathname !== "/auth/change-password"
+  ) {
+    return <Navigate to="/auth/change-password" replace />;
   }
 
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === "admin";
   const isAllowed =
-    !allowedRoles || allowedRoles.some((role) => (role === 'admin' ? isAdmin : userRole === role));
+    !allowedRoles ||
+    allowedRoles.some((role) =>
+      role === "admin" ? isAdmin : userRole === role,
+    );
 
   if (!isAllowed) {
     const redirectMap: Record<string, string> = {
-      admin: '/admin',
-      owner: '/owner',
-      manager: '/manager',
-      pharmacist: '/pharmacist',
-      cashier: '/cashier/overview',
+      admin: "/admin",
+      owner: "/owner",
+      manager: "/manager",
+      pharmacist: "/pharmacist",
+      cashier: "/cashier/overview",
     };
-    return <Navigate to={redirectMap[userRole as string] || '/auth/login'} replace />;
+    return (
+      <Navigate to={redirectMap[userRole as string] || "/auth/login"} replace />
+    );
   }
 
   return <>{children}</>;
@@ -151,9 +255,17 @@ const RoleProtectedRoute = React.memo(function RoleProtectedRoute({
 const LoadingBoundary = React.memo(function LoadingBoundary() {
   const { loading } = useAuth();
   return (
-    <div key={loading ? 'loading' : 'loaded'} className='contents'>
+    <div key={loading ? "loading" : "loaded"} className="contents">
       {loading ? <GlobalLoader /> : <Outlet />}
     </div>
+  );
+});
+
+const SuspenseBoundary = React.memo(function SuspenseBoundary() {
+  return (
+    <React.Suspense fallback={<GlobalLoader />}>
+      <Outlet />
+    </React.Suspense>
   );
 });
 
@@ -162,30 +274,36 @@ const AppRoutes = React.memo(function AppRoutes() {
   return (
     <Routes>
       {/* Landing Page */}
-      <Route path='/' element={<LandingPage />} />
-      <Route path='/about' element={<AboutPage />} />
-      <Route path='/contact-success' element={<ContactSuccess />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/contact-success" element={<ContactSuccess />} />
 
       {/* Public Auth Routes - NO LoadingBoundary */}
-      <Route path='/auth/login/*' element={<LoginPage />} />
-      <Route path='/auth/signup/*' element={<SignupPage />} />
-      <Route path='/auth/sso-callback' element={<SSOCallbackPage />} />
-      <Route path='/auth/forgot-password/*' element={<ForgotPasswordPage />} />
-      <Route path='/auth/reset-password' element={<ResetPasswordPage />} />
-      <Route path='/auth/change-password' element={<ChangePasswordPage />} />
-      <Route path='/auth/verify-email' element={<VerifyEmailPage />} />
-      <Route path='/auth/pending-approval' element={<PendingApprovalPage />} />
-      <Route path='/auth/pharmacy-request-confirm' element={<PharmacyRequestConfirmPage />} />
-      <Route path='/auth/pharmacy-suspended' element={<PharmacySuspendedPage />} />
+      <Route path="/auth/login/*" element={<LoginPage />} />
+      <Route path="/auth/signup/*" element={<SignupPage />} />
+      <Route path="/auth/sso-callback" element={<SSOCallbackPage />} />
+      <Route path="/auth/forgot-password/*" element={<ForgotPasswordPage />} />
+      <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/auth/change-password" element={<ChangePasswordPage />} />
+      <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/auth/pending-approval" element={<PendingApprovalPage />} />
+      <Route
+        path="/auth/pharmacy-request-confirm"
+        element={<PharmacyRequestConfirmPage />}
+      />
+      <Route
+        path="/auth/pharmacy-suspended"
+        element={<PharmacySuspendedPage />}
+      />
 
       {/* Protected Routes - WITH LoadingBoundary and Suspense for lazy loading */}
       <Route element={<LoadingBoundary />}>
-        <Route element={<React.Suspense fallback={<GlobalLoader />} />}>
+        <Route element={<SuspenseBoundary />}>
           {/* Owner Dashboard */}
           <Route
-            path='/owner'
+            path="/owner"
             element={
-              <RoleProtectedRoute allowedRoles={['owner']}>
+              <RoleProtectedRoute allowedRoles={["owner"]}>
                 <DashboardLayout>
                   <OwnerDashboard />
                 </DashboardLayout>
@@ -193,9 +311,9 @@ const AppRoutes = React.memo(function AppRoutes() {
             }
           />
           <Route
-            path='/owner/appeals'
+            path="/owner/appeals"
             element={
-              <RoleProtectedRoute allowedRoles={['owner']}>
+              <RoleProtectedRoute allowedRoles={["owner"]}>
                 <DashboardLayout>
                   <OwnerAppealHistory />
                 </DashboardLayout>
@@ -203,9 +321,9 @@ const AppRoutes = React.memo(function AppRoutes() {
             }
           />
           <Route
-            path='/owner/testimonials'
+            path="/owner/testimonials"
             element={
-              <RoleProtectedRoute allowedRoles={['owner']}>
+              <RoleProtectedRoute allowedRoles={["owner"]}>
                 <DashboardLayout>
                   <TestimonialSubmission />
                 </DashboardLayout>
@@ -215,9 +333,9 @@ const AppRoutes = React.memo(function AppRoutes() {
 
           {/* Admin Dashboard */}
           <Route
-            path='/admin'
+            path="/admin"
             element={
-              <RoleProtectedRoute allowedRoles={['admin']}>
+              <RoleProtectedRoute allowedRoles={["admin"]}>
                 <DashboardLayout>
                   <AdminDashboard />
                 </DashboardLayout>
@@ -225,9 +343,9 @@ const AppRoutes = React.memo(function AppRoutes() {
             }
           />
           <Route
-            path='/admin/pharmacies/:pharmacyId'
+            path="/admin/pharmacies/:pharmacyId"
             element={
-              <RoleProtectedRoute allowedRoles={['admin']}>
+              <RoleProtectedRoute allowedRoles={["admin"]}>
                 <DashboardLayout>
                   <PharmacyDetailPage />
                 </DashboardLayout>
@@ -235,9 +353,9 @@ const AppRoutes = React.memo(function AppRoutes() {
             }
           />
           <Route
-            path='/admin/appeals'
+            path="/admin/appeals"
             element={
-              <RoleProtectedRoute allowedRoles={['admin']}>
+              <RoleProtectedRoute allowedRoles={["admin"]}>
                 <DashboardLayout>
                   <AdminAppealReview />
                 </DashboardLayout>
@@ -247,9 +365,9 @@ const AppRoutes = React.memo(function AppRoutes() {
 
           {/* Manager Dashboard */}
           <Route
-            path='/manager'
+            path="/manager"
             element={
-              <RoleProtectedRoute allowedRoles={['manager']}>
+              <RoleProtectedRoute allowedRoles={["manager"]}>
                 <DashboardLayout>
                   <ManagerDashboard />
                 </DashboardLayout>
@@ -259,9 +377,9 @@ const AppRoutes = React.memo(function AppRoutes() {
 
           {/* Pharmacist Dashboard */}
           <Route
-            path='/pharmacist'
+            path="/pharmacist"
             element={
-              <RoleProtectedRoute allowedRoles={['pharmacist']}>
+              <RoleProtectedRoute allowedRoles={["pharmacist"]}>
                 <DashboardLayout>
                   <PharmacistDashboard />
                 </DashboardLayout>
@@ -271,29 +389,29 @@ const AppRoutes = React.memo(function AppRoutes() {
 
           {/* Cashier Routes - Nested */}
           <Route
-            path='/cashier'
+            path="/cashier"
             element={
-              <RoleProtectedRoute allowedRoles={['cashier']}>
+              <RoleProtectedRoute allowedRoles={["cashier"]}>
                 <DashboardLayout />
               </RoleProtectedRoute>
             }
           >
-            <Route index element={<Navigate to='overview' replace />} />
-            <Route path='overview' element={<CashierOverview />} />
-            <Route path='stock' element={<StockCheck />} />
-            <Route path='receipts' element={<Receipts />} />
-            <Route path='settings' element={<CashierSettings />} />
-            <Route path='payments/pending' element={<PendingPayments />} />
-            <Route path='returns' element={<Returns />} />
-            <Route path='transactions' element={<Transactions />} />
-            <Route path='pos' element={<POSOperations />} />
-            <Route path='sessions' element={<SessionManagement />} />
-            <Route path='shift-summary' element={<ShiftSummary />} />
-            <Route path='sales' element={<FinancialOperations />} />
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<CashierOverview />} />
+            <Route path="stock" element={<StockCheck />} />
+            <Route path="receipts" element={<Receipts />} />
+            <Route path="settings" element={<CashierSettings />} />
+            <Route path="payments/pending" element={<PendingPayments />} />
+            <Route path="returns" element={<Returns />} />
+            <Route path="transactions" element={<Transactions />} />
+            <Route path="pos" element={<POSOperations />} />
+            <Route path="sessions" element={<SessionManagement />} />
+            <Route path="shift-summary" element={<ShiftSummary />} />
+            <Route path="sales" element={<FinancialOperations />} />
           </Route>
 
           {/* Catch-all */}
-          <Route path='*' element={<Navigate to='/' replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>
     </Routes>
@@ -309,7 +427,7 @@ function App() {
           <AppRoutes />
         </AuthProvider>
       </Router>
-      <Toaster position='top-right' closeButton richColors />
+      <Toaster position="top-right" closeButton richColors />
     </QueryClientProvider>
   );
 }

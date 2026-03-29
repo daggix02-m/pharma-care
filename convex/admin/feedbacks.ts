@@ -1,6 +1,6 @@
-import { v } from 'convex/values';
-import { query, mutation } from '../_generated/server';
-import { internal } from '../_generated/api';
+import { v } from "convex/values";
+import { query, mutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 // Get contact messages with pagination and filters
 export const getMessages = query({
@@ -9,28 +9,31 @@ export const getMessages = query({
     searchQuery: v.optional(v.string()),
     cursor: v.optional(v.string()),
     limit: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = args.limit || 20;
-    let query = ctx.db.query('contact_messages');
+    let queryRunner: any = ctx.db.query("contact_messages");
 
     // Apply status filter
-    if (args.status && args.status !== 'all') {
-      query = query.withIndex('by_status', (q) => q.eq('status', args.status));
+    if (args.status && args.status !== "all") {
+      queryRunner = queryRunner.withIndex("by_status", (q: any) =>
+        q.eq("status", args.status),
+      );
     }
 
     // Get messages ordered by creation date (newest first)
-    let messages = await query.order('desc').take(limit + 1);
+    let messages = await queryRunner.order("desc").take(limit + 1);
 
     // Apply search filter if provided
     if (args.searchQuery) {
       const searchLower = args.searchQuery.toLowerCase();
       messages = messages.filter(
-        (m) =>
+        (m: any) =>
           m.firstName.toLowerCase().includes(searchLower) ||
           m.lastName.toLowerCase().includes(searchLower) ||
           m.email.toLowerCase().includes(searchLower) ||
-          m.message.toLowerCase().includes(searchLower)
+          m.message.toLowerCase().includes(searchLower),
       );
     }
 
@@ -50,12 +53,12 @@ export const getMessages = query({
 // Get a single message by ID
 export const getMessage = query({
   args: {
-    messageId: v.id('contact_messages'),
+    messageId: v.id("contact_messages"),
   },
   handler: async (ctx, args) => {
     const message = await ctx.db.get(args.messageId);
     if (!message) {
-      throw new Error('Message not found');
+      throw new Error("Message not found");
     }
     return message;
   },
@@ -63,10 +66,13 @@ export const getMessage = query({
 
 // Get unread count
 export const getUnreadCount = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx) => {
     const unreadMessages = await ctx.db
-      .query('contact_messages')
-      .withIndex('by_status', (q) => q.eq('status', 'unread'))
+      .query("contact_messages")
+      .withIndex("by_status", (q) => q.eq("status", "unread"))
       .collect();
     return unreadMessages.length;
   },
@@ -75,15 +81,15 @@ export const getUnreadCount = query({
 // Mark message as read
 export const markAsRead = mutation({
   args: {
-    messageId: v.id('contact_messages'),
+    messageId: v.id("contact_messages"),
   },
   handler: async (ctx, args) => {
     const message = await ctx.db.get(args.messageId);
     if (!message) {
-      throw new Error('Message not found');
+      throw new Error("Message not found");
     }
 
-    await ctx.db.patch(args.messageId, { status: 'read' });
+    await ctx.db.patch(args.messageId, { status: "read" });
     return { success: true };
   },
 });
@@ -91,15 +97,15 @@ export const markAsRead = mutation({
 // Mark message as unread
 export const markAsUnread = mutation({
   args: {
-    messageId: v.id('contact_messages'),
+    messageId: v.id("contact_messages"),
   },
   handler: async (ctx, args) => {
     const message = await ctx.db.get(args.messageId);
     if (!message) {
-      throw new Error('Message not found');
+      throw new Error("Message not found");
     }
 
-    await ctx.db.patch(args.messageId, { status: 'unread' });
+    await ctx.db.patch(args.messageId, { status: "unread" });
     return { success: true };
   },
 });
@@ -107,40 +113,44 @@ export const markAsUnread = mutation({
 // Reply to message
 export const replyToMessage = mutation({
   args: {
-    messageId: v.id('contact_messages'),
+    messageId: v.id("contact_messages"),
     reply: v.string(),
   },
   handler: async (ctx, args) => {
     // Validate reply
     if (!args.reply.trim()) {
-      throw new Error('Reply cannot be empty');
+      throw new Error("Reply cannot be empty");
     }
     if (args.reply.length > 2000) {
-      throw new Error('Reply must be less than 2000 characters');
+      throw new Error("Reply must be less than 2000 characters");
     }
 
     const message = await ctx.db.get(args.messageId);
     if (!message) {
-      throw new Error('Message not found');
+      throw new Error("Message not found");
     }
 
     // Update message with reply
     await ctx.db.patch(args.messageId, {
-      status: 'replied',
+      status: "replied",
       adminReply: args.reply,
       repliedAt: Date.now(),
     });
 
     // Get site settings
-    const settings = await ctx.db.query('site_settings').first();
+    const settings = await ctx.db.query("site_settings").first();
 
     if (settings && settings.resendApiKey) {
       try {
         // Send reply email to user
         await ctx.runAction(internal.lib.email.sendEmail, {
           to: message.email,
-          subject: 'Re: Your Message to PharmaCare',
-          html: createReplyEmailHtml(message.firstName, args.reply, message.message),
+          subject: "Re: Your Message to PharmaCare",
+          html: createReplyEmailHtml(
+            message.firstName,
+            args.reply,
+            message.message,
+          ),
           apiKey: settings.resendApiKey,
           testMode: settings.testMode,
         });
@@ -148,14 +158,14 @@ export const replyToMessage = mutation({
         // Mark email as sent
         await ctx.db.patch(args.messageId, { emailSent: true });
       } catch (error) {
-        console.error('Failed to send reply email:', error);
+        console.error("Failed to send reply email:", error);
         // Continue - reply is saved even if email fails
       }
     }
 
     return {
       success: true,
-      message: 'Reply sent successfully',
+      message: "Reply sent successfully",
     };
   },
 });
@@ -163,16 +173,16 @@ export const replyToMessage = mutation({
 // Move message to trash
 export const moveToTrash = mutation({
   args: {
-    messageId: v.id('contact_messages'),
+    messageId: v.id("contact_messages"),
   },
   handler: async (ctx, args) => {
     const message = await ctx.db.get(args.messageId);
     if (!message) {
-      throw new Error('Message not found');
+      throw new Error("Message not found");
     }
 
     // Insert into trash
-    await ctx.db.insert('contact_messages_trash', {
+    await ctx.db.insert("contact_messages_trash", {
       ...message,
       deletedAt: Date.now(),
       deletedBy: ctx.auth?.userId || (null as any),
@@ -191,12 +201,13 @@ export const getTrashedMessages = query({
   args: {
     cursor: v.optional(v.string()),
     limit: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = args.limit || 20;
     const messages = await ctx.db
-      .query('contact_messages_trash')
-      .order('desc')
+      .query("contact_messages_trash")
+      .order("desc")
       .take(limit + 1);
 
     const hasMore = messages.length > limit;
@@ -214,19 +225,20 @@ export const getTrashedMessages = query({
 // Restore message from trash
 export const restoreFromTrash = mutation({
   args: {
-    trashId: v.id('contact_messages_trash'),
+    trashId: v.id("contact_messages_trash"),
   },
   handler: async (ctx, args) => {
     const trashedMessage = await ctx.db.get(args.trashId);
     if (!trashedMessage) {
-      throw new Error('Message not found in trash');
+      throw new Error("Message not found in trash");
     }
 
     // Extract fields without trash-specific ones
-    const { deletedAt, deletedBy, originalId, _id, ...messageData } = trashedMessage;
+    const { deletedAt, deletedBy, originalId, _id, ...messageData } =
+      trashedMessage;
 
     // Insert back into main table
-    const newId = await ctx.db.insert('contact_messages', {
+    const newId = await ctx.db.insert("contact_messages", {
       ...messageData,
     });
 
@@ -240,12 +252,12 @@ export const restoreFromTrash = mutation({
 // Permanently delete message from trash
 export const permanentDelete = mutation({
   args: {
-    trashId: v.id('contact_messages_trash'),
+    trashId: v.id("contact_messages_trash"),
   },
   handler: async (ctx, args) => {
     const trashedMessage = await ctx.db.get(args.trashId);
     if (!trashedMessage) {
-      throw new Error('Message not found in trash');
+      throw new Error("Message not found in trash");
     }
 
     await ctx.db.delete(args.trashId);
@@ -256,7 +268,9 @@ export const permanentDelete = mutation({
 // Empty trash
 export const emptyTrash = mutation({
   handler: async (ctx) => {
-    const trashedMessages = await ctx.db.query('contact_messages_trash').collect();
+    const trashedMessages = await ctx.db
+      .query("contact_messages_trash")
+      .collect();
 
     for (const message of trashedMessages) {
       await ctx.db.delete(message._id);
@@ -270,7 +284,11 @@ export const emptyTrash = mutation({
 });
 
 // Create reply email HTML
-function createReplyEmailHtml(firstName: string, reply: string, originalMessage: string) {
+function createReplyEmailHtml(
+  firstName: string,
+  reply: string,
+  originalMessage: string,
+) {
   return `
 <!DOCTYPE html>
 <html>
