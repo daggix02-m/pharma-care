@@ -12,3 +12,4 @@ interface ImportMeta {
 }
 
 declare const __CONVEX_URL_FROM_DEPLOYMENT__: string;
+declare const __CONVEX_URL_FROM_BUILD_ENV__: string;

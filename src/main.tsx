@@ -1,18 +1,18 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import ErrorBoundary from './components/shared/ErrorBoundary';
-import './index.css';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
+import "./index.css";
 
-import { ConvexProvider, ConvexReactClient } from 'convex/react';
-import { ThemeProvider } from './components/theme/ThemeProvider';
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ThemeProvider } from "./components/theme/ThemeProvider";
 
 // Diagnostic logging
-console.log('[Main] React version:', React.version);
-console.log('[Main] Environment:', import.meta.env.MODE);
-console.log('[Main] Using Convex Auth (Clerk removed)');
+console.log("[Main] React version:", React.version);
+console.log("[Main] Environment:", import.meta.env.MODE);
+console.log("[Main] Using Convex Auth (Clerk removed)");
 
-const CONVEX_URL_PLACEHOLDER = 'your_convex_url_here';
+const CONVEX_URL_PLACEHOLDER = "your_convex_url_here";
 
 function normalizeConvexUrl(rawValue?: string | null): string | null {
   if (!rawValue) {
@@ -26,13 +26,13 @@ function normalizeConvexUrl(rawValue?: string | null): string | null {
 
   try {
     const parsed = new URL(value);
-    if (parsed.hostname.endsWith('.convex.site')) {
+    if (parsed.hostname.endsWith(".convex.site")) {
       parsed.hostname = parsed.hostname.replace(
         /\.convex\.site$/,
-        '.convex.cloud',
+        ".convex.cloud",
       );
     }
-    return parsed.toString().replace(/\/$/, '');
+    return parsed.toString().replace(/\/$/, "");
   } catch {
     return null;
   }
@@ -40,16 +40,17 @@ function normalizeConvexUrl(rawValue?: string | null): string | null {
 
 function resolveConvexConfig(): { url: string | null; source: string | null } {
   const candidates = [
-    { source: 'VITE_CONVEX_URL', value: import.meta.env.VITE_CONVEX_URL },
+    { source: "VITE_CONVEX_URL", value: import.meta.env.VITE_CONVEX_URL },
     {
-      source: 'NEXT_PUBLIC_CONVEX_URL',
+      source: "NEXT_PUBLIC_CONVEX_URL",
       value: import.meta.env.NEXT_PUBLIC_CONVEX_URL,
     },
     {
-      source: 'VITE_CONVEX_SITE_URL',
+      source: "VITE_CONVEX_SITE_URL",
       value: import.meta.env.VITE_CONVEX_SITE_URL,
     },
-    { source: 'CONVEX_DEPLOYMENT', value: __CONVEX_URL_FROM_DEPLOYMENT__ },
+    { source: "BUILD_ENV", value: __CONVEX_URL_FROM_BUILD_ENV__ },
+    { source: "CONVEX_DEPLOYMENT", value: __CONVEX_URL_FROM_DEPLOYMENT__ },
   ] as const;
 
   for (const candidate of candidates) {
@@ -71,7 +72,8 @@ function MissingConvexConfig() {
         </h1>
         <p className="mt-2 text-sm text-slate-700">
           Missing Convex URL. Set VITE_CONVEX_URL (recommended),
-          NEXT_PUBLIC_CONVEX_URL, or CONVEX_DEPLOYMENT.
+          NEXT_PUBLIC_CONVEX_URL, or CONVEX_DEPLOYMENT in your deploy
+          environment.
         </p>
       </section>
     </main>
@@ -82,7 +84,7 @@ const { url: CONVEX_URL, source: CONVEX_URL_SOURCE } = resolveConvexConfig();
 
 if (!CONVEX_URL) {
   console.error(
-    '[Main] Missing Convex URL. Set VITE_CONVEX_URL (recommended), NEXT_PUBLIC_CONVEX_URL, or CONVEX_DEPLOYMENT.',
+    "[Main] Missing Convex URL. Set VITE_CONVEX_URL (recommended), NEXT_PUBLIC_CONVEX_URL, or CONVEX_DEPLOYMENT in your deploy environment.",
   );
 } else {
   console.log(
@@ -94,7 +96,7 @@ if (!CONVEX_URL) {
 const convex = CONVEX_URL ? new ConvexReactClient(CONVEX_URL) : null;
 
 function Main() {
-  console.log('[Main] Rendering with Convex Auth');
+  console.log("[Main] Rendering with Convex Auth");
 
   if (!convex) {
     return (
@@ -121,9 +123,9 @@ function Main() {
   );
 }
 
-const rootElement = document.getElementById('root');
+const rootElement = document.getElementById("root");
 if (!rootElement) {
-  throw new Error('Root element not found');
+  throw new Error("Root element not found");
 }
 const root = ReactDOM.createRoot(rootElement);
 root.render(<Main />);
