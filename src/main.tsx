@@ -7,11 +7,6 @@ import "./index.css";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 
-// Diagnostic logging
-console.log("[Main] React version:", React.version);
-console.log("[Main] Environment:", import.meta.env.MODE);
-console.log("[Main] Using Convex Auth (Clerk removed)");
-
 const CONVEX_URL_PLACEHOLDER = "your_convex_url_here";
 
 function normalizeConvexUrl(rawValue?: string | null): string | null {
@@ -87,17 +82,12 @@ if (!CONVEX_URL) {
     "[Main] Missing Convex URL. Set VITE_CONVEX_URL (recommended), NEXT_PUBLIC_CONVEX_URL, or CONVEX_DEPLOYMENT in your deploy environment.",
   );
 } else {
-  console.log(
-    `[Main] Initializing Convex with URL from ${CONVEX_URL_SOURCE}:`,
-    CONVEX_URL,
-  );
+  void CONVEX_URL_SOURCE;
 }
 
 const convex = CONVEX_URL ? new ConvexReactClient(CONVEX_URL) : null;
 
 function Main() {
-  console.log("[Main] Rendering with Convex Auth");
-
   if (!convex) {
     return (
       <React.StrictMode>

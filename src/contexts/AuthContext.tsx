@@ -120,9 +120,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     // Set maximum loading time of 3 seconds as safety net
     const timeout = setTimeout(() => {
-      console.log(
-        "[AuthContext] Loading timeout reached, forcing loading state to false",
-      );
       setLoading(false);
     }, 3000);
 

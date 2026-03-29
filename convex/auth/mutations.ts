@@ -248,9 +248,6 @@ export const signInWithEmail = mutation({
     const user = await findUserByEmail(ctx, args.email);
 
     if (!user) {
-      console.log(
-        `[auth] Sign-in failed: user not found for ${normalizedEmail}`,
-      );
       throw new Error("Invalid email or password");
     }
 
@@ -267,9 +264,6 @@ export const signInWithEmail = mutation({
       user.passwordHash,
     );
     if (!isValidPassword) {
-      console.log(
-        `[auth] Sign-in failed: password mismatch for ${normalizedEmail}`,
-      );
       throw new Error("Invalid email or password");
     }
 

@@ -37,31 +37,17 @@ export async function getAuthenticatedUser(ctx: any, sessionToken?: string) {
  * Require admin role
  */
 export async function requireAdmin(ctx: any, sessionToken?: string) {
-  console.log(
-    "[AUTH] requireAdmin called with sessionToken:",
-    sessionToken ? "present" : "missing",
-  );
-
   const user = await getAuthenticatedUser(ctx, sessionToken);
 
-  console.log(
-    "[AUTH] getAuthenticatedUser returned:",
-    user ? `user ${user._id} with role ${user.role}` : "null",
-  );
-
   if (!user) {
-    console.log("[AUTH] FAILED: No user found");
     throw new Error(
       "Unauthorized: No user found - session may be invalid or expired",
     );
   }
 
   if (user.role !== "admin") {
-    console.log("[AUTH] FAILED: User role is", user.role, "not admin");
     throw new Error(`Unauthorized: Admin only (user has role: ${user.role})`);
   }
-
-  console.log("[AUTH] SUCCESS: Admin authenticated");
   return user;
 }
 
