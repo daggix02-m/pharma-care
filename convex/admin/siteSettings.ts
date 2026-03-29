@@ -98,7 +98,13 @@ export const toggleTestMode = mutation({
     const existing = await ctx.db.query("site_settings").first();
 
     if (!existing) {
-      throw new Error("Site settings not found");
+      const settingsData = {
+        ...DEFAULT_SETTINGS,
+        testMode: args.testMode,
+        updatedAt: Date.now(),
+      };
+      const newId = await ctx.db.insert("site_settings", settingsData);
+      return { success: true, testMode: args.testMode, _id: newId };
     }
 
     await ctx.db.patch(existing._id, {
