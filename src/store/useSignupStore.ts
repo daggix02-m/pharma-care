@@ -90,7 +90,7 @@ export const useSignupStore = create<SignupState>((set, get) => ({
   // Navigation
   goToNextStep: () => {
     const { currentStep } = get();
-    set({ currentStep: Math.min(currentStep + 1, 4) });
+    set({ currentStep: Math.min(currentStep + 1, 3) });
   },
   goToPreviousStep: () => {
     const { currentStep } = get();
@@ -160,9 +160,10 @@ export const useSignupStore = create<SignupState>((set, get) => ({
       else if (!get().validatePassword(managerInfo.password))
         errors.password =
           "Password must be at least 8 chars with uppercase, lowercase, and number";
-      if (!managerInfo.confirmPassword)
-        errors.confirmPassword = "Confirm Password is required";
-      else if (managerInfo.password !== managerInfo.confirmPassword)
+      if (
+        managerInfo.confirmPassword &&
+        managerInfo.password !== managerInfo.confirmPassword
+      )
         errors.confirmPassword = "Passwords do not match";
     }
     // Step 3 has a default radio selection so no strict validation needed.

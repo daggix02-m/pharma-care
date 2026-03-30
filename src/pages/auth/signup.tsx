@@ -213,16 +213,11 @@ const Step2AdminProfile = () => {
     errors,
     setManagerInfo,
     validateCurrentStep,
-    goToNextStep,
+    setCurrentStep,
     goToPreviousStep,
     pharmacyDetails,
   } = useSignupStore();
-  const signUpMutation = useMutation(api.auth.mutations.signUpWithEmail);
-  const sendVerificationEmail = useMutation(
-    api.auth.mutations.sendVerificationEmail,
-  );
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -240,14 +235,16 @@ const Step2AdminProfile = () => {
     return () => ctx.revert();
   }, []);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateCurrentStep(2)) return;
-    setIsLoading(true);
 
-    try {
-      // Call Convex signUp mutation
-      await signUpMutation({
+    sessionStorage.removeItem("pendingVerificationEmail");
+    sessionStorage.removeItem("tempPassword");
+
+    sessionStorage.setItem(
+      "pendingSignupData",
+      JSON.stringify({
         email: managerInfo.email,
         password: managerInfo.password,
         full_name: managerInfo.fullName,
@@ -257,22 +254,10 @@ const Step2AdminProfile = () => {
           location: pharmacyDetails.locations,
           pharmacyEmail: pharmacyDetails.pharmacyEmail || undefined,
         },
-      });
+      }),
+    );
 
-      // Store email and password in sessionStorage for verification step
-      sessionStorage.setItem("pendingVerificationEmail", managerInfo.email);
-      sessionStorage.setItem("tempPassword", managerInfo.password);
-
-      // Send verification email
-      await sendVerificationEmail({ email: managerInfo.email });
-
-      toast.success("Verification code sent to your email.");
-      goToNextStep();
-    } catch (err: any) {
-      toast.error(err.message || "Registration failed. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+    setCurrentStep(3);
   };
 
   return (
@@ -297,7 +282,7 @@ const Step2AdminProfile = () => {
       <OAuthButtons mode="signup" />
       <AuthSeparator />
 
-      <form onSubmit={handleRegister} className="space-y-4 pt-2">
+      <form onSubmit={handleContinue} className="space-y-4 pt-2">
         <div className="space-y-1.5">
           <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">
             Full Name
@@ -389,17 +374,9 @@ const Step2AdminProfile = () => {
 
         <Button
           type="submit"
-          disabled={isLoading}
           className="w-full h-12 mt-4 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold tracking-wide shadow-sm"
         >
-          {isLoading ? (
-            <span className="flex items-center gap-2">
-              <Loader2Icon className="size-4 animate-spin" /> Creating
-              Account...
-            </span>
-          ) : (
-            "Create Account"
-          )}
+          Continue
         </Button>
       </form>
     </div>
@@ -408,17 +385,129 @@ const Step2AdminProfile = () => {
 
 // ─── Step 3: Verification ───────────────────────────────────────────────────────
 const Step3Verification = () => {
+  const { managerInfo, pharmacyDetails, goToPreviousStep } = useSignupStore();
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmittingAccount, setIsSubmittingAccount] = useState(false);
+  const [accountSubmitted, setAccountSubmitted] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hasBootstrappedRef = useRef(false);
 
   // Convex auth mutations
+  const signUpMutation = useMutation(api.auth.mutations.signUpWithEmail);
   const verifyMutation = useMutation(api.auth.mutations.verifyEmail);
   const signInMutation = useMutation(api.auth.mutations.signInWithEmail);
   const sendVerificationEmail = useMutation(
     api.auth.mutations.sendVerificationEmail,
   );
+
+  const sendVerificationCode = async (email: string) => {
+    const resendResult = await sendVerificationEmail({ email });
+    if (!resendResult?.success || !resendResult?.emailSent) {
+      throw new Error(
+        resendResult?.message ||
+          "Verification code could not be sent. Please try again.",
+      );
+    }
+  };
+
+  const submitAccount = async () => {
+    const rawPendingData = sessionStorage.getItem("pendingSignupData");
+    const payload = rawPendingData ? JSON.parse(rawPendingData) : null;
+
+    const email = payload?.email || managerInfo.email;
+    const password = payload?.password || managerInfo.password;
+    const fullName = payload?.full_name || managerInfo.fullName;
+    const pharmacyName =
+      payload?.pharmacyDetails?.name || pharmacyDetails.pharmacyName;
+    const licenseNumber =
+      payload?.pharmacyDetails?.licenseNumber || pharmacyDetails.licenseCode;
+    const location =
+      payload?.pharmacyDetails?.location || pharmacyDetails.locations;
+    const pharmacyEmail =
+      payload?.pharmacyDetails?.pharmacyEmail || pharmacyDetails.pharmacyEmail;
+
+    if (
+      !email ||
+      !password ||
+      !fullName ||
+      !pharmacyName ||
+      !licenseNumber ||
+      !location
+    ) {
+      throw new Error(
+        "Missing registration data. Please go back and complete step 2.",
+      );
+    }
+
+    try {
+      await signUpMutation({
+        email,
+        password,
+        full_name: fullName,
+        pharmacyDetails: {
+          name: pharmacyName,
+          licenseNumber,
+          location,
+          pharmacyEmail: pharmacyEmail || undefined,
+        },
+      });
+    } catch (error: any) {
+      const message = String(error?.message || "").toLowerCase();
+      if (!message.includes("already exists")) {
+        throw error;
+      }
+    }
+
+    await sendVerificationCode(email);
+
+    sessionStorage.setItem("pendingVerificationEmail", email);
+    sessionStorage.setItem("tempPassword", password);
+    setAccountSubmitted(true);
+    setSubmissionError(null);
+    toast.success("Account submitted. Verification code sent to your email.");
+  };
+
+  useEffect(() => {
+    if (hasBootstrappedRef.current) {
+      return;
+    }
+    hasBootstrappedRef.current = true;
+
+    const pendingEmail = sessionStorage.getItem("pendingVerificationEmail");
+    if (pendingEmail) {
+      setAccountSubmitted(true);
+      return;
+    }
+
+    let isMounted = true;
+    const bootstrap = async () => {
+      setIsSubmittingAccount(true);
+      try {
+        await submitAccount();
+      } catch (error: any) {
+        if (isMounted) {
+          setSubmissionError(
+            error.message ||
+              "Failed to submit account. Go back to Step 2 and check your details.",
+          );
+          toast.error(error.message || "Failed to submit account");
+        }
+      } finally {
+        if (isMounted) {
+          setIsSubmittingAccount(false);
+        }
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
@@ -441,6 +530,10 @@ const Step3Verification = () => {
     setIsLoading(true);
 
     try {
+      if (!accountSubmitted) {
+        await submitAccount();
+      }
+
       // Get email from sessionStorage
       const email = sessionStorage.getItem("pendingVerificationEmail");
       const tempPassword = sessionStorage.getItem("tempPassword");
@@ -497,7 +590,7 @@ const Step3Verification = () => {
         throw new Error("Session expired. Please start registration again.");
       }
 
-      await sendVerificationEmail({ email });
+      await sendVerificationCode(email);
       toast.success(`A new verification code was sent to ${email}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to resend code");
@@ -508,6 +601,17 @@ const Step3Verification = () => {
 
   return (
     <div ref={containerRef} className="space-y-6 text-center pt-4">
+      <div className="flex justify-start">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToPreviousStep}
+          className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground"
+        >
+          <ChevronLeftIcon className="size-4" />
+        </Button>
+      </div>
+
       <div className="mx-auto w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-6 shadow-sm border border-accent">
         <MailIcon className="size-8 text-accent-foreground" />
       </div>
@@ -523,6 +627,16 @@ const Step3Verification = () => {
             {sessionStorage.getItem("pendingVerificationEmail") || ""}
           </span>
         </p>
+        {!accountSubmitted && (
+          <p className="text-xs text-muted-foreground">
+            Preparing your account and sending verification code...
+          </p>
+        )}
+        {submissionError && (
+          <p className="text-xs text-red-600 font-semibold">
+            {submissionError}
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleVerify} className="space-y-6 mt-8">
@@ -543,15 +657,20 @@ const Step3Verification = () => {
 
         <Button
           type="submit"
-          disabled={isLoading || code.length !== 6}
+          disabled={isLoading || isSubmittingAccount || code.length !== 6}
           className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold tracking-wide shadow-sm"
         >
           {isLoading ? (
             <span className="flex items-center gap-2">
               <Loader2Icon className="size-4 animate-spin" /> Verifying...
             </span>
+          ) : isSubmittingAccount ? (
+            <span className="flex items-center gap-2">
+              <Loader2Icon className="size-4 animate-spin" /> Submitting
+              Account...
+            </span>
           ) : (
-            "Complete Registration"
+            "Submit & Verify"
           )}
         </Button>
       </form>

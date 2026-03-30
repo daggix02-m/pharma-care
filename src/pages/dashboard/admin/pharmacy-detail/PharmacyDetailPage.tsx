@@ -36,6 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { PharmacyOverviewSection } from "./sections/PharmacyOverviewSection";
 import { OwnerDetailsSection } from "./sections/OwnerDetailsSection";
@@ -49,6 +50,7 @@ import { DiagnosticSessionsSection } from "./sections/DiagnosticSessionsSection"
 
 export function PharmacyDetailPage() {
   const { pharmacyId } = useParams<{ pharmacyId: string }>();
+  const { sessionToken } = useAuth();
   const navigate = useNavigate();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["overview", "owner"]),
@@ -60,7 +62,9 @@ export function PharmacyDetailPage() {
 
   const pharmacyData = useQuery(
     api.admin.queries.getPharmacyDetail,
-    pharmacyId ? { pharmacyId: pharmacyId as Id<"pharmacies"> } : "skip",
+    pharmacyId && sessionToken
+      ? { pharmacyId: pharmacyId as Id<"pharmacies">, sessionToken }
+      : "skip",
   );
 
   const suspendPharmacy = useMutation(api.admin.mutations.suspendPharmacy);

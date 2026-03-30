@@ -594,9 +594,10 @@ export const getPharmacyDetail = query({
     const managers = await ctx.db
       .query("users")
       .filter((q: any) =>
-        q
-          .eq(q.field("pharmacyId"), args.pharmacyId)
-          .eq(q.field("role"), "manager"),
+        q.and(
+          q.eq(q.field("pharmacyId"), args.pharmacyId),
+          q.eq(q.field("role"), "manager"),
+        ),
       )
       .take(100);
 
@@ -604,9 +605,10 @@ export const getPharmacyDetail = query({
     const staff = await ctx.db
       .query("users")
       .filter((q: any) =>
-        q
-          .eq(q.field("pharmacyId"), args.pharmacyId)
-          .neq(q.field("role"), "manager"),
+        q.and(
+          q.eq(q.field("pharmacyId"), args.pharmacyId),
+          q.neq(q.field("role"), "manager"),
+        ),
       )
       .take(100);
 

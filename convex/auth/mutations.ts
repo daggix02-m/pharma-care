@@ -19,10 +19,10 @@ async function sendEmailViaResend(args: {
   testMode?: boolean;
 }) {
   if (args.testMode) {
-    return;
+    return { emailSent: false, status: "test_mode" as const };
   }
 
-  await fetch("https://api.resend.com/emails", {
+  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${args.apiKey}`,
@@ -35,6 +35,20 @@ async function sendEmailViaResend(args: {
       html: args.html,
     }),
   });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Verification email provider error (${response.status}): ${errorText}`,
+    );
+  }
+
+  const data = await response.json();
+  return {
+    emailSent: true,
+    status: "sent" as const,
+    providerId: data?.id,
+  };
 }
 
 async function hashPasswordWithSecret(
@@ -143,6 +157,18 @@ export const signUpWithEmail = mutation({
       throw new Error("Pharmacy details are required for owner registration");
     }
 
+    const settings = await ctx.db.query("site_settings").first();
+    if (!settings?.resendApiKey) {
+      throw new Error(
+        "Verification email service is not configured. Please contact support.",
+      );
+    }
+    if (settings.testMode) {
+      throw new Error(
+        "Verification email is in test mode. Disable test mode in settings to send real emails.",
+      );
+    }
+
     // Check if user already exists
     const existingUser = await ctx.db
       .query("users")
@@ -201,19 +227,16 @@ export const signUpWithEmail = mutation({
       expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
     });
 
-    const settings = await ctx.db.query("site_settings").first();
-    if (settings?.resendApiKey) {
-      const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
-        normalizedEmail,
-      )}&token=${encodeURIComponent(verifyToken)}`;
-      await sendEmailViaResend({
-        to: normalizedEmail,
-        subject: "Verify your PharmaCare account",
-        html: `<p>Hello ${args.full_name},</p><p>Welcome to PharmaCare. Verify your email to continue your pharmacy application.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
-        apiKey: settings.resendApiKey,
-        testMode: settings.testMode,
-      });
-    }
+    const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
+      normalizedEmail,
+    )}&token=${encodeURIComponent(verifyToken)}`;
+    const delivery = await sendEmailViaResend({
+      to: normalizedEmail,
+      subject: "Verify your PharmaCare account",
+      html: `<p>Hello ${args.full_name},</p><p>Welcome to PharmaCare. Verify your email to continue your pharmacy application.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
+      apiKey: settings.resendApiKey,
+      testMode: settings.testMode,
+    });
 
     // Log the signup
     await ctx.db.insert("audit_logs", {
@@ -229,6 +252,8 @@ export const signUpWithEmail = mutation({
       success: true,
       userId,
       pharmacyId,
+      emailSent: delivery.emailSent,
+      deliveryStatus: delivery.status,
       message:
         "Owner account submitted. Verify your email and wait for admin approval.",
     };
@@ -601,12 +626,40 @@ export const sendVerificationEmail = mutation({
     if (!user) {
       return {
         success: true,
+        emailSent: false,
+        deliveryStatus: "user_not_found",
         message: "If an account exists, a verification email has been sent",
       };
     }
 
     if (user.emailVerified) {
-      return { success: true, message: "Email already verified" };
+      return {
+        success: true,
+        emailSent: false,
+        deliveryStatus: "already_verified",
+        message: "Email already verified",
+      };
+    }
+
+    const settings = await ctx.db.query("site_settings").first();
+    if (!settings?.resendApiKey) {
+      return {
+        success: false,
+        emailSent: false,
+        deliveryStatus: "missing_config",
+        message:
+          "Verification email service is not configured. Please contact support.",
+      };
+    }
+
+    if (settings.testMode) {
+      return {
+        success: false,
+        emailSent: false,
+        deliveryStatus: "test_mode",
+        message:
+          "Verification email is in test mode. Disable test mode to send real emails.",
+      };
     }
 
     const verifyToken = generateVerificationCode();
@@ -618,21 +671,23 @@ export const sendVerificationEmail = mutation({
       expires: expiresAt,
     });
 
-    const settings = await ctx.db.query("site_settings").first();
-    if (settings?.resendApiKey) {
-      const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
-        normalizedEmail,
-      )}&token=${encodeURIComponent(verifyToken)}`;
-      await sendEmailViaResend({
-        to: normalizedEmail,
-        subject: "Your PharmaCare verification link",
-        html: `<p>Click the link below to verify your email:</p><p><a href="${verifyLink}">Verify Email</a></p>`,
-        apiKey: settings.resendApiKey,
-        testMode: settings.testMode,
-      });
-    }
+    const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
+      normalizedEmail,
+    )}&token=${encodeURIComponent(verifyToken)}`;
+    const delivery = await sendEmailViaResend({
+      to: normalizedEmail,
+      subject: "Your PharmaCare verification link",
+      html: `<p>Click the link below to verify your email:</p><p><a href="${verifyLink}">Verify Email</a></p>`,
+      apiKey: settings.resendApiKey,
+      testMode: settings.testMode,
+    });
 
-    return { success: true, message: "Verification email sent" };
+    return {
+      success: true,
+      emailSent: delivery.emailSent,
+      deliveryStatus: delivery.status,
+      message: "Verification email sent",
+    };
   },
 });
 
