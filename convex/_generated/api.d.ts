@@ -38,6 +38,8 @@ import type * as pharmacist_queries from "../pharmacist/queries.js";
 import type * as public_contact from "../public/contact.js";
 import type * as public_landingPage from "../public/landingPage.js";
 import type * as seed from "../seed.js";
+import type * as subscription_mutations from "../subscription/mutations.js";
+import type * as subscription_queries from "../subscription/queries.js";
 import type * as users_mutations from "../users/mutations.js";
 import type * as users_queries from "../users/queries.js";
 
@@ -78,6 +80,8 @@ declare const fullApi: ApiFromModules<{
   "public/contact": typeof public_contact;
   "public/landingPage": typeof public_landingPage;
   seed: typeof seed;
+  "subscription/mutations": typeof subscription_mutations;
+  "subscription/queries": typeof subscription_queries;
   "users/mutations": typeof users_mutations;
   "users/queries": typeof users_queries;
 }>;

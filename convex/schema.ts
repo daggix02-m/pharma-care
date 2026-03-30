@@ -12,6 +12,7 @@ export default defineSchema({
 
     // Application-specific fields
     full_name: v.string(),
+    phone: v.optional(v.string()),
     role: v.string(), // "admin", "manager", "pharmacist", "cashier", "owner"
     status: v.string(), // "pending", "active", "deactivated", "locked"
     pharmacyId: v.optional(v.id("pharmacies")),
@@ -125,6 +126,20 @@ export default defineSchema({
     billingStartDate: v.optional(v.number()),
     nextBillingDate: v.optional(v.number()),
     paymentStatus: v.optional(v.string()),
+    plannedBranches: v.optional(v.number()),
+    plannedBranchLocations: v.optional(v.array(v.string())),
+    plannedStaffTotal: v.optional(v.number()),
+    plannedStaffBreakdown: v.optional(
+      v.object({
+        pharmacists: v.number(),
+        managers: v.number(),
+        cashiers: v.number(),
+      }),
+    ),
+    recommendedSubscriptionTier: v.optional(v.string()),
+    pendingPaymentLinkToken: v.optional(v.string()),
+    pendingPaymentLinkSentAt: v.optional(v.number()),
+    pendingPaymentLinkExpiresAt: v.optional(v.number()),
   })
     .index("by_owner", ["ownerId"])
     .index("by_subscription_tier", ["subscriptionTier"])
@@ -278,7 +293,45 @@ export default defineSchema({
     maxUsers: v.number(), // Maximum number of users allowed
     isActive: v.boolean(), // Whether the plan is available
     description: v.optional(v.string()), // Plan description
-  }).index("by_code", ["code"]),
+  })
+    .index("by_code", ["code"])
+    .index("by_active", ["isActive"]),
+
+  subscription_plan_templates: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    price: v.number(),
+    currency: v.string(),
+    features: v.array(v.string()),
+    maxBranches: v.number(),
+    maxUsers: v.number(),
+    isActiveDefault: v.boolean(),
+    isBuiltIn: v.boolean(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_built_in", ["isBuiltIn"]),
+
+  subscription_payment_links: defineTable({
+    token: v.string(),
+    pharmacyId: v.id("pharmacies"),
+    ownerUserId: v.id("users"),
+    planCode: v.string(),
+    amount: v.number(),
+    currency: v.string(),
+    status: v.string(), // "pending", "completed", "expired", "cancelled"
+    expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
+    chapaTransactionId: v.optional(v.string()),
+    chapaReference: v.optional(v.string()),
+    chapaPaymentMethod: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_pharmacy", ["pharmacyId"])
+    .index("by_owner", ["ownerUserId"]),
 
   subscription_history: defineTable({
     pharmacyId: v.id("pharmacies"),

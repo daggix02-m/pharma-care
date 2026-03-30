@@ -198,7 +198,7 @@ function ServicesSection() {
     return (
       <section
         id="services"
-        className="w-full py-12 md:py-24 lg:py-32 bg-transparent"
+        className="w-full py-12 md:py-24 lg:py-32 bg-transparent scroll-mt-20"
       >
         <div className="container px-4 md:px-6">
           <div className="text-center mb-12">
@@ -219,7 +219,7 @@ function ServicesSection() {
   return (
     <section
       id="services"
-      className="w-full py-12 md:py-24 lg:py-32 bg-transparent"
+      className="w-full py-12 md:py-24 lg:py-32 bg-transparent scroll-mt-20"
     >
       <div className="container px-4 md:px-6">
         <div

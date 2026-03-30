@@ -110,7 +110,7 @@ function TestimonialsSection() {
     return (
       <section
         id="testimonials"
-        className="w-full py-12 md:py-24 lg:py-32 bg-transparent"
+        className="w-full py-12 md:py-24 lg:py-32 bg-transparent scroll-mt-20"
       >
         <div className="container px-4 md:px-6">
           <div className="text-center mb-12">
@@ -136,7 +136,7 @@ function TestimonialsSection() {
     <section
       id="testimonials"
       ref={sectionRef}
-      className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-transparent via-muted/10 to-transparent"
+      className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-transparent via-muted/10 to-transparent scroll-mt-20"
     >
       <div className="container px-4 md:px-6">
         <div

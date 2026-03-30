@@ -1,6 +1,21 @@
-import { v } from 'convex/values';
-import { internal } from '../_generated/api';
-import { action } from '../_generated/server';
+import { v } from "convex/values";
+import { internal } from "../_generated/api";
+import { action } from "../_generated/server";
+
+const getEmailLogoUrl = (): string => {
+  const explicitLogoUrl = process.env.EMAIL_LOGO_URL?.trim();
+  if (explicitLogoUrl) {
+    return explicitLogoUrl;
+  }
+
+  const siteUrl = (process.env.SITE_URL ?? "http://localhost:5173").replace(
+    /\/$/,
+    "",
+  );
+  return `${siteUrl}/favicon.png`;
+};
+
+const EMAIL_LOGO_URL = getEmailLogoUrl();
 
 // Email templates
 const createAdminNotificationEmail = (data: {
@@ -10,7 +25,7 @@ const createAdminNotificationEmail = (data: {
   message: string;
   dashboardUrl: string;
 }) => ({
-  subject: 'New Contact Message - PharmaCare Platform',
+  subject: "New Contact Message - PharmaCare Platform",
   html: `
 <!DOCTYPE html>
 <html>
@@ -19,6 +34,7 @@ const createAdminNotificationEmail = (data: {
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
     .header { background: #2563eb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .brand-logo { display: block; margin: 0 auto 12px; width: 140px; height: auto; }
     .header h1 { color: white; margin: 0; font-size: 24px; }
     .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
     .message-box { background: #f3f4f6; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; }
@@ -29,6 +45,7 @@ const createAdminNotificationEmail = (data: {
 <body>
   <div class="container">
     <div class="header">
+      <img src="${EMAIL_LOGO_URL}" alt="PharmaCare Logo" class="brand-logo" />
       <h1>PharmaCare Platform</h1>
     </div>
     <div class="content">
@@ -43,7 +60,7 @@ const createAdminNotificationEmail = (data: {
       
       <div class="message-box">
         <strong>Message:</strong><br>
-        ${data.message.substring(0, 200)}${data.message.length > 200 ? '...' : ''}
+        ${data.message.substring(0, 200)}${data.message.length > 200 ? "..." : ""}
       </div>
       
       <a href="${data.dashboardUrl}" class="button">View Full Message</a>
@@ -66,7 +83,7 @@ const createUserReplyEmail = (data: {
   adminReply: string;
   originalMessage: string;
 }) => ({
-  subject: 'Re: Your Message to PharmaCare',
+  subject: "Re: Your Message to PharmaCare",
   html: `
 <!DOCTYPE html>
 <html>
@@ -75,6 +92,7 @@ const createUserReplyEmail = (data: {
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
     .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 3px solid #2563eb; }
+    .brand-logo { display: block; margin: 0 auto 12px; width: 140px; height: auto; }
     .logo { font-size: 24px; font-weight: bold; color: #2563eb; }
     .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; }
     .original-message { background: #f3f4f6; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; font-size: 14px; }
@@ -87,6 +105,7 @@ const createUserReplyEmail = (data: {
 <body>
   <div class="container">
     <div class="header">
+      <img src="${EMAIL_LOGO_URL}" alt="PharmaCare Logo" class="brand-logo" />
       <div class="logo">PharmaCare</div>
     </div>
     <div class="content">
@@ -130,37 +149,67 @@ export const sendEmail = action({
   handler: async (ctx, args) => {
     // In test mode, just log the email
     if (args.testMode) {
-      console.log('[TEST MODE] Would send email:');
-      console.log('  To:', args.to);
-      console.log('  Subject:', args.subject);
-      console.log('  Length:', args.html.length, 'characters');
+      console.log("[TEST MODE] Would send email:");
+      console.log("  To:", args.to);
+      console.log("  Subject:", args.subject);
+      console.log("  Length:", args.html.length, "characters");
       return { success: true, testMode: true };
     }
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${args.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'PharmaCare <noreply@pharmacare.io>',
-          to: args.to,
-          subject: args.subject,
-          html: args.html,
-        }),
-      });
+      const configuredFrom = process.env.RESEND_FROM_EMAIL?.trim();
+      const primaryFrom =
+        configuredFrom || "PharmaCare <noreply@pharmacare.io>";
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Resend API error: ${error}`);
+      const sendWithFrom = async (from: string) => {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${args.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from,
+            to: args.to,
+            subject: args.subject,
+            html: args.html,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return { ok: false as const, status: response.status, errorText };
+        }
+
+        const data = await response.json();
+        return { ok: true as const, id: data.id };
+      };
+
+      const result = await sendWithFrom(primaryFrom);
+
+      if (!result.ok) {
+        const needsFallback =
+          result.status === 403 &&
+          result.errorText.includes("domain is not verified") &&
+          !configuredFrom;
+
+        if (needsFallback) {
+          const fallbackResult = await sendWithFrom(
+            "PharmaCare <onboarding@resend.dev>",
+          );
+          if (fallbackResult.ok) {
+            return { success: true, id: fallbackResult.id, fallbackFrom: true };
+          }
+
+          throw new Error(`Resend API error: ${fallbackResult.errorText}`);
+        }
+
+        throw new Error(`Resend API error: ${result.errorText}`);
       }
 
-      const data = await response.json();
-      return { success: true, id: data.id };
+      return { success: true, id: result.id };
     } catch (error) {
-      console.error('Failed to send email:', error);
+      console.error("Failed to send email:", error);
       throw error;
     }
   },
@@ -178,7 +227,7 @@ export const sendAdminNotification = async (
     apiKey: string;
     testMode: boolean;
     dashboardUrl: string;
-  }
+  },
 ) => {
   const emailContent = createAdminNotificationEmail({
     firstName: args.firstName,
@@ -207,7 +256,7 @@ export const sendUserReply = async (
     originalMessage: string;
     apiKey: string;
     testMode: boolean;
-  }
+  },
 ) => {
   const emailContent = createUserReplyEmail({
     firstName: args.firstName,
@@ -240,6 +289,7 @@ export const sendTestEmail = action({
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
     .header { background: #2563eb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .brand-logo { display: block; margin: 0 auto 12px; width: 140px; height: auto; }
     .header h1 { color: white; margin: 0; font-size: 24px; }
     .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; }
     .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
@@ -248,13 +298,14 @@ export const sendTestEmail = action({
 <body>
   <div class="container">
     <div class="header">
+      <img src="${EMAIL_LOGO_URL}" alt="PharmaCare Logo" class="brand-logo" />
       <h1>PharmaCare Platform</h1>
     </div>
     <div class="content">
       <h2>Test Email</h2>
       <p>This is a test email from your PharmaCare platform.</p>
       <p>If you're receiving this, your email configuration is working correctly!</p>
-      <p><strong>Test Mode:</strong> ${args.testMode ? 'ON' : 'OFF'}</p>
+      <p><strong>Test Mode:</strong> ${args.testMode ? "ON" : "OFF"}</p>
       <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
     </div>
     <div class="footer">
@@ -267,7 +318,7 @@ export const sendTestEmail = action({
 
     return await ctx.runAction(internal.lib.email.sendEmail, {
       to: args.to,
-      subject: 'Test Email - PharmaCare Platform',
+      subject: "Test Email - PharmaCare Platform",
       html: testHtml,
       apiKey: args.apiKey,
       testMode: args.testMode,

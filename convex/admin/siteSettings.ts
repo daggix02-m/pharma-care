@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "../_generated/server";
+import { action, internalQuery, mutation, query } from "../_generated/server";
 import { internal } from "../_generated/api";
 
 // Default settings
@@ -117,12 +117,16 @@ export const toggleTestMode = mutation({
 });
 
 // Send test email
-export const sendTestEmail = mutation({
+export const sendTestEmail = action({
   args: {
     to: v.string(),
   },
   handler: async (ctx, args) => {
-    const settings = await ctx.db.query("site_settings").first();
+    const settings: { resendApiKey: string; testMode: boolean } | null =
+      await ctx.runQuery(
+        internal.admin.siteSettings.getEmailSettingsForTestEmail,
+        {},
+      );
 
     if (!settings || !settings.resendApiKey) {
       throw new Error("Email service not configured");
@@ -133,5 +137,21 @@ export const sendTestEmail = mutation({
       apiKey: settings.resendApiKey,
       testMode: settings.testMode,
     });
+  },
+});
+
+export const getEmailSettingsForTestEmail = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const settings = await ctx.db.query("site_settings").first();
+
+    if (!settings) {
+      return null;
+    }
+
+    return {
+      resendApiKey: settings.resendApiKey,
+      testMode: settings.testMode,
+    };
   },
 });

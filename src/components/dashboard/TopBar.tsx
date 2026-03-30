@@ -42,6 +42,7 @@ import {
   ChevronRight,
   MessageSquare,
   Layout,
+  BadgeDollarSign,
 } from "lucide-react";
 
 // Types
@@ -62,6 +63,11 @@ const NAV_CONFIG: Record<string, NavItem[]> = {
     { label: "Overview", path: "/admin?tab=overview", icon: LayoutDashboard },
     { label: "Approvals", path: "/admin?tab=approvals", icon: ShieldCheck },
     { label: "Pharmacies", path: "/admin?tab=pharmacies", icon: Building2 },
+    {
+      label: "Subscriptions",
+      path: "/admin?tab=subscriptions",
+      icon: BadgeDollarSign,
+    },
     { label: "Feedbacks", path: "/admin?tab=feedbacks", icon: MessageSquare },
     { label: "Audit Logs", path: "/admin?tab=audit-logs", icon: ClipboardList },
     { label: "Settings", path: "/admin?tab=settings", icon: Settings },
@@ -405,7 +411,7 @@ export const TopBar = React.memo(function TopBar({ className }: TopBarProps) {
     <header
       ref={headerRef}
       className={cn(
-        "sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur-md",
+        "fixed top-0 left-0 right-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur-md",
         className,
       )}
     >

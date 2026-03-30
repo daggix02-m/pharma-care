@@ -171,7 +171,7 @@ function AboutPage() {
       <LabBackground className="fixed inset-0 z-0 opacity-30" />
 
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-border">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-border">
         <div className="w-full px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
           <Button
             variant="ghost"
@@ -186,7 +186,7 @@ function AboutPage() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10">
+      <main className="relative z-10 pt-16">
         {/* Hero Section */}
         <section className="w-full py-12 md:py-24 lg:py-32">
           <div className="container px-4 md:px-6">

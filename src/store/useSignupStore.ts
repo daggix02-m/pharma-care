@@ -4,15 +4,27 @@ interface PharmacyDetails {
   pharmacyName: string;
   pharmacyEmail: string;
   licenseCode: string;
-  staffCount: string;
-  numberOfBranches: string;
-  branchNames: string;
   locations: string;
 }
 
-interface ManagerInfo {
+interface OperationsInfo {
+  totalBranches: number;
+  branchLocations: string[];
+  totalStaff: number;
+  pharmacistCount: number;
+  managerCount: number;
+  cashierCount: number;
+}
+
+interface SubscriptionInfo {
+  selectedTier: string;
+  recommendedTier: string;
+}
+
+interface OwnerInfo {
   fullName: string;
   email: string;
+  phone: string;
   password: string;
   confirmPassword: string;
 }
@@ -24,8 +36,10 @@ interface Errors {
 interface SignupState {
   currentStep: number;
   pharmacyDetails: PharmacyDetails;
-  managerInfo: ManagerInfo;
-  subscriptionTier: string;
+  operationsInfo: OperationsInfo;
+  subscriptionInfo: SubscriptionInfo;
+  ownerInfo: OwnerInfo;
+  termsAccepted: boolean;
   errors: Errors;
   isLoading: boolean;
   isSuccess: boolean;
@@ -38,8 +52,16 @@ interface SignupState {
 
   // Setters
   setPharmacyDetails: (field: keyof PharmacyDetails, value: string) => void;
-  setManagerInfo: (field: keyof ManagerInfo, value: string) => void;
-  setSubscriptionTier: (tier: string) => void;
+  setOperationsInfo: (
+    field: keyof OperationsInfo,
+    value: number | string[],
+  ) => void;
+  setBranchLocation: (index: number, value: string) => void;
+  addBranchLocation: () => void;
+  removeBranchLocation: (index: number) => void;
+  setSubscriptionInfo: (field: keyof SubscriptionInfo, value: string) => void;
+  setOwnerInfo: (field: keyof OwnerInfo, value: string) => void;
+  setTermsAccepted: (accepted: boolean) => void;
 
   // Errors & Status
   setErrors: (errors: Errors) => void;
@@ -51,6 +73,7 @@ interface SignupState {
 
   // Validation
   validateEmail: (email: string) => boolean;
+  validatePhone: (phone: string) => boolean;
   validatePassword: (password: string) => boolean;
   validateCurrentStep: (step: number, shouldSetErrors?: boolean) => boolean;
 }
@@ -62,20 +85,32 @@ const initialState = {
     pharmacyName: "",
     pharmacyEmail: "",
     licenseCode: "",
-    staffCount: "",
-    numberOfBranches: "",
-    branchNames: "",
     locations: "",
   },
   // Step 2
-  managerInfo: {
+  operationsInfo: {
+    totalBranches: 1,
+    branchLocations: [""],
+    totalStaff: 1,
+    pharmacistCount: 1,
+    managerCount: 0,
+    cashierCount: 0,
+  },
+  // Step 3
+  subscriptionInfo: {
+    selectedTier: "",
+    recommendedTier: "basic",
+  },
+  // Step 4
+  ownerInfo: {
     fullName: "",
     email: "",
+    phone: "",
     password: "",
     confirmPassword: "",
   },
-  // Step 3
-  subscriptionTier: "basic", // 'basic', 'premium', 'enterprise'
+  // Step 5
+  termsAccepted: false,
 
   // Common state
   errors: {},
@@ -90,7 +125,7 @@ export const useSignupStore = create<SignupState>((set, get) => ({
   // Navigation
   goToNextStep: () => {
     const { currentStep } = get();
-    set({ currentStep: Math.min(currentStep + 1, 3) });
+    set({ currentStep: Math.min(currentStep + 1, 5) });
   },
   goToPreviousStep: () => {
     const { currentStep } = get();
@@ -105,14 +140,68 @@ export const useSignupStore = create<SignupState>((set, get) => ({
       errors: { ...state.errors, [field]: "" },
     }));
   },
-  setManagerInfo: (field, value) => {
+  setOperationsInfo: (field, value) => {
     set((state) => ({
-      managerInfo: { ...state.managerInfo, [field]: value },
+      operationsInfo: { ...state.operationsInfo, [field]: value },
       errors: { ...state.errors, [field]: "" },
     }));
   },
-  setSubscriptionTier: (tier) => {
-    set({ subscriptionTier: tier });
+  setBranchLocation: (index, value) => {
+    set((state) => {
+      const nextLocations = [...state.operationsInfo.branchLocations];
+      nextLocations[index] = value;
+      return {
+        operationsInfo: {
+          ...state.operationsInfo,
+          branchLocations: nextLocations,
+        },
+        errors: { ...state.errors, branchLocations: "" },
+      };
+    });
+  },
+  addBranchLocation: () => {
+    set((state) => ({
+      operationsInfo: {
+        ...state.operationsInfo,
+        totalBranches: state.operationsInfo.totalBranches + 1,
+        branchLocations: [...state.operationsInfo.branchLocations, ""],
+      },
+    }));
+  },
+  removeBranchLocation: (index) => {
+    set((state) => {
+      if (state.operationsInfo.branchLocations.length <= 1) {
+        return state;
+      }
+      const nextLocations = state.operationsInfo.branchLocations.filter(
+        (_, idx) => idx !== index,
+      );
+      return {
+        operationsInfo: {
+          ...state.operationsInfo,
+          totalBranches: nextLocations.length,
+          branchLocations: nextLocations,
+        },
+      };
+    });
+  },
+  setSubscriptionInfo: (field, value) => {
+    set((state) => ({
+      subscriptionInfo: { ...state.subscriptionInfo, [field]: value },
+      errors: { ...state.errors, [field]: "" },
+    }));
+  },
+  setOwnerInfo: (field, value) => {
+    set((state) => ({
+      ownerInfo: { ...state.ownerInfo, [field]: value },
+      errors: { ...state.errors, [field]: "" },
+    }));
+  },
+  setTermsAccepted: (accepted) => {
+    set((state) => ({
+      termsAccepted: accepted,
+      errors: { ...state.errors, termsAccepted: "" },
+    }));
   },
 
   // Errors & Status
@@ -125,6 +214,8 @@ export const useSignupStore = create<SignupState>((set, get) => ({
 
   // Validation
   validateEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+  validatePhone: (phone) =>
+    /^(\+251|0)?[79]\d{8}$/.test(phone.replace(/\s+/g, "")),
   validatePassword: (password) => {
     return (
       password.length >= 8 &&
@@ -135,7 +226,13 @@ export const useSignupStore = create<SignupState>((set, get) => ({
   },
 
   validateCurrentStep: (step, shouldSetErrors = true) => {
-    const { pharmacyDetails, managerInfo } = get();
+    const {
+      pharmacyDetails,
+      operationsInfo,
+      subscriptionInfo,
+      ownerInfo,
+      termsAccepted,
+    } = get();
     const errors: Errors = {};
 
     if (step === 1) {
@@ -151,23 +248,54 @@ export const useSignupStore = create<SignupState>((set, get) => ({
       if (!pharmacyDetails.locations.trim())
         errors.locations = "Locations are required";
     } else if (step === 2) {
-      if (!managerInfo.fullName.trim())
-        errors.fullName = "Full Name is required";
-      if (!managerInfo.email.trim()) errors.email = "Email is required";
-      else if (!get().validateEmail(managerInfo.email))
+      if (operationsInfo.totalBranches < 1)
+        errors.totalBranches = "At least one branch is required";
+
+      const validLocations = operationsInfo.branchLocations
+        .map((location) => location.trim())
+        .filter(Boolean);
+
+      if (validLocations.length !== operationsInfo.totalBranches) {
+        errors.branchLocations = "Please provide all branch locations";
+      }
+
+      if (operationsInfo.totalStaff < 1) {
+        errors.totalStaff = "Total staff must be at least 1";
+      }
+
+      const roleTotal =
+        operationsInfo.pharmacistCount +
+        operationsInfo.managerCount +
+        operationsInfo.cashierCount;
+
+      if (roleTotal !== operationsInfo.totalStaff) {
+        errors.staffBreakdown = "Staff breakdown must equal total staff count";
+      }
+    } else if (step === 3) {
+      if (!subscriptionInfo.selectedTier.trim()) {
+        errors.selectedTier = "Please select a subscription plan";
+      }
+    } else if (step === 4) {
+      if (!ownerInfo.fullName.trim()) errors.fullName = "Full Name is required";
+      if (!ownerInfo.email.trim()) errors.email = "Email is required";
+      else if (!get().validateEmail(ownerInfo.email))
         errors.email = "Invalid email format";
-      if (!managerInfo.password) errors.password = "Password is required";
-      else if (!get().validatePassword(managerInfo.password))
+      if (!ownerInfo.phone.trim()) {
+        errors.phone = "Phone number is required";
+      } else if (!get().validatePhone(ownerInfo.phone)) {
+        errors.phone = "Invalid phone format (use Ethiopian mobile format)";
+      }
+      if (!ownerInfo.password) errors.password = "Password is required";
+      else if (!get().validatePassword(ownerInfo.password))
         errors.password =
           "Password must be at least 8 chars with uppercase, lowercase, and number";
-      if (
-        managerInfo.confirmPassword &&
-        managerInfo.password !== managerInfo.confirmPassword
-      )
+      if (ownerInfo.password !== ownerInfo.confirmPassword)
         errors.confirmPassword = "Passwords do not match";
+    } else if (step === 5) {
+      if (!termsAccepted) {
+        errors.termsAccepted = "You must accept terms before submission";
+      }
     }
-    // Step 3 has a default radio selection so no strict validation needed.
-    // Step 4 is Review & Submit, validation checked prior.
 
     if (Object.keys(errors).length > 0) {
       if (shouldSetErrors) get().setErrors(errors);

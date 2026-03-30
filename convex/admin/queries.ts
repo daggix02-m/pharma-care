@@ -417,6 +417,53 @@ export const getSubscriptionPlans = query({
   },
 });
 
+export const getAllSubscriptionPlans = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
+
+    return await ctx.db.query("subscription_plans").take(200);
+  },
+});
+
+export const getPlanUsageCounts = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
+
+    const plans = await ctx.db.query("subscription_plans").take(200);
+    const pharmacies = await ctx.db.query("pharmacies").take(2000);
+
+    const counts = new Map<string, number>();
+    for (const pharmacy of pharmacies) {
+      const tier = pharmacy.subscriptionTier;
+      if (!tier) continue;
+      counts.set(tier, (counts.get(tier) || 0) + 1);
+    }
+
+    return plans.map((plan: any) => ({
+      planId: plan._id,
+      code: plan.code,
+      pharmacyCount: counts.get(plan.code) || 0,
+    }));
+  },
+});
+
+export const getSubscriptionPlanTemplates = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    await requireAdmin(ctx, args.sessionToken);
+
+    return await ctx.db.query("subscription_plan_templates").take(200);
+  },
+});
+
 export const getSubscriptionHistory = query({
   args: {
     pharmacyId: v.id("pharmacies"),

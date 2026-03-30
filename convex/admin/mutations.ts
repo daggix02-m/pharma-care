@@ -1,8 +1,10 @@
 // @ts-ignore
 import { mutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { hasPermission, Permission } from "../lib/permissions";
 import { requireAdmin } from "../lib/auth";
+import { generateRandomString } from "../lib/utils";
 
 export const submitPharmacyApplication = mutation({
   args: {
@@ -111,8 +113,97 @@ export const approvePharmacyApplication = mutation({
     const owner = await ctx.db.get(pharmacy.ownerId);
     if (!owner) throw new Error("Owner not found");
 
-    await ctx.db.patch(args.pharmacyId, { status: "active" });
+    const selectedPlan = await ctx.db
+      .query("subscription_plans")
+      .withIndex("by_code", (q: any) => q.eq("code", pharmacy.subscriptionTier))
+      .unique();
+
+    const paymentToken = generateRandomString(48);
+    const paymentLinkExpiresAt = Date.now() + 72 * 60 * 60 * 1000;
+    const amount = selectedPlan?.price || pharmacy.monthlyCost || 0;
+    const currency = selectedPlan?.currency || "ETB";
+
+    await ctx.db.patch(args.pharmacyId, {
+      status: "active",
+      paymentStatus: amount > 0 ? "pending_payment" : "paid",
+      monthlyCost: amount,
+      pendingPaymentLinkToken: amount > 0 ? paymentToken : undefined,
+      pendingPaymentLinkSentAt: amount > 0 ? Date.now() : undefined,
+      pendingPaymentLinkExpiresAt:
+        amount > 0 ? paymentLinkExpiresAt : undefined,
+    });
     await ctx.db.patch(owner._id, { status: "active", role: "owner" });
+
+    if (amount > 0) {
+      await ctx.db.insert("subscription_payment_links", {
+        token: paymentToken,
+        pharmacyId: args.pharmacyId,
+        ownerUserId: owner._id,
+        planCode: pharmacy.subscriptionTier,
+        amount,
+        currency,
+        status: "pending",
+        expiresAt: paymentLinkExpiresAt,
+        createdAt: Date.now(),
+      });
+    }
+
+    const settings = await ctx.db.query("site_settings").first();
+    if (owner.email && settings?.resendApiKey && amount > 0) {
+      const finishPaymentUrl = `${process.env.SITE_URL ?? "http://localhost:5173"}/subscription/finish-payment?token=${encodeURIComponent(paymentToken)}`;
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #0f766e; color: #fff; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px; }
+    .cta { display: inline-block; background: #0f766e; color: #fff; text-decoration: none; padding: 12px 18px; border-radius: 6px; font-weight: 600; }
+    .meta { margin-top: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 style="margin:0;">Your PharmaCare account is approved</h2>
+    </div>
+    <div class="content">
+      <p>Hello ${owner.full_name || "there"},</p>
+      <p>Your pharmacy application for <strong>${pharmacy.name}</strong> has been approved.</p>
+      <p>To activate your subscription, please complete payment using the secure link below:</p>
+      <p><a class="cta" href="${finishPaymentUrl}">Finish Payment</a></p>
+      <div class="meta">
+        <p style="margin:0;"><strong>Plan:</strong> ${pharmacy.subscriptionTier.toUpperCase()}</p>
+        <p style="margin:0;"><strong>Amount:</strong> ${currency} ${amount}</p>
+        <p style="margin:0;"><strong>Link expires:</strong> ${new Date(paymentLinkExpiresAt).toLocaleString()}</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+      `;
+
+      try {
+        await ctx.runAction(internal.lib.email.sendEmail, {
+          to: owner.email,
+          subject: "Finish your PharmaCare subscription payment",
+          html,
+          apiKey: settings.resendApiKey,
+          testMode: settings.testMode,
+        });
+      } catch (error) {
+        await ctx.db.insert("audit_logs", {
+          userId: admin._id,
+          action: "subscription_payment_link_email_failed",
+          entityId: args.pharmacyId,
+          entityType: "pharmacy",
+          details: `Approval completed but payment link email failed: ${String(error)}`,
+          timestamp: Date.now(),
+        });
+      }
+    }
 
     await ctx.db.insert("audit_logs", {
       userId: admin._id,
@@ -124,6 +215,141 @@ export const approvePharmacyApplication = mutation({
     });
 
     return { success: true, pharmacyId: args.pharmacyId, ownerId: owner._id };
+  },
+});
+
+export const resendSubscriptionPaymentLink = mutation({
+  args: {
+    pharmacyId: v.id("pharmacies"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const pharmacy = await ctx.db.get(args.pharmacyId);
+    if (!pharmacy) throw new Error("Pharmacy not found");
+
+    const owner = await ctx.db.get(pharmacy.ownerId);
+    if (!owner || !owner.email) {
+      throw new Error("Owner email is not available");
+    }
+
+    const selectedPlan = await ctx.db
+      .query("subscription_plans")
+      .withIndex("by_code", (q: any) => q.eq("code", pharmacy.subscriptionTier))
+      .unique();
+
+    const amount = selectedPlan?.price || pharmacy.monthlyCost || 0;
+    const currency = selectedPlan?.currency || "ETB";
+
+    if (amount <= 0) {
+      throw new Error(
+        "This pharmacy does not require payment for the current plan",
+      );
+    }
+
+    const existingPendingLinks = await ctx.db
+      .query("subscription_payment_links")
+      .withIndex("by_pharmacy", (q: any) => q.eq("pharmacyId", pharmacy._id))
+      .take(50);
+
+    await Promise.all(
+      existingPendingLinks
+        .filter((link: any) => link.status === "pending")
+        .map((link: any) =>
+          ctx.db.patch(link._id, {
+            status: "cancelled",
+          }),
+        ),
+    );
+
+    const paymentToken = generateRandomString(48);
+    const paymentLinkExpiresAt = Date.now() + 72 * 60 * 60 * 1000;
+
+    await ctx.db.insert("subscription_payment_links", {
+      token: paymentToken,
+      pharmacyId: pharmacy._id,
+      ownerUserId: owner._id,
+      planCode: pharmacy.subscriptionTier,
+      amount,
+      currency,
+      status: "pending",
+      expiresAt: paymentLinkExpiresAt,
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.patch(pharmacy._id, {
+      paymentStatus: "pending_payment",
+      pendingPaymentLinkToken: paymentToken,
+      pendingPaymentLinkSentAt: Date.now(),
+      pendingPaymentLinkExpiresAt: paymentLinkExpiresAt,
+      monthlyCost: amount,
+    });
+
+    const settings = await ctx.db.query("site_settings").first();
+    if (!settings?.resendApiKey) {
+      throw new Error("Email settings are not configured");
+    }
+
+    const finishPaymentUrl = `${process.env.SITE_URL ?? "http://localhost:5173"}/subscription/finish-payment?token=${encodeURIComponent(paymentToken)}`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #0f766e; color: #fff; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px; }
+    .cta { display: inline-block; background: #0f766e; color: #fff; text-decoration: none; padding: 12px 18px; border-radius: 6px; font-weight: 600; }
+    .meta { margin-top: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 style="margin:0;">Finish your PharmaCare subscription payment</h2>
+    </div>
+    <div class="content">
+      <p>Hello ${owner.full_name || "there"},</p>
+      <p>This is your updated payment link for <strong>${pharmacy.name}</strong>.</p>
+      <p><a class="cta" href="${finishPaymentUrl}">Finish Payment</a></p>
+      <div class="meta">
+        <p style="margin:0;"><strong>Plan:</strong> ${pharmacy.subscriptionTier.toUpperCase()}</p>
+        <p style="margin:0;"><strong>Amount:</strong> ${currency} ${amount}</p>
+        <p style="margin:0;"><strong>Link expires:</strong> ${new Date(paymentLinkExpiresAt).toLocaleString()}</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    await ctx.runAction(internal.lib.email.sendEmail, {
+      to: owner.email,
+      subject: "Updated finish-payment link for PharmaCare",
+      html,
+      apiKey: settings.resendApiKey,
+      testMode: settings.testMode,
+    });
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "resend_subscription_payment_link",
+      entityId: pharmacy._id,
+      entityType: "pharmacy",
+      details: `Resent payment link to owner ${owner.email}`,
+      timestamp: Date.now(),
+    });
+
+    return {
+      success: true,
+      paymentLinkExpiresAt,
+      amount,
+      currency,
+      ownerEmail: owner.email,
+    };
   },
 });
 
@@ -421,9 +647,24 @@ export const createSubscriptionPlan = mutation({
       throw new Error("Unauthorized: Admin only");
     }
 
+    const normalizedCode = args.code.trim().toLowerCase();
+    if (!/^[a-z0-9-]+$/.test(normalizedCode)) {
+      throw new Error(
+        "Subscription plan code must use lowercase letters, numbers, or hyphens",
+      );
+    }
+
+    const existingPlan = await ctx.db
+      .query("subscription_plans")
+      .withIndex("by_code", (q: any) => q.eq("code", normalizedCode))
+      .unique();
+    if (existingPlan) {
+      throw new Error("Subscription plan code already exists");
+    }
+
     const planId = await ctx.db.insert("subscription_plans", {
       name: args.name,
-      code: args.code,
+      code: normalizedCode,
       price: args.price,
       currency: args.currency || "ETB",
       features: args.features,
@@ -451,6 +692,7 @@ export const updateSubscriptionPlan = mutation({
     id: v.id("subscription_plans"),
     data: v.object({
       name: v.optional(v.string()),
+      code: v.optional(v.string()),
       price: v.optional(v.number()),
       currency: v.optional(v.string()),
       features: v.optional(v.array(v.string())),
@@ -480,18 +722,76 @@ export const updateSubscriptionPlan = mutation({
       throw new Error("Subscription plan not found");
     }
 
-    await ctx.db.patch(args.id, args.data);
+    const DEFAULT_PLAN_CODES = new Set(["basic", "premium", "enterprise"]);
+    const normalizedCode = args.data.code?.trim().toLowerCase();
+    const codeChanged =
+      typeof normalizedCode === "string" && normalizedCode !== plan.code;
+    const isDefaultPlan = DEFAULT_PLAN_CODES.has(plan.code);
+
+    if (typeof normalizedCode === "string" && normalizedCode.length === 0) {
+      throw new Error("Subscription plan code cannot be empty");
+    }
+
+    if (
+      typeof normalizedCode === "string" &&
+      !/^[a-z0-9-]+$/.test(normalizedCode)
+    ) {
+      throw new Error(
+        "Subscription plan code must use lowercase letters, numbers, or hyphens",
+      );
+    }
+
+    if (codeChanged && isDefaultPlan) {
+      throw new Error("Default system plan codes cannot be changed");
+    }
+
+    if (codeChanged && normalizedCode) {
+      const existingPlan = await ctx.db
+        .query("subscription_plans")
+        .withIndex("by_code", (q: any) => q.eq("code", normalizedCode))
+        .unique();
+
+      if (existingPlan && existingPlan._id !== plan._id) {
+        throw new Error("Subscription plan code already exists");
+      }
+    }
+
+    const patchData = {
+      ...args.data,
+      code: normalizedCode ?? args.data.code,
+    };
+
+    await ctx.db.patch(args.id, patchData);
+
+    let remappedPharmacies = 0;
+    if (codeChanged && normalizedCode) {
+      const pharmaciesUsingOldCode = await ctx.db
+        .query("pharmacies")
+        .filter((q: any) => q.eq(q.field("subscriptionTier"), plan.code))
+        .collect();
+
+      remappedPharmacies = pharmaciesUsingOldCode.length;
+      for (const pharmacy of pharmaciesUsingOldCode) {
+        await ctx.db.patch(pharmacy._id, {
+          subscriptionTier: normalizedCode,
+        });
+      }
+    }
+
+    const auditDetails = codeChanged
+      ? `Updated subscription plan: ${plan.name}. Code changed from ${plan.code} to ${normalizedCode}. Remapped ${remappedPharmacies} pharmacies.`
+      : `Updated subscription plan: ${plan.name}`;
 
     await ctx.db.insert("audit_logs", {
       userId: admin._id,
       action: "update_subscription_plan",
       entityId: args.id,
       entityType: "subscription_plan",
-      details: `Updated subscription plan: ${plan.name}`,
+      details: auditDetails,
       timestamp: Date.now(),
     });
 
-    return { success: true };
+    return { success: true, remappedPharmacies };
   },
 });
 
@@ -536,6 +836,208 @@ export const deleteSubscriptionPlan = mutation({
       entityId: args.id,
       entityType: "subscription_plan",
       details: `Deleted subscription plan: ${plan.name}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const ensureSubscriptionPlanTemplates = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const existingTemplates = await ctx.db
+      .query("subscription_plan_templates")
+      .take(10);
+
+    if (existingTemplates.length > 0) {
+      return { created: 0 };
+    }
+
+    const now = Date.now();
+    const defaults = [
+      {
+        name: "Starter",
+        description: "For small pharmacies getting started.",
+        price: 1999,
+        currency: "ETB",
+        features: [
+          "Basic inventory management",
+          "Sales tracking",
+          "Single branch support",
+        ],
+        maxBranches: 1,
+        maxUsers: 8,
+        isActiveDefault: true,
+      },
+      {
+        name: "Growth",
+        description: "For growing pharmacies with multiple teams.",
+        price: 4999,
+        currency: "ETB",
+        features: [
+          "Advanced reports",
+          "Branch performance dashboard",
+          "Role-based controls",
+        ],
+        maxBranches: 5,
+        maxUsers: 35,
+        isActiveDefault: true,
+      },
+      {
+        name: "Scale",
+        description: "For enterprise-scale pharmacy operations.",
+        price: 9999,
+        currency: "ETB",
+        features: [
+          "Unlimited branch analytics",
+          "Advanced auditing",
+          "Priority support workflows",
+        ],
+        maxBranches: 25,
+        maxUsers: 120,
+        isActiveDefault: true,
+      },
+    ];
+
+    for (const template of defaults) {
+      await ctx.db.insert("subscription_plan_templates", {
+        ...template,
+        isBuiltIn: true,
+        createdBy: admin._id,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "seed_subscription_templates",
+      entityId: "subscription_plan_templates",
+      entityType: "subscription_plan_template",
+      details: "Seeded default subscription plan templates",
+      timestamp: now,
+    });
+
+    return { created: defaults.length };
+  },
+});
+
+export const createSubscriptionPlanTemplate = mutation({
+  args: {
+    name: v.string(),
+    description: v.optional(v.string()),
+    price: v.number(),
+    currency: v.optional(v.string()),
+    features: v.array(v.string()),
+    maxBranches: v.number(),
+    maxUsers: v.number(),
+    isActiveDefault: v.optional(v.boolean()),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const now = Date.now();
+    const templateId = await ctx.db.insert("subscription_plan_templates", {
+      name: args.name.trim(),
+      description: args.description?.trim() || undefined,
+      price: args.price,
+      currency: args.currency?.trim() || "ETB",
+      features: args.features,
+      maxBranches: args.maxBranches,
+      maxUsers: args.maxUsers,
+      isActiveDefault: args.isActiveDefault ?? true,
+      isBuiltIn: false,
+      createdBy: admin._id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "create_subscription_plan_template",
+      entityId: String(templateId),
+      entityType: "subscription_plan_template",
+      details: `Created template: ${args.name}`,
+      timestamp: now,
+    });
+
+    return { success: true, templateId };
+  },
+});
+
+export const updateSubscriptionPlanTemplate = mutation({
+  args: {
+    id: v.id("subscription_plan_templates"),
+    data: v.object({
+      name: v.optional(v.string()),
+      description: v.optional(v.string()),
+      price: v.optional(v.number()),
+      currency: v.optional(v.string()),
+      features: v.optional(v.array(v.string())),
+      maxBranches: v.optional(v.number()),
+      maxUsers: v.optional(v.number()),
+      isActiveDefault: v.optional(v.boolean()),
+    }),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+    const template = await ctx.db.get(args.id);
+    if (!template) {
+      throw new Error("Subscription template not found");
+    }
+
+    await ctx.db.patch(args.id, {
+      ...args.data,
+      name: args.data.name?.trim(),
+      description: args.data.description?.trim(),
+      currency: args.data.currency?.trim(),
+      updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "update_subscription_plan_template",
+      entityId: String(args.id),
+      entityType: "subscription_plan_template",
+      details: `Updated template: ${template.name}`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const deleteSubscriptionPlanTemplate = mutation({
+  args: {
+    id: v.id("subscription_plan_templates"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+    const template = await ctx.db.get(args.id);
+    if (!template) {
+      throw new Error("Subscription template not found");
+    }
+
+    if (template.isBuiltIn) {
+      throw new Error("Built-in templates cannot be deleted");
+    }
+
+    await ctx.db.delete(args.id);
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "delete_subscription_plan_template",
+      entityId: String(args.id),
+      entityType: "subscription_plan_template",
+      details: `Deleted template: ${template.name}`,
       timestamp: Date.now(),
     });
 
@@ -626,6 +1128,87 @@ export const updatePharmacySubscription = mutation({
       details: `Updated pharmacy subscription from ${oldTier} to ${args.newTier}`,
       timestamp: Date.now(),
     });
+
+    const owner = pharmacy.ownerId ? await ctx.db.get(pharmacy.ownerId) : null;
+    const formatTier = (tier?: string | null) => {
+      if (!tier) return "Unknown";
+      return tier.charAt(0).toUpperCase() + tier.slice(1);
+    };
+    const trimmedReason = args.reason?.trim();
+    const reasonSuffix = trimmedReason ? ` Reason: ${trimmedReason}` : "";
+
+    if (owner) {
+      const notificationMessage = `Your subscription has been updated from ${formatTier(oldTier)} to ${formatTier(args.newTier)} (${changeType}).${reasonSuffix}`;
+
+      await ctx.db.insert("notifications", {
+        userId: owner._id,
+        pharmacyId: args.pharmacyId,
+        title: "Subscription Updated",
+        message: notificationMessage,
+        type: "info",
+        priority: "high",
+        read: false,
+        createdAt: Date.now(),
+      });
+
+      const settings = await ctx.db.query("site_settings").first();
+      if (owner.email && settings?.resendApiKey) {
+        const subject = "Your PharmaCare subscription has been updated";
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #0f766e; color: #fff; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px; }
+    .summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin: 16px 0; }
+    .muted { color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 style="margin:0;">PharmaCare Subscription Update</h2>
+    </div>
+    <div class="content">
+      <p>Hello ${owner.full_name || "there"},</p>
+      <p>Your pharmacy subscription has been updated by the system administrator.</p>
+      <div class="summary">
+        <p style="margin:0;"><strong>Pharmacy:</strong> ${pharmacy.name}</p>
+        <p style="margin:0;"><strong>Previous Plan:</strong> ${formatTier(oldTier)}</p>
+        <p style="margin:0;"><strong>New Plan:</strong> ${formatTier(args.newTier)}</p>
+        <p style="margin:0;"><strong>Change Type:</strong> ${formatTier(changeType)}</p>
+        ${trimmedReason ? `<p style="margin:0;"><strong>Reason:</strong> ${trimmedReason}</p>` : ""}
+      </div>
+      <p class="muted">If you have questions about this update, please contact support.</p>
+    </div>
+  </div>
+</body>
+</html>
+        `;
+
+        try {
+          await ctx.runAction(internal.lib.email.sendEmail, {
+            to: owner.email,
+            subject,
+            html,
+            apiKey: settings.resendApiKey,
+            testMode: settings.testMode,
+          });
+        } catch (error) {
+          await ctx.db.insert("audit_logs", {
+            userId: admin._id,
+            action: "subscription_update_email_failed",
+            entityId: args.pharmacyId,
+            entityType: "pharmacy",
+            details: `Subscription updated but owner email failed: ${String(error)}`,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    }
 
     return { success: true, changeType, newPrice: newPlan.price };
   },

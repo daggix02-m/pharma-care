@@ -29,6 +29,7 @@ import { VerifyEmailPage } from "./pages/auth/verify-email";
 import { PendingApprovalPage } from "./pages/auth/pending-approval";
 import { PharmacyRequestConfirmPage } from "./pages/auth/pharmacy-request-confirm";
 import { PharmacySuspendedPage } from "./pages/auth/pharmacy-suspended";
+import { FinishPaymentPage } from "./pages/subscription/FinishPaymentPage";
 
 // Pages - Dashboard - Lazy loaded for code splitting
 const OwnerDashboard = React.lazy(() =>
@@ -310,6 +311,10 @@ const AppRoutes = React.memo(function AppRoutes() {
       <Route
         path="/auth/pharmacy-suspended"
         element={<PharmacySuspendedPage />}
+      />
+      <Route
+        path="/subscription/finish-payment"
+        element={<FinishPaymentPage />}
       />
 
       {/* Protected Routes - WITH LoadingBoundary and Suspense for lazy loading */}

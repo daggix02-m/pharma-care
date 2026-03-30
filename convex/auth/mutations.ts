@@ -141,12 +141,29 @@ export const signUpWithEmail = mutation({
     email: v.string(),
     password: v.string(),
     full_name: v.string(),
+    phone: v.optional(v.string()),
     pharmacyDetails: v.optional(
       v.object({
         name: v.string(),
         licenseNumber: v.string(),
         location: v.string(),
         pharmacyEmail: v.optional(v.string()),
+      }),
+    ),
+    operations: v.optional(
+      v.object({
+        totalBranches: v.number(),
+        branchLocations: v.array(v.string()),
+        totalStaff: v.number(),
+        pharmacistCount: v.number(),
+        managerCount: v.number(),
+        cashierCount: v.number(),
+      }),
+    ),
+    subscription: v.optional(
+      v.object({
+        selectedTier: v.string(),
+        recommendedTier: v.string(),
       }),
     ),
   },
@@ -193,6 +210,7 @@ export const signUpWithEmail = mutation({
       emailVerified: false,
       name: args.full_name,
       full_name: args.full_name,
+      phone: args.phone,
       passwordHash,
       role: "owner",
       status: "pending",
@@ -209,10 +227,22 @@ export const signUpWithEmail = mutation({
         ? normalizeEmail(args.pharmacyDetails.pharmacyEmail)
         : undefined,
       licenseCode: args.pharmacyDetails.licenseNumber,
-      staffCount: 1,
-      subscriptionTier: "basic",
+      staffCount: args.operations?.totalStaff || 1,
+      subscriptionTier: args.subscription?.selectedTier || "basic",
       status: "pending",
       ownerId: userId,
+      plannedBranches: args.operations?.totalBranches,
+      plannedBranchLocations: args.operations?.branchLocations,
+      plannedStaffTotal: args.operations?.totalStaff,
+      plannedStaffBreakdown: args.operations
+        ? {
+            pharmacists: args.operations.pharmacistCount,
+            managers: args.operations.managerCount,
+            cashiers: args.operations.cashierCount,
+          }
+        : undefined,
+      recommendedSubscriptionTier: args.subscription?.recommendedTier,
+      paymentStatus: "pending_approval",
     });
 
     await ctx.db.patch(userId, {

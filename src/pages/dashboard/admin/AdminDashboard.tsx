@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -28,12 +28,16 @@ import {
   ChevronUp,
   ChevronDown,
   ExternalLink,
+  Plus,
+  Pencil,
+  Power,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +58,7 @@ type AdminTab =
   | "overview"
   | "approvals"
   | "pharmacies"
+  | "subscriptions"
   | "feedbacks"
   | "audit-logs"
   | "settings"
@@ -98,6 +103,7 @@ export function AdminDashboard() {
     "overview",
     "approvals",
     "pharmacies",
+    "subscriptions",
     "feedbacks",
     "audit-logs",
     "settings",
@@ -190,6 +196,12 @@ export function AdminDashboard() {
           </TabsContent>
           <TabsContent value="pharmacies" className="mt-0 focus:outline-none">
             <PharmaciesSection />
+          </TabsContent>
+          <TabsContent
+            value="subscriptions"
+            className="mt-0 focus:outline-none"
+          >
+            <SubscriptionsSection />
           </TabsContent>
           <TabsContent value="feedbacks" className="mt-0 focus:outline-none">
             <FeedbacksSection />
@@ -1589,6 +1601,1214 @@ function AuditLogsSection() {
   );
 }
 
+function SubscriptionsSection() {
+  const { sessionToken } = useAuth();
+  const plans = useQuery(
+    api.admin.queries.getAllSubscriptionPlans,
+    sessionToken ? { sessionToken } : "skip",
+  );
+  const planUsage = useQuery(
+    api.admin.queries.getPlanUsageCounts,
+    sessionToken ? { sessionToken } : "skip",
+  );
+  const templates = useQuery(
+    api.admin.queries.getSubscriptionPlanTemplates,
+    sessionToken ? { sessionToken } : "skip",
+  );
+  const createPlan = useMutation(api.admin.mutations.createSubscriptionPlan);
+  const updatePlan = useMutation(api.admin.mutations.updateSubscriptionPlan);
+  const ensureTemplates = useMutation(
+    api.admin.mutations.ensureSubscriptionPlanTemplates,
+  );
+  const createTemplate = useMutation(
+    api.admin.mutations.createSubscriptionPlanTemplate,
+  );
+  const updateTemplate = useMutation(
+    api.admin.mutations.updateSubscriptionPlanTemplate,
+  );
+  const deleteTemplate = useMutation(
+    api.admin.mutations.deleteSubscriptionPlanTemplate,
+  );
+
+  type PlanRecord = {
+    _id: Id<"subscription_plans">;
+    name: string;
+    code: string;
+    price: number;
+    currency?: string;
+    maxBranches: number;
+    maxUsers: number;
+    description?: string;
+    features: string[];
+    isActive: boolean;
+  };
+
+  interface PlanDraft {
+    name: string;
+    code: string;
+    price: string;
+    currency: string;
+    maxBranches: string;
+    maxUsers: string;
+    description: string;
+    features: string[];
+    isActive: boolean;
+  }
+
+  interface TemplateRecord {
+    _id: Id<"subscription_plan_templates">;
+    name: string;
+    description?: string;
+    price: number;
+    currency: string;
+    features: string[];
+    maxBranches: number;
+    maxUsers: number;
+    isActiveDefault: boolean;
+    isBuiltIn: boolean;
+  }
+
+  interface TemplateDraft {
+    name: string;
+    description: string;
+    price: string;
+    currency: string;
+    maxBranches: string;
+    maxUsers: string;
+    features: string[];
+    isActiveDefault: boolean;
+  }
+
+  const DEFAULT_CODES = new Set(["basic", "premium", "enterprise"]);
+  const emptyDraft: PlanDraft = {
+    name: "",
+    code: "",
+    price: "0",
+    currency: "ETB",
+    maxBranches: "1",
+    maxUsers: "1",
+    description: "",
+    features: [],
+    isActive: true,
+  };
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "inactive"
+  >("all");
+  const [selectedPlanId, setSelectedPlanId] =
+    useState<Id<"subscription_plans"> | null>(null);
+  const [mode, setMode] = useState<"create" | "edit">("edit");
+  const [draft, setDraft] = useState<PlanDraft>(emptyDraft);
+  const [baselineDraft, setBaselineDraft] = useState<PlanDraft>(emptyDraft);
+  const [newFeature, setNewFeature] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [templatesSeeded, setTemplatesSeeded] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] =
+    useState<Id<"subscription_plan_templates"> | null>(null);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateFeatureInput, setTemplateFeatureInput] = useState("");
+  const [templateDraft, setTemplateDraft] = useState<TemplateDraft>({
+    name: "",
+    description: "",
+    price: "0",
+    currency: "ETB",
+    maxBranches: "1",
+    maxUsers: "1",
+    features: [],
+    isActiveDefault: true,
+  });
+
+  const allPlans = (plans || []) as PlanRecord[];
+  const allTemplates = (templates || []) as TemplateRecord[];
+
+  const filteredPlans = useMemo(() => {
+    return allPlans
+      .filter((plan) => {
+        if (statusFilter === "active") return plan.isActive;
+        if (statusFilter === "inactive") return !plan.isActive;
+        return true;
+      })
+      .filter((plan) => {
+        const haystack = `${plan.name} ${plan.code}`.toLowerCase();
+        return haystack.includes(searchTerm.toLowerCase());
+      })
+      .sort((a, b) => a.price - b.price);
+  }, [allPlans, searchTerm, statusFilter]);
+
+  const selectedPlan = useMemo(() => {
+    if (!selectedPlanId) return null;
+    return allPlans.find((plan) => plan._id === selectedPlanId) || null;
+  }, [allPlans, selectedPlanId]);
+
+  const usageByCode = useMemo(() => {
+    const map = new Map<string, number>();
+    (planUsage || []).forEach((item: any) => {
+      map.set(item.code, item.pharmacyCount || 0);
+    });
+    return map;
+  }, [planUsage]);
+
+  const stats = useMemo(() => {
+    const activeCount = allPlans.filter((p) => p.isActive).length;
+    const avgPrice =
+      allPlans.length > 0
+        ? Math.round(
+            allPlans.reduce((sum, p) => sum + p.price, 0) / allPlans.length,
+          )
+        : 0;
+    return {
+      total: allPlans.length,
+      active: activeCount,
+      inactive: allPlans.length - activeCount,
+      averagePrice: avgPrice,
+    };
+  }, [allPlans]);
+
+  const isDirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(baselineDraft),
+    [draft, baselineDraft],
+  );
+
+  const isDefaultCodeLocked =
+    mode === "edit" && selectedPlan
+      ? DEFAULT_CODES.has(selectedPlan.code)
+      : false;
+
+  useEffect(() => {
+    if (allPlans.length === 0) {
+      setSelectedPlanId(null);
+      setMode("create");
+      setDraft(emptyDraft);
+      setBaselineDraft(emptyDraft);
+      return;
+    }
+
+    if (!selectedPlanId) {
+      const firstPlan = allPlans[0];
+      setSelectedPlanId(firstPlan._id);
+      setMode("edit");
+    }
+  }, [allPlans, selectedPlanId]);
+
+  useEffect(() => {
+    if (mode !== "edit" || !selectedPlan) return;
+
+    const hydrated: PlanDraft = {
+      name: selectedPlan.name,
+      code: selectedPlan.code,
+      price: String(selectedPlan.price),
+      currency: selectedPlan.currency || "ETB",
+      maxBranches: String(selectedPlan.maxBranches),
+      maxUsers: String(selectedPlan.maxUsers),
+      description: selectedPlan.description || "",
+      features: selectedPlan.features || [],
+      isActive: Boolean(selectedPlan.isActive),
+    };
+
+    setDraft(hydrated);
+    setBaselineDraft(hydrated);
+    setNewFeature("");
+  }, [mode, selectedPlan]);
+
+  const selectedTemplate = useMemo(() => {
+    if (!selectedTemplateId) return null;
+    return (
+      allTemplates.find((template) => template._id === selectedTemplateId) ||
+      null
+    );
+  }, [allTemplates, selectedTemplateId]);
+
+  useEffect(() => {
+    if (!templates || templatesSeeded) {
+      return;
+    }
+
+    if (templates.length > 0) {
+      setTemplatesSeeded(true);
+      return;
+    }
+
+    let cancelled = false;
+    const seedTemplates = async () => {
+      try {
+        await ensureTemplates({ sessionToken });
+      } catch (error) {
+        console.error("Failed to seed templates", error);
+      } finally {
+        if (!cancelled) {
+          setTemplatesSeeded(true);
+        }
+      }
+    };
+
+    void seedTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, [templates, templatesSeeded, ensureTemplates, sessionToken]);
+
+  useEffect(() => {
+    if (allTemplates.length === 0) {
+      setSelectedTemplateId(null);
+      return;
+    }
+
+    if (!selectedTemplateId) {
+      setSelectedTemplateId(allTemplates[0]._id);
+    }
+  }, [allTemplates, selectedTemplateId]);
+
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setTemplateDraft({
+        name: "",
+        description: "",
+        price: "0",
+        currency: "ETB",
+        maxBranches: "1",
+        maxUsers: "1",
+        features: [],
+        isActiveDefault: true,
+      });
+      setTemplateFeatureInput("");
+      return;
+    }
+
+    setTemplateDraft({
+      name: selectedTemplate.name,
+      description: selectedTemplate.description || "",
+      price: String(selectedTemplate.price),
+      currency: selectedTemplate.currency || "ETB",
+      maxBranches: String(selectedTemplate.maxBranches),
+      maxUsers: String(selectedTemplate.maxUsers),
+      features: selectedTemplate.features || [],
+      isActiveDefault: selectedTemplate.isActiveDefault,
+    });
+    setTemplateFeatureInput("");
+  }, [selectedTemplate]);
+
+  const safelySwitchContext = (next: () => void) => {
+    if (!isDirty) {
+      next();
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "You have unsaved changes. Continue and discard the draft?",
+    );
+    if (confirmed) next();
+  };
+
+  const openCreateDraft = () => {
+    safelySwitchContext(() => {
+      setMode("create");
+      setSelectedPlanId(null);
+      setDraft(emptyDraft);
+      setBaselineDraft(emptyDraft);
+      setNewFeature("");
+    });
+  };
+
+  const selectPlan = (planId: Id<"subscription_plans">) => {
+    safelySwitchContext(() => {
+      setMode("edit");
+      setSelectedPlanId(planId);
+    });
+  };
+
+  const updateDraftField = <K extends keyof PlanDraft>(
+    key: K,
+    value: PlanDraft[K],
+  ) => {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const addFeature = () => {
+    const value = newFeature.trim();
+    if (!value) return;
+    if (draft.features.includes(value)) {
+      toast.error("Feature already added");
+      return;
+    }
+    updateDraftField("features", [...draft.features, value]);
+    setNewFeature("");
+  };
+
+  const removeFeature = (feature: string) => {
+    updateDraftField(
+      "features",
+      draft.features.filter((item) => item !== feature),
+    );
+  };
+
+  const discardChanges = () => {
+    setDraft(baselineDraft);
+    setNewFeature("");
+  };
+
+  const codePattern = /^[a-z0-9-]+$/;
+
+  const validateDraft = () => {
+    if (!draft.name.trim()) return "Plan name is required";
+    if (!draft.code.trim()) return "Plan code is required";
+    if (!codePattern.test(draft.code.trim())) {
+      return "Plan code must use lowercase letters, numbers, or hyphens";
+    }
+
+    const price = Number(draft.price);
+    const maxBranches = Number(draft.maxBranches);
+    const maxUsers = Number(draft.maxUsers);
+
+    if (Number.isNaN(price) || price < 0) {
+      return "Price must be a valid non-negative number";
+    }
+    if (Number.isNaN(maxBranches) || maxBranches < 1) {
+      return "Max branches must be at least 1";
+    }
+    if (Number.isNaN(maxUsers) || maxUsers < 1) {
+      return "Max users must be at least 1";
+    }
+    if (draft.features.length === 0) return "Add at least one feature";
+
+    return null;
+  };
+
+  const savePlan = async () => {
+    const validationError = validateDraft();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    setSaving(true);
+
+    const payload = {
+      name: draft.name.trim(),
+      code: draft.code.trim().toLowerCase(),
+      price: Number(draft.price),
+      currency: draft.currency.trim() || "ETB",
+      features: draft.features,
+      maxBranches: Number(draft.maxBranches),
+      maxUsers: Number(draft.maxUsers),
+      description: draft.description.trim() || undefined,
+      isActive: draft.isActive,
+    };
+
+    try {
+      if (mode === "create") {
+        const result = await createPlan({
+          name: payload.name,
+          code: payload.code,
+          price: payload.price,
+          currency: payload.currency,
+          features: payload.features,
+          maxBranches: payload.maxBranches,
+          maxUsers: payload.maxUsers,
+          description: payload.description,
+        });
+        toast.success("Subscription plan created");
+        setMode("edit");
+        setSelectedPlanId(result.planId);
+      } else if (selectedPlanId) {
+        const result = await updatePlan({
+          id: selectedPlanId,
+          data: payload,
+        });
+        if (result?.remappedPharmacies > 0) {
+          toast.success(
+            `Plan updated. ${result.remappedPharmacies} pharmacies remapped to new code.`,
+          );
+        } else {
+          toast.success("Subscription plan updated");
+        }
+      }
+
+      setBaselineDraft({ ...draft, code: payload.code });
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save subscription plan");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleStatus = async () => {
+    if (mode !== "edit" || !selectedPlanId) return;
+
+    const nextState = !draft.isActive;
+    try {
+      await updatePlan({
+        id: selectedPlanId,
+        data: { isActive: nextState },
+      });
+      updateDraftField("isActive", nextState);
+      setBaselineDraft((prev) => ({ ...prev, isActive: nextState }));
+      toast.success(nextState ? "Plan activated" : "Plan deactivated");
+    } catch (error) {
+      toast.error("Failed to update plan status");
+    }
+  };
+
+  const applyTemplateToDraft = () => {
+    if (!selectedTemplate) {
+      toast.error("Select a template first");
+      return;
+    }
+
+    safelySwitchContext(() => {
+      const nextDraft: PlanDraft = {
+        ...draft,
+        name: selectedTemplate.name,
+        price: String(selectedTemplate.price),
+        currency: selectedTemplate.currency || "ETB",
+        maxBranches: String(selectedTemplate.maxBranches),
+        maxUsers: String(selectedTemplate.maxUsers),
+        description: selectedTemplate.description || "",
+        features: selectedTemplate.features,
+        isActive: selectedTemplate.isActiveDefault,
+      };
+      setDraft(nextDraft);
+      toast.success(`Applied template: ${selectedTemplate.name}`);
+    });
+  };
+
+  const addTemplateFeature = () => {
+    const value = templateFeatureInput.trim();
+    if (!value) return;
+    if (templateDraft.features.includes(value)) {
+      toast.error("Template feature already added");
+      return;
+    }
+    setTemplateDraft((prev) => ({
+      ...prev,
+      features: [...prev.features, value],
+    }));
+    setTemplateFeatureInput("");
+  };
+
+  const removeTemplateFeature = (feature: string) => {
+    setTemplateDraft((prev) => ({
+      ...prev,
+      features: prev.features.filter((item) => item !== feature),
+    }));
+  };
+
+  const saveTemplate = async () => {
+    if (!templateDraft.name.trim()) {
+      toast.error("Template name is required");
+      return;
+    }
+
+    if (templateDraft.features.length === 0) {
+      toast.error("Add at least one template feature");
+      return;
+    }
+
+    const price = Number(templateDraft.price);
+    const maxBranches = Number(templateDraft.maxBranches);
+    const maxUsers = Number(templateDraft.maxUsers);
+
+    if (Number.isNaN(price) || price < 0) {
+      toast.error("Template price must be a valid non-negative number");
+      return;
+    }
+    if (Number.isNaN(maxBranches) || maxBranches < 1) {
+      toast.error("Template max branches must be at least 1");
+      return;
+    }
+    if (Number.isNaN(maxUsers) || maxUsers < 1) {
+      toast.error("Template max users must be at least 1");
+      return;
+    }
+
+    setTemplateSaving(true);
+    try {
+      if (selectedTemplate) {
+        await updateTemplate({
+          id: selectedTemplate._id,
+          data: {
+            name: templateDraft.name.trim(),
+            description: templateDraft.description.trim() || undefined,
+            price,
+            currency: templateDraft.currency.trim() || "ETB",
+            features: templateDraft.features,
+            maxBranches,
+            maxUsers,
+            isActiveDefault: templateDraft.isActiveDefault,
+          },
+          sessionToken,
+        });
+        toast.success("Template updated");
+      } else {
+        const result = await createTemplate({
+          name: templateDraft.name.trim(),
+          description: templateDraft.description.trim() || undefined,
+          price,
+          currency: templateDraft.currency.trim() || "ETB",
+          features: templateDraft.features,
+          maxBranches,
+          maxUsers,
+          isActiveDefault: templateDraft.isActiveDefault,
+          sessionToken,
+        });
+        setSelectedTemplateId(result.templateId);
+        toast.success("Template created");
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save template");
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const createTemplateFromCurrentDraft = () => {
+    setSelectedTemplateId(null);
+    setTemplateDraft({
+      name: `${draft.name || "Custom"} Template`,
+      description: draft.description,
+      price: draft.price,
+      currency: draft.currency,
+      maxBranches: draft.maxBranches,
+      maxUsers: draft.maxUsers,
+      features: draft.features,
+      isActiveDefault: draft.isActive,
+    });
+    setTemplateFeatureInput("");
+    toast.info("Template draft prefilled from current plan draft");
+  };
+
+  const removeTemplate = async () => {
+    if (!selectedTemplate) {
+      toast.error("Select a template first");
+      return;
+    }
+    if (selectedTemplate.isBuiltIn) {
+      toast.error("Built-in templates cannot be deleted");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete template "${selectedTemplate.name}"? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteTemplate({ id: selectedTemplate._id, sessionToken });
+      toast.success("Template deleted");
+      setSelectedTemplateId(null);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to delete template");
+    }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isSaveCombo =
+        (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s";
+      if (!isSaveCombo) return;
+
+      event.preventDefault();
+      if (saving) return;
+      void savePlan();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [saving, draft, mode, selectedPlanId]);
+
+  if (!plans) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Subscription Plans
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Control global plan pricing, limits, and availability from one
+            workspace.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <StatPill label="Total plans" value={stats.total} />
+          <StatPill label="Active" value={stats.active} />
+          <StatPill label="Inactive" value={stats.inactive} />
+          <StatPill label="Avg monthly" value={`${stats.averagePrice} ETB`} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6">
+        <Card className="border border-border/60 bg-gradient-to-b from-card to-muted/10">
+          <CardHeader className="space-y-4 pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Plan Navigator</CardTitle>
+              <Button onClick={openCreateDraft} size="sm" className="gap-1.5">
+                <Plus className="w-3.5 h-3.5" />
+                New
+              </Button>
+            </div>
+
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by name or code"
+                className="pl-9"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {(["all", "active", "inactive"] as const).map((item) => (
+                <Button
+                  key={item}
+                  size="sm"
+                  variant={statusFilter === item ? "default" : "outline"}
+                  className="h-8 text-xs capitalize"
+                  onClick={() => setStatusFilter(item)}
+                >
+                  {item}
+                </Button>
+              ))}
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4 max-h-[760px] overflow-y-auto">
+            <div className="space-y-2">
+              {filteredPlans.length === 0 ? (
+                <div className="p-4 rounded-lg border border-dashed text-sm text-muted-foreground">
+                  No plans match your filter.
+                </div>
+              ) : (
+                filteredPlans.map((plan) => {
+                  const selected =
+                    mode === "edit" && selectedPlanId === plan._id;
+                  return (
+                    <button
+                      key={plan._id}
+                      type="button"
+                      onClick={() => selectPlan(plan._id)}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl border transition-all",
+                        selected
+                          ? "border-primary bg-primary/5"
+                          : "border-border/50 hover:border-border",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">{plan.name}</p>
+                          <p className="text-[11px] uppercase text-muted-foreground tracking-wide">
+                            {plan.code}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={plan.isActive ? "default" : "secondary"}
+                        >
+                          {plan.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+                        <span>
+                          {plan.currency || "ETB"} {plan.price}/mo
+                        </span>
+                        <span>
+                          {plan.maxBranches} branches • {plan.maxUsers} users
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <Badge variant="outline" className="text-[10px]">
+                          Used by {usageByCode.get(plan.code) || 0} pharmacies
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="border-t border-border/60 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Template Library</h4>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={createTemplateFromCurrentDraft}
+                >
+                  From Draft
+                </Button>
+              </div>
+
+              <div className="space-y-2 max-h-44 overflow-y-auto">
+                {allTemplates.length === 0 ? (
+                  <div className="p-3 rounded-lg border border-dashed text-xs text-muted-foreground">
+                    No templates yet.
+                  </div>
+                ) : (
+                  allTemplates.map((template) => {
+                    const selected = selectedTemplateId === template._id;
+                    return (
+                      <button
+                        key={template._id}
+                        type="button"
+                        onClick={() => setSelectedTemplateId(template._id)}
+                        className={cn(
+                          "w-full text-left p-2.5 rounded-lg border transition-all",
+                          selected
+                            ? "border-primary bg-primary/5"
+                            : "border-border/50 hover:border-border",
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold truncate">
+                            {template.name}
+                          </p>
+                          {template.isBuiltIn && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Built-in
+                            </Badge>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+                <p className="text-xs font-medium">Template Editor</p>
+                <Input
+                  value={templateDraft.name}
+                  onChange={(e) =>
+                    setTemplateDraft((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
+                  placeholder="Template name"
+                />
+                <Textarea
+                  rows={2}
+                  value={templateDraft.description}
+                  onChange={(e) =>
+                    setTemplateDraft((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Template description"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={templateDraft.price}
+                    onChange={(e) =>
+                      setTemplateDraft((prev) => ({
+                        ...prev,
+                        price: e.target.value,
+                      }))
+                    }
+                    placeholder="Price"
+                  />
+                  <Input
+                    value={templateDraft.currency}
+                    onChange={(e) =>
+                      setTemplateDraft((prev) => ({
+                        ...prev,
+                        currency: e.target.value,
+                      }))
+                    }
+                    placeholder="Currency"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={templateDraft.maxBranches}
+                    onChange={(e) =>
+                      setTemplateDraft((prev) => ({
+                        ...prev,
+                        maxBranches: e.target.value,
+                      }))
+                    }
+                    placeholder="Max branches"
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={templateDraft.maxUsers}
+                    onChange={(e) =>
+                      setTemplateDraft((prev) => ({
+                        ...prev,
+                        maxUsers: e.target.value,
+                      }))
+                    }
+                    placeholder="Max users"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    value={templateFeatureInput}
+                    onChange={(e) => setTemplateFeatureInput(e.target.value)}
+                    placeholder="Add template feature"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTemplateFeature();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addTemplateFeature}
+                  >
+                    Add
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {templateDraft.features.map((feature) => (
+                    <Badge
+                      key={feature}
+                      variant="outline"
+                      className="cursor-pointer text-[10px]"
+                      onClick={() => removeTemplateFeature(feature)}
+                    >
+                      {feature} ×
+                    </Badge>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={applyTemplateToDraft}
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={saveTemplate}
+                    disabled={templateSaving}
+                  >
+                    {templateSaving ? "Saving..." : "Save Template"}
+                  </Button>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={removeTemplate}
+                  disabled={!selectedTemplate || selectedTemplate.isBuiltIn}
+                >
+                  Delete Template
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card className="border border-border/60">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">
+                    {mode === "create" ? "Create Plan" : "Edit Plan"}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {mode === "create"
+                      ? "Build a new subscription tier with limits and features."
+                      : "Edit this plan. Changes in the preview update instantly."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isDirty && (
+                    <Badge
+                      variant="outline"
+                      className="text-amber-600 border-amber-300"
+                    >
+                      Unsaved changes
+                    </Badge>
+                  )}
+                  {mode === "edit" && (
+                    <Button
+                      size="sm"
+                      variant={draft.isActive ? "secondary" : "default"}
+                      className="gap-1.5"
+                      onClick={toggleStatus}
+                      disabled={saving}
+                    >
+                      <Power className="w-3.5 h-3.5" />
+                      {draft.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Plan Name" required>
+                  <Input
+                    value={draft.name}
+                    onChange={(e) => updateDraftField("name", e.target.value)}
+                    placeholder="Growth"
+                  />
+                </Field>
+                <Field
+                  label="Plan Code"
+                  required
+                  hint={
+                    isDefaultCodeLocked
+                      ? "System default codes are locked for safety"
+                      : "Used in system mapping; lowercase and hyphenated"
+                  }
+                >
+                  <Input
+                    value={draft.code}
+                    onChange={(e) =>
+                      updateDraftField("code", e.target.value.toLowerCase())
+                    }
+                    placeholder="growth"
+                    disabled={isDefaultCodeLocked}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Field label="Monthly Price" required>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.price}
+                    onChange={(e) => updateDraftField("price", e.target.value)}
+                  />
+                </Field>
+                <Field label="Currency">
+                  <Input
+                    value={draft.currency}
+                    onChange={(e) =>
+                      updateDraftField("currency", e.target.value.toUpperCase())
+                    }
+                  />
+                </Field>
+                <Field label="Status">
+                  <div className="h-10 px-3 rounded-md border border-border bg-muted/30 flex items-center">
+                    <Badge variant={draft.isActive ? "default" : "secondary"}>
+                      {draft.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Max Branches" required>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.maxBranches}
+                    onChange={(e) =>
+                      updateDraftField("maxBranches", e.target.value)
+                    }
+                  />
+                </Field>
+                <Field label="Max Users" required>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.maxUsers}
+                    onChange={(e) =>
+                      updateDraftField("maxUsers", e.target.value)
+                    }
+                  />
+                </Field>
+              </div>
+
+              <Field label="Description">
+                <Textarea
+                  rows={3}
+                  value={draft.description}
+                  onChange={(e) =>
+                    updateDraftField("description", e.target.value)
+                  }
+                  placeholder="Best for fast-growing pharmacies with multiple branches"
+                />
+              </Field>
+
+              <Field label="Features" required>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      value={newFeature}
+                      placeholder="Add feature and press Enter"
+                      onChange={(e) => setNewFeature(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addFeature();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addFeature}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {draft.features.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        No features yet.
+                      </span>
+                    ) : (
+                      draft.features.map((feature) => (
+                        <Badge
+                          key={feature}
+                          variant="outline"
+                          className="cursor-pointer"
+                          onClick={() => removeFeature(feature)}
+                        >
+                          {feature} ×
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </Field>
+
+              <div className="pt-2 border-t border-border/50 flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={discardChanges}
+                  disabled={!isDirty || saving}
+                >
+                  Discard
+                </Button>
+                <Button onClick={savePlan} disabled={saving} className="gap-2">
+                  {mode === "edit" && <Pencil className="w-4 h-4" />}
+                  {saving
+                    ? "Saving..."
+                    : mode === "create"
+                      ? "Create Plan"
+                      : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-primary/20 bg-gradient-to-br from-primary/[0.04] to-transparent">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Live Plan Preview</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xl font-bold tracking-tight">
+                    {draft.name.trim() || "Untitled Plan"}
+                  </p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                    {draft.code.trim() || "plan-code"}
+                  </p>
+                </div>
+                <Badge variant={draft.isActive ? "default" : "secondary"}>
+                  {draft.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-3xl font-bold tracking-tight">
+                    {Number(draft.price || 0)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(draft.currency || "ETB").toUpperCase()} / month
+                  </p>
+                </div>
+                <div className="text-right text-sm text-muted-foreground">
+                  <p>{Number(draft.maxBranches || 0)} branches</p>
+                  <p>{Number(draft.maxUsers || 0)} users</p>
+                </div>
+              </div>
+
+              {draft.description && (
+                <p className="text-sm text-muted-foreground">
+                  {draft.description}
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {draft.features.slice(0, 8).map((feature, index) => (
+                  <div
+                    key={`${feature}-${index}`}
+                    className="text-sm rounded-lg border border-border/50 bg-background/70 px-3 py-2"
+                  >
+                    {feature}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-border/50 px-3 py-2 bg-card/60">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-sm font-semibold mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-sm font-medium">
+          {label}
+          {required && <span className="text-destructive"> *</span>}
+        </label>
+        {hint && (
+          <span className="text-[11px] text-muted-foreground">{hint}</span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function SettingsSection() {
   const { sessionToken } = useAuth();
   const settings = useQuery(
@@ -1597,7 +2817,7 @@ function SettingsSection() {
   );
   const updateSettings = useMutation(api.admin.siteSettings.updateSiteSettings);
   const toggleTestMode = useMutation(api.admin.siteSettings.toggleTestMode);
-  const sendTestEmail = useMutation(api.admin.siteSettings.sendTestEmail);
+  const sendTestEmail = useAction(api.admin.siteSettings.sendTestEmail);
 
   const [formData, setFormData] = useState({
     contactEmail: "",
@@ -1608,9 +2828,32 @@ function SettingsSection() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const hasSavedApiKey = Boolean(settings?.resendApiKey) || apiKeyConfigured;
+  const hasPendingApiKey = formData.resendApiKey.trim().length > 0;
+  const maskedSavedApiKey = useMemo(() => {
+    const apiKey = settings?.resendApiKey;
+    if (!apiKey) {
+      return null;
+    }
+
+    if (apiKey.length <= 12) {
+      return `${apiKey.slice(0, 3)}****`;
+    }
+
+    return `${apiKey.slice(0, 5)}...${apiKey.slice(-4)}`;
+  }, [settings?.resendApiKey]);
+
+  const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return "Unexpected error";
+  };
 
   useEffect(() => {
     if (settings) {
+      setApiKeyConfigured(Boolean(settings.resendApiKey));
       setFormData({
         contactEmail: settings.contactEmail || "daggi.x02@gmail.com",
         contactPhone: settings.contactPhone || "",
@@ -1636,7 +2879,15 @@ function SettingsSection() {
         resendApiKey: formData.resendApiKey,
         testMode: formData.testMode,
       });
-      toast.success("Settings saved successfully");
+      setFormData((prev) => ({ ...prev, resendApiKey: "" }));
+      if (hasPendingApiKey) {
+        setApiKeyConfigured(true);
+      }
+      toast.success(
+        hasPendingApiKey
+          ? "Settings and Resend API key saved"
+          : "Settings saved successfully",
+      );
     } catch (error) {
       toast.error("Failed to save settings");
     } finally {
@@ -1656,12 +2907,17 @@ function SettingsSection() {
   };
 
   const handleSendTestEmail = async () => {
+    if (!hasSavedApiKey) {
+      toast.error("Save a Resend API key first");
+      return;
+    }
+
     setIsTestingEmail(true);
     try {
       await sendTestEmail({ to: formData.contactEmail });
       toast.success("Test email sent! Check your console in test mode.");
     } catch (error) {
-      toast.error("Failed to send test email");
+      toast.error(`Failed to send test email: ${getErrorMessage(error)}`);
     } finally {
       setIsTestingEmail(false);
     }
@@ -1731,9 +2987,38 @@ function SettingsSection() {
               className="rounded-xl h-11"
             />
             <p className="text-xs text-muted-foreground">
-              Get your API key from resend.com. Leave empty to keep existing
-              key.
+              {hasPendingApiKey
+                ? "New key ready to save"
+                : hasSavedApiKey
+                  ? "API key is saved. Enter a new key to replace it."
+                  : "Get your API key from resend.com."}
             </p>
+
+            <div
+              className={cn(
+                "rounded-lg border px-3 py-2",
+                hasSavedApiKey
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-amber-200 bg-amber-50",
+              )}
+            >
+              <p
+                className={cn(
+                  "text-xs font-semibold",
+                  hasSavedApiKey ? "text-emerald-700" : "text-amber-700",
+                )}
+              >
+                {hasSavedApiKey
+                  ? "Resend API key configured"
+                  : "Resend API key not configured"}
+              </p>
+              {hasSavedApiKey && maskedSavedApiKey && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Saved key:{" "}
+                  <span className="font-mono">{maskedSavedApiKey}</span>
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="pt-2 border-t border-border/40">
@@ -1763,7 +3048,7 @@ function SettingsSection() {
               variant="outline"
               size="sm"
               onClick={handleSendTestEmail}
-              disabled={isTestingEmail}
+              disabled={isTestingEmail || !hasSavedApiKey}
               className="w-full rounded-xl"
             >
               {isTestingEmail ? (

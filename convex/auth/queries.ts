@@ -21,3 +21,15 @@ export const checkAccountStatus = query({
     };
   },
 });
+
+export const getSignupSubscriptionPlans = query({
+  args: {},
+  handler: async (ctx) => {
+    const plans = await ctx.db
+      .query("subscription_plans")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .take(100);
+
+    return plans.sort((a, b) => a.price - b.price);
+  },
+});
