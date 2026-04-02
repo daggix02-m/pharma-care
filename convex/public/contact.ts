@@ -1,6 +1,6 @@
-import { v } from 'convex/values';
-import { query, mutation } from '../_generated/server';
-import { internal } from '../_generated/api';
+import { v } from "convex/values";
+import { query, mutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 const RATE_LIMIT_MINUTES = 60;
 const RATE_LIMIT_MS = RATE_LIMIT_MINUTES * 60 * 1000;
@@ -12,8 +12,8 @@ export const checkRateLimit = query({
   },
   handler: async (ctx, args) => {
     const rateLimit = await ctx.db
-      .query('rate_limits')
-      .withIndex('by_email', (q) => q.eq('email', args.email))
+      .query("rate_limits")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
       .first();
 
     if (!rateLimit) {
@@ -23,7 +23,9 @@ export const checkRateLimit = query({
     const timeSinceLastAttempt = Date.now() - rateLimit.lastAttempt;
 
     if (timeSinceLastAttempt < RATE_LIMIT_MS) {
-      const waitTimeMinutes = Math.ceil((RATE_LIMIT_MS - timeSinceLastAttempt) / (60 * 1000));
+      const waitTimeMinutes = Math.ceil(
+        (RATE_LIMIT_MS - timeSinceLastAttempt) / (60 * 1000),
+      );
       return { canSubmit: false, waitTimeMinutes };
     }
 
@@ -45,38 +47,42 @@ export const submitContactMessage = mutation({
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(args.email)) {
-      throw new Error('Invalid email format');
+      throw new Error("Invalid email format");
     }
 
     // Validate message length
     if (args.message.length < 10) {
-      throw new Error('Message must be at least 10 characters long');
+      throw new Error("Message must be at least 10 characters long");
     }
     if (args.message.length > 2000) {
-      throw new Error('Message must be less than 2000 characters');
+      throw new Error("Message must be less than 2000 characters");
     }
 
     // Check rate limit
     const rateLimit = await ctx.db
-      .query('rate_limits')
-      .withIndex('by_email', (q) => q.eq('email', args.email))
+      .query("rate_limits")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
       .first();
 
     if (rateLimit) {
       const timeSinceLastAttempt = Date.now() - rateLimit.lastAttempt;
       if (timeSinceLastAttempt < RATE_LIMIT_MS) {
-        const waitTimeMinutes = Math.ceil((RATE_LIMIT_MS - timeSinceLastAttempt) / (60 * 1000));
-        throw new Error(`Please wait ${waitTimeMinutes} minutes before sending another message`);
+        const waitTimeMinutes = Math.ceil(
+          (RATE_LIMIT_MS - timeSinceLastAttempt) / (60 * 1000),
+        );
+        throw new Error(
+          `Please wait ${waitTimeMinutes} minutes before sending another message`,
+        );
       }
     }
 
     // Save the message
-    const messageId = await ctx.db.insert('contact_messages', {
+    const messageId = await ctx.db.insert("contact_messages", {
       firstName: args.firstName,
       lastName: args.lastName,
       email: args.email,
       message: args.message,
-      status: 'unread',
+      status: "unread",
       emailSent: false,
       createdAt: Date.now(),
       ipAddress: args.ipAddress,
@@ -91,32 +97,31 @@ export const submitContactMessage = mutation({
         ipAddress: args.ipAddress || rateLimit.ipAddress,
       });
     } else {
-      await ctx.db.insert('rate_limits', {
+      await ctx.db.insert("rate_limits", {
         email: args.email,
-        ipAddress: args.ipAddress || 'unknown',
+        ipAddress: args.ipAddress || "unknown",
         lastAttempt: Date.now(),
         attemptCount: 1,
       });
     }
 
     // Get site settings
-    const settings = await ctx.db.query('site_settings').first();
+    const settings = await ctx.db.query("site_settings").first();
 
     if (settings) {
       try {
-        // Send notification to admin
-        await ctx.runAction(internal.lib.email.sendEmail, {
+        await ctx.scheduler.runAfter(0, internal.lib.email.sendEmail, {
           to: settings.contactEmail,
-          subject: 'New Contact Message - PharmaCare Platform',
+          subject: "New Contact Message - PharmaCare Platform",
           html: createAdminNotificationHtml(args),
-          apiKey: settings.resendApiKey || '',
+          apiKey: settings.resendApiKey || "",
           testMode: settings.testMode,
         });
 
         // Update message to mark email as sent
         await ctx.db.patch(messageId, { emailSent: true });
       } catch (error) {
-        console.error('Failed to send admin notification:', error);
+        console.error("Failed to send admin notification:", error);
         // Don't throw - message is still saved
       }
     }
@@ -125,7 +130,7 @@ export const submitContactMessage = mutation({
       success: true,
       messageId,
       message:
-        'Your message has been sent successfully! We will review it and get back to you soon.',
+        "Your message has been sent successfully! We will review it and get back to you soon.",
     };
   },
 });
@@ -168,7 +173,7 @@ function createAdminNotificationHtml(args: {
       
       <div class="message-box">
         <strong>Message:</strong><br>
-        ${args.message.substring(0, 200)}${args.message.length > 200 ? '...' : ''}
+        ${args.message.substring(0, 200)}${args.message.length > 200 ? "..." : ""}
       </div>
       
       <p style="margin-top: 30px; font-size: 12px; color: #6b7280;">

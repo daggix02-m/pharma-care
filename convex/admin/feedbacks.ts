@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { requireAdmin } from "../lib/auth";
 
 // Get contact messages with pagination and filters
 export const getMessages = query({
@@ -12,6 +13,8 @@ export const getMessages = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const limit = args.limit || 20;
     let queryRunner: any = ctx.db.query("contact_messages");
 
@@ -54,8 +57,11 @@ export const getMessages = query({
 export const getMessage = query({
   args: {
     messageId: v.id("contact_messages"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const message = await ctx.db.get(args.messageId);
     if (!message) {
       throw new Error("Message not found");
@@ -69,7 +75,9 @@ export const getUnreadCount = query({
   args: {
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const unreadMessages = await ctx.db
       .query("contact_messages")
       .withIndex("by_status", (q) => q.eq("status", "unread"))
@@ -82,8 +90,11 @@ export const getUnreadCount = query({
 export const markAsRead = mutation({
   args: {
     messageId: v.id("contact_messages"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const message = await ctx.db.get(args.messageId);
     if (!message) {
       throw new Error("Message not found");
@@ -98,8 +109,11 @@ export const markAsRead = mutation({
 export const markAsUnread = mutation({
   args: {
     messageId: v.id("contact_messages"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const message = await ctx.db.get(args.messageId);
     if (!message) {
       throw new Error("Message not found");
@@ -115,8 +129,11 @@ export const replyToMessage = mutation({
   args: {
     messageId: v.id("contact_messages"),
     reply: v.string(),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     // Validate reply
     if (!args.reply.trim()) {
       throw new Error("Reply cannot be empty");
@@ -142,8 +159,7 @@ export const replyToMessage = mutation({
 
     if (settings && settings.resendApiKey) {
       try {
-        // Send reply email to user
-        await ctx.runAction(internal.lib.email.sendEmail, {
+        await ctx.scheduler.runAfter(0, internal.lib.email.sendEmail, {
           to: message.email,
           subject: "Re: Your Message to PharmaCare",
           html: createReplyEmailHtml(
@@ -174,8 +190,11 @@ export const replyToMessage = mutation({
 export const moveToTrash = mutation({
   args: {
     messageId: v.id("contact_messages"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
     const message = await ctx.db.get(args.messageId);
     if (!message) {
       throw new Error("Message not found");
@@ -185,7 +204,7 @@ export const moveToTrash = mutation({
     await ctx.db.insert("contact_messages_trash", {
       ...message,
       deletedAt: Date.now(),
-      deletedBy: ctx.auth?.userId || (null as any),
+      deletedBy: admin._id,
       originalId: args.messageId,
     });
 
@@ -204,6 +223,8 @@ export const getTrashedMessages = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const limit = args.limit || 20;
     const messages = await ctx.db
       .query("contact_messages_trash")
@@ -226,8 +247,11 @@ export const getTrashedMessages = query({
 export const restoreFromTrash = mutation({
   args: {
     trashId: v.id("contact_messages_trash"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const trashedMessage = await ctx.db.get(args.trashId);
     if (!trashedMessage) {
       throw new Error("Message not found in trash");
@@ -253,8 +277,11 @@ export const restoreFromTrash = mutation({
 export const permanentDelete = mutation({
   args: {
     trashId: v.id("contact_messages_trash"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const trashedMessage = await ctx.db.get(args.trashId);
     if (!trashedMessage) {
       throw new Error("Message not found in trash");
@@ -267,7 +294,12 @@ export const permanentDelete = mutation({
 
 // Empty trash
 export const emptyTrash = mutation({
-  handler: async (ctx) => {
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const trashedMessages = await ctx.db
       .query("contact_messages_trash")
       .collect();

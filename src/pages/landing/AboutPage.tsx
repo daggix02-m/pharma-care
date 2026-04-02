@@ -68,8 +68,7 @@ function AboutPage() {
 
   const aboutContent = useQuery(api.public.landingPage.getLandingPageSection, {
     sectionKey: "about",
-  });
-  const analytics = useQuery(api.public.landingPage.getAboutPageContent);
+  }) as any;
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -166,6 +165,16 @@ function AboutPage() {
     return () => ctx.revert();
   }, []);
 
+  const goToContact = () => {
+    navigate("/");
+    requestAnimationFrame(() => {
+      const contactSection = document.getElementById("contact");
+      if (contactSection) {
+        contactSection.scrollIntoView({ behavior: "smooth" });
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background relative">
       <LabBackground className="fixed inset-0 z-0 opacity-30" />
@@ -240,7 +249,7 @@ function AboutPage() {
                       description: "Customer service",
                     },
                   ]
-                ).map((stat, index) => (
+                ).map((stat: any, index: number) => (
                   <div
                     key={index}
                     className="flex flex-col items-center text-center p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-border shadow-sm"
@@ -360,7 +369,7 @@ function AboutPage() {
             >
               {(
                 aboutContent?.aboutValues || coreValues.map((v) => v.title)
-              ).map((value, index) => {
+              ).map((value: any, index: number) => {
                 const valueData =
                   typeof value === "string"
                     ? coreValues.find((v) => v.title === value) ||
@@ -409,7 +418,7 @@ function AboutPage() {
                 <Button
                   size="lg"
                   className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-8 font-bold"
-                  onClick={() => navigate("/contact")}
+                  onClick={goToContact}
                 >
                   Contact Us
                 </Button>
@@ -417,7 +426,7 @@ function AboutPage() {
                   size="lg"
                   variant="outline"
                   className="rounded-xl px-8 font-bold"
-                  onClick={() => navigate("/contact")}
+                  onClick={goToContact}
                 >
                   Schedule Demo
                 </Button>

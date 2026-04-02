@@ -37,7 +37,7 @@ function TestimonialsSection() {
   );
   const content = useQuery(api.public.landingPage.getLandingPageSection, {
     sectionKey: "testimonials",
-  });
+  }) as any;
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);

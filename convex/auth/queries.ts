@@ -17,7 +17,7 @@ export const checkAccountStatus = query({
       exists: true,
       status: user.status,
       role: user.role,
-      emailVerified: true, // Clerk handles email verification
+      emailVerified: Boolean(user.emailVerified),
     };
   },
 });
@@ -30,6 +30,11 @@ export const getSignupSubscriptionPlans = query({
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .take(100);
 
-    return plans.sort((a, b) => a.price - b.price);
+    return plans
+      .map((plan) => ({
+        ...plan,
+        currency: "ETB",
+      }))
+      .sort((a, b) => a.price - b.price);
   },
 });

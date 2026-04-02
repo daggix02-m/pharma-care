@@ -29,7 +29,7 @@ function FeaturesSection() {
 
   const content = useQuery(api.public.landingPage.getLandingPageSection, {
     sectionKey: "features",
-  });
+  }) as any;
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);

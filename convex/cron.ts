@@ -1,9 +1,10 @@
-import { internalAction } from './_generated/server';
+import { internalAction, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 // Manual cleanup endpoint for old messages
-export const cleanupOldMessages = internalAction({
+export const cleanupOldMessages = internalMutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx: any) => {
     const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
     const cutoffDate = Date.now() - SIXTY_DAYS_MS;
 
@@ -11,8 +12,8 @@ export const cleanupOldMessages = internalAction({
 
     // Delete old messages from main table
     const oldMessages = await ctx.db
-      .query('contact_messages')
-      .withIndex('by_created', (q) => q.lt(cutoffDate))
+      .query("contact_messages")
+      .withIndex("by_created", (q: any) => q.lt("createdAt", cutoffDate))
       .collect();
 
     for (const message of oldMessages) {
@@ -22,8 +23,8 @@ export const cleanupOldMessages = internalAction({
 
     // Delete old messages from trash
     const oldTrashedMessages = await ctx.db
-      .query('contact_messages_trash')
-      .withIndex('by_deleted', (q) => q.lt(cutoffDate))
+      .query("contact_messages_trash")
+      .withIndex("by_deleted", (q: any) => q.lt("deletedAt", cutoffDate))
       .collect();
 
     for (const message of oldTrashedMessages) {
@@ -38,6 +39,37 @@ export const cleanupOldMessages = internalAction({
     return {
       success: true,
       deletedCount,
+      timestamp: Date.now(),
+    };
+  },
+});
+
+export const cancelStaleTransferRequests = internalAction({
+  args: {},
+  handler: async (
+    ctx: any,
+  ): Promise<{
+    success: boolean;
+    cancelled: number;
+    staleAfterHours: number;
+    timestamp: number;
+  }> => {
+    const result: { cancelled: number; staleAfterHours: number } =
+      await ctx.runMutation(
+        internal.stockTransfers.cancelStalePendingTransferRequestsInternal,
+        {
+          staleAfterHours: 72,
+        },
+      );
+
+    console.log(
+      `[TRANSFER-CLEANUP] Cancelled ${result.cancelled} stale transfer requests`,
+    );
+
+    return {
+      success: true,
+      cancelled: result.cancelled,
+      staleAfterHours: result.staleAfterHours,
       timestamp: Date.now(),
     };
   },

@@ -1,4 +1,5 @@
 import { mutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { generateRandomString } from "../lib/utils";
 import { getAuthenticatedUser } from "../lib/auth";
@@ -11,44 +12,49 @@ function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function sendEmailViaResend(args: {
-  to: string;
-  subject: string;
-  html: string;
-  apiKey: string;
-  testMode?: boolean;
-}) {
+async function queueEmailSend(
+  ctx: any,
+  args: {
+    to: string;
+    subject: string;
+    html: string;
+    apiKey: string;
+    testMode?: boolean;
+  },
+) {
   if (args.testMode) {
     return { emailSent: false, status: "test_mode" as const };
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "PharmaCare <noreply@pharmacare.io>",
-      to: args.to,
-      subject: args.subject,
-      html: args.html,
-    }),
+  await ctx.scheduler.runAfter(0, internal.lib.email.sendEmail, {
+    to: args.to,
+    subject: args.subject,
+    html: args.html,
+    apiKey: args.apiKey,
+    testMode: Boolean(args.testMode),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Verification email provider error (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
   return {
     emailSent: true,
-    status: "sent" as const,
-    providerId: data?.id,
+    status: "queued" as const,
   };
+}
+
+async function deleteVerificationTokensForEmail(ctx: any, email: string) {
+  while (true) {
+    const existingTokens = await ctx.db
+      .query("authVerificationTokens")
+      .withIndex("by_identifier", (q: any) => q.eq("identifier", email))
+      .take(50);
+
+    if (existingTokens.length === 0) {
+      break;
+    }
+
+    for (const tokenDoc of existingTokens) {
+      await ctx.db.delete(tokenDoc._id);
+    }
+  }
 }
 
 async function hashPasswordWithSecret(
@@ -193,7 +199,41 @@ export const signUpWithEmail = mutation({
       .unique();
 
     if (existingUser) {
-      throw new Error("An account with this email already exists");
+      if (existingUser.emailVerified) {
+        throw new Error(
+          "An account with this email already exists. Please sign in.",
+        );
+      }
+
+      const verifyToken = generateVerificationCode();
+      await deleteVerificationTokensForEmail(ctx, normalizedEmail);
+      await ctx.db.insert("authVerificationTokens", {
+        identifier: normalizedEmail,
+        token: verifyToken,
+        expires: Date.now() + 24 * 60 * 60 * 1000,
+      });
+
+      const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
+        normalizedEmail,
+      )}&token=${encodeURIComponent(verifyToken)}`;
+
+      const delivery = await queueEmailSend(ctx, {
+        to: normalizedEmail,
+        subject: "Verify your PharmaCare account",
+        html: `<p>Hello ${existingUser.full_name || "there"},</p><p>Your account already exists but is not verified yet. Verify your email to continue.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
+        apiKey: settings.resendApiKey,
+        testMode: settings.testMode,
+      });
+
+      return {
+        success: true,
+        userId: existingUser._id,
+        pharmacyId: existingUser.pharmacyId ?? null,
+        emailSent: delivery.emailSent,
+        deliveryStatus: delivery.status,
+        message:
+          "Account already exists but is unverified. A new verification email has been sent.",
+      };
     }
 
     // Validate password strength
@@ -226,6 +266,7 @@ export const signUpWithEmail = mutation({
       pharmacyEmail: args.pharmacyDetails.pharmacyEmail
         ? normalizeEmail(args.pharmacyDetails.pharmacyEmail)
         : undefined,
+      signupLocation: args.pharmacyDetails.location,
       licenseCode: args.pharmacyDetails.licenseNumber,
       staffCount: args.operations?.totalStaff || 1,
       subscriptionTier: args.subscription?.selectedTier || "basic",
@@ -251,6 +292,7 @@ export const signUpWithEmail = mutation({
 
     // Generate email verification token
     const verifyToken = generateVerificationCode();
+    await deleteVerificationTokensForEmail(ctx, normalizedEmail);
     await ctx.db.insert("authVerificationTokens", {
       identifier: normalizedEmail,
       token: verifyToken,
@@ -260,7 +302,7 @@ export const signUpWithEmail = mutation({
     const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
       normalizedEmail,
     )}&token=${encodeURIComponent(verifyToken)}`;
-    const delivery = await sendEmailViaResend({
+    const delivery = await queueEmailSend(ctx, {
       to: normalizedEmail,
       subject: "Verify your PharmaCare account",
       html: `<p>Hello ${args.full_name},</p><p>Welcome to PharmaCare. Verify your email to continue your pharmacy application.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
@@ -297,19 +339,26 @@ export const signInWithEmail = mutation({
     password: v.string(),
   },
   handler: async (ctx, args) => {
+    const fail = (message: string, code: string) => ({
+      success: false as const,
+      code,
+      message,
+    });
+
     const normalizedEmail = normalizeEmail(args.email);
 
     // Find user by email
     const user = await findUserByEmail(ctx, args.email);
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      return fail("Invalid email or password", "invalid_credentials");
     }
 
     // Check if user has password (might be OAuth-only user)
     if (!user.passwordHash) {
-      throw new Error(
+      return fail(
         "This account uses social login. Please sign in with Google or GitHub.",
+        "social_login_required",
       );
     }
 
@@ -319,7 +368,7 @@ export const signInWithEmail = mutation({
       user.passwordHash,
     );
     if (!isValidPassword) {
-      throw new Error("Invalid email or password");
+      return fail("Invalid email or password", "invalid_credentials");
     }
 
     if (user.email !== normalizedEmail) {
@@ -338,12 +387,18 @@ export const signInWithEmail = mutation({
 
     // Check if account is locked
     if (user.adminLocked) {
-      throw new Error("Your account has been locked. Please contact support.");
+      return fail(
+        "Your account has been locked. Please contact support.",
+        "account_locked",
+      );
     }
 
     // Check if email is verified
     if (!user.emailVerified) {
-      throw new Error("Please verify your email before signing in.");
+      return fail(
+        "Please verify your email before signing in.",
+        "email_not_verified",
+      );
     }
 
     // Update last activity
@@ -461,7 +516,7 @@ export const requestPasswordReset = mutation({
       const resetLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/reset-password?email=${encodeURIComponent(
         normalizedEmail,
       )}&token=${encodeURIComponent(resetToken)}`;
-      await sendEmailViaResend({
+      await queueEmailSend(ctx, {
         to: normalizedEmail,
         subject: "Reset your PharmaCare password",
         html: `<p>We received a password reset request.</p><p><a href="${resetLink}">Set a new password</a></p>`,
@@ -695,6 +750,7 @@ export const sendVerificationEmail = mutation({
     const verifyToken = generateVerificationCode();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
+    await deleteVerificationTokensForEmail(ctx, normalizedEmail);
     await ctx.db.insert("authVerificationTokens", {
       identifier: normalizedEmail,
       token: verifyToken,
@@ -704,7 +760,7 @@ export const sendVerificationEmail = mutation({
     const verifyLink = `${process.env.SITE_URL ?? "http://localhost:5173"}/auth/verify-email?email=${encodeURIComponent(
       normalizedEmail,
     )}&token=${encodeURIComponent(verifyToken)}`;
-    const delivery = await sendEmailViaResend({
+    const delivery = await queueEmailSend(ctx, {
       to: normalizedEmail,
       subject: "Your PharmaCare verification link",
       html: `<p>Click the link below to verify your email:</p><p><a href="${verifyLink}">Verify Email</a></p>`,

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -48,7 +48,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { AdminBroadcastDialog } from "@/components/shared/messaging";
 import { DiagnosticViewModal } from "@/components/shared";
 import { LandingPageManagement } from "./landing-page/LandingPageManagement";
@@ -67,12 +67,28 @@ type AdminTab =
 interface Pharmacy {
   _id: string;
   name: string;
-  email: string;
+  pharmacyEmail?: string;
   status: string;
-  address?: string;
-  subscription_tier?: string;
+  signupLocation?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  subscriptionTier?: string;
   created_at?: string;
 }
+
+const getPharmacyLocationLabel = (pharmacy: Pharmacy): string => {
+  if (pharmacy.signupLocation?.trim()) return pharmacy.signupLocation;
+  if (pharmacy.address?.city && pharmacy.address?.country) {
+    return `${pharmacy.address.city}, ${pharmacy.address.country}`;
+  }
+  if (pharmacy.address?.city) return pharmacy.address.city;
+  return "Location not provided";
+};
 
 interface Branch {
   _id: string;
@@ -289,7 +305,7 @@ function OverviewSection() {
       activeManagers: stats?.activeManagers || 0,
       totalPlans: stats?.totalPlans || 0,
       monthlyRevenue: stats?.monthlyRevenue || 0,
-      activeSubscriptions: stats?.activePharmacies || 0,
+      activeSubscriptions: stats?.activeSubscriptions || 0,
       flaggedCount: stats?.flaggedCount || 0,
       pendingAppealsCount: stats?.appealsCount || 0,
       aiEscalationsToday: aiEscalations?.today || 0,
@@ -339,7 +355,7 @@ function OverviewSection() {
         />
         <MetricCard
           title="Monthly Revenue"
-          value={`$${displayStats.monthlyRevenue.toLocaleString()}`}
+          value={`ETB ${displayStats.monthlyRevenue.toLocaleString()}`}
           change={displayStats.activeSubscriptions}
           changeLabel="Active Subscriptions"
           icon={DollarSign}
@@ -535,7 +551,7 @@ function OverviewSection() {
                   <div>
                     <p className="font-semibold text-[14px]">{plan.name}</p>
                     <p className="text-[12px] text-muted-foreground">
-                      ${plan.price} / {plan.currency}
+                      ETB {plan.price} / month
                     </p>
                   </div>
                   <Badge
@@ -677,6 +693,82 @@ function ApprovalsSection() {
                         <Mail className="w-3.5 h-3.5" />
                         {application.pharmacyEmail || "No pharmacy email"}
                       </p>
+                      <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5" />
+                        {application.ownerPhone || "No owner phone"}
+                      </p>
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            License:
+                          </span>{" "}
+                          {application.licenseCode || "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Location:
+                          </span>{" "}
+                          {application.signupLocation || "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Owner Name:
+                          </span>{" "}
+                          {application.ownerName || "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Selected Tier:
+                          </span>{" "}
+                          {application.selectedTier?.toUpperCase() || "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Recommended:
+                          </span>{" "}
+                          {application.recommendedTier?.toUpperCase() || "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Planned Branches:
+                          </span>{" "}
+                          {application.plannedBranches ?? "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Planned Staff:
+                          </span>{" "}
+                          {application.plannedStaffTotal ?? "N/A"}
+                        </p>
+                        <p className="sm:col-span-2">
+                          <span className="font-semibold text-foreground">
+                            Branch Locations:
+                          </span>{" "}
+                          {application.plannedBranchLocations?.length
+                            ? application.plannedBranchLocations.join(", ")
+                            : "N/A"}
+                        </p>
+                        <p className="sm:col-span-2">
+                          <span className="font-semibold text-foreground">
+                            Staff Breakdown:
+                          </span>{" "}
+                          {application.plannedStaffBreakdown
+                            ? `${application.plannedStaffBreakdown.pharmacists} pharmacists, ${application.plannedStaffBreakdown.managers} managers, ${application.plannedStaffBreakdown.cashiers} cashiers`
+                            : "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Payment:
+                          </span>{" "}
+                          {application.paymentStatus || "N/A"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-foreground">
+                            Submitted:
+                          </span>{" "}
+                          {formatDateTime(application.submittedAt)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -816,7 +908,7 @@ function PharmaciesSection() {
     return pharmacies.filter((p: Pharmacy) => {
       const matchesSearch =
         p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.email?.toLowerCase().includes(searchQuery.toLowerCase());
+        p.pharmacyEmail?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesFilter = filter === "all" || p.status === filter;
       return matchesSearch && matchesFilter;
     });
@@ -896,7 +988,7 @@ function PharmaciesSection() {
                           {pharmacy.name}
                         </h3>
                         <p className="text-[12px] text-muted-foreground mt-0.5">
-                          {pharmacy.email}
+                          {pharmacy.pharmacyEmail || "No pharmacy email"}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -938,24 +1030,22 @@ function PharmaciesSection() {
                         <Users className="w-3.5 h-3.5" />
                         <span>{data.managerCount} managers</span>
                       </div>
-                      {pharmacy.subscription_tier && (
+                      {pharmacy.subscriptionTier && (
                         <Badge
                           variant="outline"
                           className="text-[10px] font-medium"
                         >
-                          {pharmacy.subscription_tier}
+                          {pharmacy.subscriptionTier}
                         </Badge>
                       )}
                     </div>
 
-                    {pharmacy.address && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-2">
-                        <MapPin className="w-3 h-3" />
-                        <span className="truncate max-w-full sm:max-w-[300px]">
-                          {pharmacy.address}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-2">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate max-w-full sm:max-w-[300px]">
+                        {getPharmacyLocationLabel(pharmacy)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -979,7 +1069,7 @@ function PharmaciesSection() {
                     className="h-8 w-8 rounded-lg text-destructive"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm("Delete this pharmacy?"))
+                      if (window.confirm("Delete this pharmacy?"))
                         deletePharmacy({ id: pharmacy._id });
                     }}
                   >
@@ -1096,6 +1186,7 @@ function PharmaciesSection() {
 
 function FeedbacksSection() {
   const { sessionToken } = useAuth();
+  const sessionTokenArg = sessionToken || undefined;
   const [activeTab, setActiveTab] = useState<"inbox" | "trash">("inbox");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1111,17 +1202,19 @@ function FeedbacksSection() {
 
   const messages = useQuery(
     api.admin.feedbacks.getMessages,
-    sessionToken && activeTab === "inbox"
-      ? { sessionToken, status: statusFilter, searchQuery }
+    sessionTokenArg && activeTab === "inbox"
+      ? { sessionToken: sessionTokenArg, status: statusFilter, searchQuery }
       : "skip",
   );
   const trashedMessages = useQuery(
     api.admin.feedbacks.getTrashedMessages,
-    sessionToken && activeTab === "trash" ? { sessionToken } : "skip",
+    sessionTokenArg && activeTab === "trash"
+      ? { sessionToken: sessionTokenArg }
+      : "skip",
   );
   const unreadCount = useQuery(
     api.admin.feedbacks.getUnreadCount,
-    sessionToken ? { sessionToken } : "skip",
+    sessionTokenArg ? { sessionToken: sessionTokenArg } : "skip",
   );
   const markAsRead = useMutation(api.admin.feedbacks.markAsRead);
   const replyToMessage = useMutation(api.admin.feedbacks.replyToMessage);
@@ -1138,6 +1231,7 @@ function FeedbacksSection() {
       await replyToMessage({
         messageId: selectedMessage._id,
         reply: replyText,
+        sessionToken: sessionTokenArg,
       });
       toast.success("Reply sent successfully");
       setReplyText("");
@@ -1151,7 +1245,7 @@ function FeedbacksSection() {
 
   const handleDelete = async (messageId: Id<"contact_messages">) => {
     try {
-      await moveToTrash({ messageId });
+      await moveToTrash({ messageId, sessionToken: sessionTokenArg });
       toast.success("Message moved to trash");
       if (selectedMessage?._id === messageId) {
         setSelectedMessage(null);
@@ -1163,7 +1257,10 @@ function FeedbacksSection() {
 
   const handleRestore = async (trashId: Id<"contact_messages_trash">) => {
     try {
-      await restoreFromTrash({ trashId });
+      await restoreFromTrash({
+        trashId,
+        sessionToken: sessionTokenArg,
+      });
       toast.success("Message restored");
     } catch (error) {
       toast.error("Failed to restore message");
@@ -1174,7 +1271,10 @@ function FeedbacksSection() {
     trashId: Id<"contact_messages_trash">,
   ) => {
     try {
-      await permanentDelete({ trashId });
+      await permanentDelete({
+        trashId,
+        sessionToken: sessionTokenArg,
+      });
       toast.success("Message permanently deleted");
     } catch (error) {
       toast.error("Failed to delete message");
@@ -1183,7 +1283,9 @@ function FeedbacksSection() {
 
   const handleEmptyTrash = async () => {
     try {
-      const result = await emptyTrash();
+      const result = await emptyTrash({
+        sessionToken: sessionTokenArg,
+      });
       toast.success(`Trash emptied. ${result.deletedCount} messages deleted.`);
     } catch (error) {
       toast.error("Failed to empty trash");
@@ -1307,7 +1409,10 @@ function FeedbacksSection() {
               onClick={() => {
                 setSelectedMessage(message);
                 if (message.status === "unread" && activeTab === "inbox") {
-                  markAsRead({ messageId: message._id });
+                  markAsRead({
+                    messageId: message._id,
+                    sessionToken: sessionTokenArg,
+                  });
                 }
               }}
             >
@@ -1623,6 +1728,9 @@ function SubscriptionsSection() {
   const createTemplate = useMutation(
     api.admin.mutations.createSubscriptionPlanTemplate,
   );
+  const normalizeCurrencies = useMutation(
+    api.admin.mutations.normalizeSubscriptionCurrenciesToETB,
+  );
   const updateTemplate = useMutation(
     api.admin.mutations.updateSubscriptionPlanTemplate,
   );
@@ -1707,6 +1815,7 @@ function SubscriptionsSection() {
   const [selectedTemplateId, setSelectedTemplateId] =
     useState<Id<"subscription_plan_templates"> | null>(null);
   const [templateSaving, setTemplateSaving] = useState(false);
+  const [currencyNormalized, setCurrencyNormalized] = useState(false);
   const [templateFeatureInput, setTemplateFeatureInput] = useState("");
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>({
     name: "",
@@ -1798,7 +1907,7 @@ function SubscriptionsSection() {
       name: selectedPlan.name,
       code: selectedPlan.code,
       price: String(selectedPlan.price),
-      currency: selectedPlan.currency || "ETB",
+      currency: "ETB",
       maxBranches: String(selectedPlan.maxBranches),
       maxUsers: String(selectedPlan.maxUsers),
       description: selectedPlan.description || "",
@@ -1818,6 +1927,30 @@ function SubscriptionsSection() {
       null
     );
   }, [allTemplates, selectedTemplateId]);
+
+  useEffect(() => {
+    if (!sessionToken || currencyNormalized) {
+      return;
+    }
+
+    let cancelled = false;
+    const runNormalization = async () => {
+      try {
+        await normalizeCurrencies({ sessionToken });
+      } catch (error) {
+        console.error("Failed to normalize subscription currencies", error);
+      } finally {
+        if (!cancelled) {
+          setCurrencyNormalized(true);
+        }
+      }
+    };
+
+    void runNormalization();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionToken, currencyNormalized, normalizeCurrencies]);
 
   useEffect(() => {
     if (!templates || templatesSeeded) {
@@ -1879,7 +2012,7 @@ function SubscriptionsSection() {
       name: selectedTemplate.name,
       description: selectedTemplate.description || "",
       price: String(selectedTemplate.price),
-      currency: selectedTemplate.currency || "ETB",
+      currency: "ETB",
       maxBranches: String(selectedTemplate.maxBranches),
       maxUsers: String(selectedTemplate.maxUsers),
       features: selectedTemplate.features || [],
@@ -1987,7 +2120,7 @@ function SubscriptionsSection() {
       name: draft.name.trim(),
       code: draft.code.trim().toLowerCase(),
       price: Number(draft.price),
-      currency: draft.currency.trim() || "ETB",
+      currency: "ETB",
       features: draft.features,
       maxBranches: Number(draft.maxBranches),
       maxUsers: Number(draft.maxUsers),
@@ -2060,7 +2193,7 @@ function SubscriptionsSection() {
         ...draft,
         name: selectedTemplate.name,
         price: String(selectedTemplate.price),
-        currency: selectedTemplate.currency || "ETB",
+        currency: "ETB",
         maxBranches: String(selectedTemplate.maxBranches),
         maxUsers: String(selectedTemplate.maxUsers),
         description: selectedTemplate.description || "",
@@ -2130,7 +2263,7 @@ function SubscriptionsSection() {
             name: templateDraft.name.trim(),
             description: templateDraft.description.trim() || undefined,
             price,
-            currency: templateDraft.currency.trim() || "ETB",
+            currency: "ETB",
             features: templateDraft.features,
             maxBranches,
             maxUsers,
@@ -2144,7 +2277,7 @@ function SubscriptionsSection() {
           name: templateDraft.name.trim(),
           description: templateDraft.description.trim() || undefined,
           price,
-          currency: templateDraft.currency.trim() || "ETB",
+          currency: "ETB",
           features: templateDraft.features,
           maxBranches,
           maxUsers,
@@ -2167,7 +2300,7 @@ function SubscriptionsSection() {
       name: `${draft.name || "Custom"} Template`,
       description: draft.description,
       price: draft.price,
-      currency: draft.currency,
+      currency: "ETB",
       maxBranches: draft.maxBranches,
       maxUsers: draft.maxUsers,
       features: draft.features,
@@ -2316,9 +2449,7 @@ function SubscriptionsSection() {
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                        <span>
-                          {plan.currency || "ETB"} {plan.price}/mo
-                        </span>
+                        <span>ETB {plan.price}/mo</span>
                         <span>
                           {plan.maxBranches} branches • {plan.maxUsers} users
                         </span>
@@ -2419,16 +2550,9 @@ function SubscriptionsSection() {
                     }
                     placeholder="Price"
                   />
-                  <Input
-                    value={templateDraft.currency}
-                    onChange={(e) =>
-                      setTemplateDraft((prev) => ({
-                        ...prev,
-                        currency: e.target.value,
-                      }))
-                    }
-                    placeholder="Currency"
-                  />
+                  <div className="h-10 px-3 rounded-md border border-border bg-muted/30 flex items-center text-sm font-medium">
+                    ETB
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Input
@@ -2600,12 +2724,9 @@ function SubscriptionsSection() {
                   />
                 </Field>
                 <Field label="Currency">
-                  <Input
-                    value={draft.currency}
-                    onChange={(e) =>
-                      updateDraftField("currency", e.target.value.toUpperCase())
-                    }
-                  />
+                  <div className="h-10 px-3 rounded-md border border-border bg-muted/30 flex items-center text-sm font-medium">
+                    ETB
+                  </div>
                 </Field>
                 <Field label="Status">
                   <div className="h-10 px-3 rounded-md border border-border bg-muted/30 flex items-center">
@@ -2737,9 +2858,7 @@ function SubscriptionsSection() {
                   <p className="text-3xl font-bold tracking-tight">
                     {Number(draft.price || 0)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {(draft.currency || "ETB").toUpperCase()} / month
-                  </p>
+                  <p className="text-xs text-muted-foreground">ETB / month</p>
                 </div>
                 <div className="text-right text-sm text-muted-foreground">
                   <p>{Number(draft.maxBranches || 0)} branches</p>
@@ -2811,13 +2930,14 @@ function Field({
 
 function SettingsSection() {
   const { sessionToken } = useAuth();
+  const sessionTokenArg = sessionToken || undefined;
   const settings = useQuery(
     api.admin.siteSettings.getSiteSettingsAdmin,
-    sessionToken ? { sessionToken } : "skip",
+    sessionTokenArg ? { sessionToken: sessionTokenArg } : "skip",
   );
   const updateSettings = useMutation(api.admin.siteSettings.updateSiteSettings);
   const toggleTestMode = useMutation(api.admin.siteSettings.toggleTestMode);
-  const sendTestEmail = useAction(api.admin.siteSettings.sendTestEmail);
+  const sendTestEmail = useMutation(api.admin.siteSettings.sendSiteTestEmail);
 
   const [formData, setFormData] = useState({
     contactEmail: "",
@@ -2878,6 +2998,7 @@ function SettingsSection() {
         contactAddress: formData.contactAddress,
         resendApiKey: formData.resendApiKey,
         testMode: formData.testMode,
+        sessionToken: sessionTokenArg,
       });
       setFormData((prev) => ({ ...prev, resendApiKey: "" }));
       if (hasPendingApiKey) {
@@ -2898,7 +3019,10 @@ function SettingsSection() {
   const handleToggleTestMode = async () => {
     const newTestMode = !formData.testMode;
     try {
-      await toggleTestMode({ testMode: newTestMode });
+      await toggleTestMode({
+        testMode: newTestMode,
+        sessionToken: sessionTokenArg,
+      });
       setFormData({ ...formData, testMode: newTestMode });
       toast.success(newTestMode ? "Test mode enabled" : "Live mode enabled");
     } catch (error) {
@@ -2914,7 +3038,10 @@ function SettingsSection() {
 
     setIsTestingEmail(true);
     try {
-      await sendTestEmail({ to: formData.contactEmail });
+      await sendTestEmail({
+        to: formData.contactEmail,
+        sessionToken: sessionTokenArg,
+      });
       toast.success("Test email sent! Check your console in test mode.");
     } catch (error) {
       toast.error(`Failed to send test email: ${getErrorMessage(error)}`);

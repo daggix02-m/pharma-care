@@ -57,12 +57,6 @@ function useStepAnimation() {
   return containerRef;
 }
 
-function getRecommendedTier(totalBranches: number, totalStaff: number): string {
-  if (totalBranches <= 1 && totalStaff <= 10) return "basic";
-  if (totalBranches <= 5 && totalStaff <= 50) return "premium";
-  return "enterprise";
-}
-
 const Step1PharmacyOperations = () => {
   const {
     pharmacyDetails,
@@ -399,26 +393,101 @@ const Step2Subscription = () => {
   } = useSignupStore();
   const containerRef = useStepAnimation();
 
-  const plans =
-    useQuery((api.auth as any).queries.getSignupSubscriptionPlans, {}) || [];
+  const planResponse = useQuery(
+    (api.auth as any).queries.getSignupSubscriptionPlans,
+    {},
+  ) as any[] | undefined;
+  const plans = useMemo(() => planResponse ?? [], [planResponse]);
+  const isPlansLoading = planResponse === undefined;
+
+  const normalizeTierCode = (code: string | undefined | null) =>
+    String(code || "")
+      .trim()
+      .toLowerCase();
+
+  const normalizedPlans = useMemo(
+    () =>
+      plans
+        .map((plan: any) => ({
+          ...plan,
+          code: normalizeTierCode(plan?.code),
+          maxBranches:
+            typeof plan?.maxBranches === "number" ? plan.maxBranches : 0,
+          maxUsers: typeof plan?.maxUsers === "number" ? plan.maxUsers : 0,
+          price: typeof plan?.price === "number" ? plan.price : 0,
+          currency: "ETB",
+        }))
+        .filter((plan: any) => plan.code),
+    [plans],
+  );
+
+  const recommendedPlan = useMemo(() => {
+    if (normalizedPlans.length === 0) return null;
+
+    const compatiblePlans = normalizedPlans
+      .filter(
+        (plan: any) =>
+          plan.maxBranches >= operationsInfo.totalBranches &&
+          plan.maxUsers >= operationsInfo.totalStaff,
+      )
+      .sort((a: any, b: any) => a.price - b.price);
+
+    if (compatiblePlans.length > 0) {
+      return compatiblePlans[0];
+    }
+
+    return [...normalizedPlans].sort((a: any, b: any) => {
+      if (b.maxBranches !== a.maxBranches) return b.maxBranches - a.maxBranches;
+      if (b.maxUsers !== a.maxUsers) return b.maxUsers - a.maxUsers;
+      return a.price - b.price;
+    })[0];
+  }, [
+    normalizedPlans,
+    operationsInfo.totalBranches,
+    operationsInfo.totalStaff,
+  ]);
 
   const recommendedTier = useMemo(
-    () =>
-      getRecommendedTier(
-        operationsInfo.totalBranches,
-        operationsInfo.totalStaff,
-      ),
-    [operationsInfo.totalBranches, operationsInfo.totalStaff],
+    () => normalizeTierCode(recommendedPlan?.code),
+    [recommendedPlan],
   );
 
   useEffect(() => {
-    setSubscriptionInfo("recommendedTier", recommendedTier);
-    if (!subscriptionInfo.selectedTier) {
+    if (!recommendedTier) return;
+
+    if (
+      normalizeTierCode(subscriptionInfo.recommendedTier) !== recommendedTier
+    ) {
+      setSubscriptionInfo("recommendedTier", recommendedTier);
+    }
+
+    const selectedCode = normalizeTierCode(subscriptionInfo.selectedTier);
+    const selectedIsAvailable = normalizedPlans.some(
+      (plan: any) => plan.code === selectedCode,
+    );
+
+    if (!selectedIsAvailable) {
       setSubscriptionInfo("selectedTier", recommendedTier);
     }
-  }, [recommendedTier, setSubscriptionInfo, subscriptionInfo.selectedTier]);
+  }, [
+    normalizedPlans,
+    recommendedTier,
+    setSubscriptionInfo,
+    subscriptionInfo.recommendedTier,
+    subscriptionInfo.selectedTier,
+  ]);
 
   const handleContinue = () => {
+    const selectedCode = normalizeTierCode(subscriptionInfo.selectedTier);
+    const selectedIsAvailable = normalizedPlans.some(
+      (plan: any) => plan.code === selectedCode,
+    );
+
+    if (!selectedIsAvailable) {
+      toast.error("Please select an active subscription plan.");
+      return;
+    }
+
     if (!validateCurrentStep(3)) return;
     goToNextStep();
   };
@@ -449,26 +518,67 @@ const Step2Subscription = () => {
           {operationsInfo.totalStaff} planned staff, we recommend
           <span className="font-bold text-foreground">
             {" "}
-            {recommendedTier.toUpperCase()}
+            {recommendedPlan?.name || "the best available plan"}
           </span>
           .
         </p>
+        {recommendedPlan && (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 h-8 text-xs"
+            onClick={() =>
+              setSubscriptionInfo("selectedTier", recommendedPlan.code)
+            }
+          >
+            Choose Recommended Plan
+          </Button>
+        )}
       </div>
 
       <div className="space-y-3">
-        {plans.length === 0 ? (
+        {isPlansLoading ? (
           <div className="rounded-xl border border-input p-4 text-sm text-muted-foreground">
             Loading available plans...
           </div>
+        ) : plans.length === 0 ? (
+          <div className="rounded-xl border border-input p-4 text-sm text-muted-foreground">
+            No active subscription plans are available right now. Please contact
+            support or try again later.
+          </div>
         ) : (
           plans.map((plan: any) => {
-            const selected = subscriptionInfo.selectedTier === plan.code;
-            const recommended = recommendedTier === plan.code;
+            const planCode = normalizeTierCode(plan?.code);
+            const selected =
+              normalizeTierCode(subscriptionInfo.selectedTier) === planCode;
+            const recommended = normalizeTierCode(recommendedTier) === planCode;
+
+            const planName = plan?.name || "Unnamed plan";
+            const planDescription = plan?.description || "Subscription plan";
+            const planPrice =
+              typeof plan?.price === "number"
+                ? `ETB ${plan.price} / month`
+                : "Pricing unavailable";
+            const maxBranches =
+              typeof plan?.maxBranches === "number" ? plan.maxBranches : "N/A";
+            const maxUsers =
+              typeof plan?.maxUsers === "number" ? plan.maxUsers : "N/A";
+            const planFeatures = Array.isArray(plan?.features)
+              ? plan.features.filter((feature: unknown) => {
+                  return (
+                    typeof feature === "string" && feature.trim().length > 0
+                  );
+                })
+              : [];
+
             return (
               <button
-                key={plan._id}
+                key={plan._id || `${planName}-${planCode}`}
                 type="button"
-                onClick={() => setSubscriptionInfo("selectedTier", plan.code)}
+                onClick={() => {
+                  if (!planCode) return;
+                  setSubscriptionInfo("selectedTier", planCode);
+                }}
                 className={cn(
                   "w-full text-left rounded-xl border p-4 transition",
                   selected
@@ -478,15 +588,13 @@ const Step2Subscription = () => {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-bold text-base">{plan.name}</p>
+                    <p className="font-bold text-base">{planName}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {plan.description || "Subscription plan"}
+                      {planDescription}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-sm">
-                      ETB {plan.price} / month
-                    </p>
+                    <p className="font-bold text-sm">{planPrice}</p>
                     {recommended && (
                       <p className="text-[10px] mt-1 font-bold text-primary uppercase tracking-wider">
                         Recommended
@@ -495,8 +603,30 @@ const Step2Subscription = () => {
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-                  <p>Branches: {plan.maxBranches}</p>
-                  <p>Users: {plan.maxUsers}</p>
+                  <p>Branches: {maxBranches}</p>
+                  <p>Users: {maxUsers}</p>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-input/70 bg-muted/20 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Included in this plan
+                  </p>
+                  {planFeatures.length > 0 ? (
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-foreground/90">
+                      {planFeatures.slice(0, 6).map((feature: string) => (
+                        <li
+                          key={`${planCode}-${feature}`}
+                          className="truncate before:content-['-'] before:mr-1.5 before:text-primary"
+                        >
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Plan features will be shown here once configured by admin.
+                    </p>
+                  )}
                 </div>
               </button>
             );
@@ -736,6 +866,36 @@ const Step4ReviewConfirm = () => {
     errors,
   } = useSignupStore();
   const containerRef = useStepAnimation();
+  const planResponse = useQuery(
+    (api.auth as any).queries.getSignupSubscriptionPlans,
+    {},
+  ) as any[] | undefined;
+  const plans = useMemo(() => planResponse ?? [], [planResponse]);
+
+  const normalizeTierCode = (code: string | undefined | null) =>
+    String(code || "")
+      .trim()
+      .toLowerCase();
+
+  const selectedPlan = useMemo(
+    () =>
+      plans.find(
+        (plan: any) =>
+          normalizeTierCode(plan?.code) ===
+          normalizeTierCode(subscriptionInfo.selectedTier),
+      ),
+    [plans, subscriptionInfo.selectedTier],
+  );
+
+  const recommendedPlan = useMemo(
+    () =>
+      plans.find(
+        (plan: any) =>
+          normalizeTierCode(plan?.code) ===
+          normalizeTierCode(subscriptionInfo.recommendedTier),
+      ),
+    [plans, subscriptionInfo.recommendedTier],
+  );
 
   const handleContinue = () => {
     if (!validateCurrentStep(5)) return;
@@ -864,11 +1024,18 @@ const Step4ReviewConfirm = () => {
         <div className="mt-3 text-xs text-muted-foreground space-y-1">
           <p>
             <span className="font-semibold text-foreground">Selected:</span>{" "}
-            {subscriptionInfo.selectedTier.toUpperCase()}
+            {selectedPlan?.name || subscriptionInfo.selectedTier.toUpperCase()}
           </p>
+          {selectedPlan && (
+            <p>
+              <span className="font-semibold text-foreground">Price:</span> ETB{" "}
+              {selectedPlan.price} / month
+            </p>
+          )}
           <p>
             <span className="font-semibold text-foreground">Recommended:</span>{" "}
-            {subscriptionInfo.recommendedTier.toUpperCase()}
+            {recommendedPlan?.name ||
+              subscriptionInfo.recommendedTier.toUpperCase()}
           </p>
           <p>
             Payment is sent after approval using secure Chapa finish-payment
@@ -954,6 +1121,12 @@ const Step5Verification = () => {
   const sendVerificationCode = useCallback(
     async (email: string) => {
       const resendResult = await sendVerificationEmail({ email });
+      if (resendResult?.deliveryStatus === "already_verified") {
+        throw new Error(
+          "This email is already verified. Please sign in instead.",
+        );
+      }
+
       if (!resendResult?.success || !resendResult?.emailSent) {
         throw new Error(
           resendResult?.message ||
@@ -972,8 +1145,9 @@ const Step5Verification = () => {
       throw new Error("Missing registration data. Please go back to review.");
     }
 
+    let signUpResult: any;
     try {
-      await signUpMutation({
+      signUpResult = await signUpMutation({
         email: payload.email,
         password: payload.password,
         full_name: payload.full_name,
@@ -983,18 +1157,27 @@ const Step5Verification = () => {
         subscription: payload.subscription,
       });
     } catch (error: any) {
-      const message = String(error?.message || "").toLowerCase();
-      if (!message.includes("already exists")) {
-        throw error;
+      const message = String(error?.message || "");
+      if (message.toLowerCase().includes("please sign in")) {
+        throw new Error(
+          "This email already has a verified account. Please sign in.",
+        );
       }
+      throw error;
     }
 
-    await sendVerificationCode(payload.email);
+    if (!signUpResult?.emailSent) {
+      await sendVerificationCode(payload.email);
+    }
+
     sessionStorage.setItem("pendingVerificationEmail", payload.email);
     sessionStorage.setItem("tempPassword", payload.password);
     setAccountSubmitted(true);
     setSubmissionError(null);
-    toast.success("Account submitted. Verification code sent to your email.");
+    toast.success(
+      signUpResult?.message ||
+        "Account submitted. Verification code sent to your email.",
+    );
   }, [sendVerificationCode, signUpMutation]);
 
   useEffect(() => {
@@ -1048,7 +1231,13 @@ const Step5Verification = () => {
       await verifyMutation({ email, token: code });
       const result = await signInMutation({ email, password: tempPassword });
 
-      if (result.sessionToken) {
+      if (!result?.success) {
+        throw new Error(
+          result?.message || "Unable to sign in after verification",
+        );
+      }
+
+      if ("sessionToken" in result && result.sessionToken) {
         localStorage.setItem("sessionToken", result.sessionToken);
       }
 

@@ -23,9 +23,8 @@ export const submitPharmacyApplication = mutation({
     subscription: v.string(), // "basic", "premium", "enterprise"
   },
   handler: async (ctx: any, args: any) => {
-    // 1. Create the pending user (Clerk will finish setup later but we need an ID)
+    // 1. Create the pending user record so related entities can reference it.
     const userId = await ctx.db.insert("users", {
-      clerkId: `pending_${Date.now()}`, // Temporary clerkId
       tokenIdentifier: "pending",
       full_name: args.manager.fullName,
       email: args.manager.email,
@@ -607,7 +606,7 @@ export const resetManagerPassword = mutation({
       throw new Error("Manager not found");
     }
 
-    // Note: Password reset is handled by Clerk
+    // Password reset workflow is handled via the platform auth flow.
     await ctx.db.insert("audit_logs", {
       userId: admin._id,
       action: "password_reset",
@@ -617,7 +616,10 @@ export const resetManagerPassword = mutation({
       timestamp: Date.now(),
     });
 
-    return { success: true, message: "Password reset initiated via Clerk" };
+    return {
+      success: true,
+      message: "Password reset request has been recorded",
+    };
   },
 });
 
@@ -666,7 +668,7 @@ export const createSubscriptionPlan = mutation({
       name: args.name,
       code: normalizedCode,
       price: args.price,
-      currency: args.currency || "ETB",
+      currency: "ETB",
       features: args.features,
       maxBranches: args.maxBranches,
       maxUsers: args.maxUsers,
@@ -759,6 +761,7 @@ export const updateSubscriptionPlan = mutation({
     const patchData = {
       ...args.data,
       code: normalizedCode ?? args.data.code,
+      currency: "ETB",
     };
 
     await ctx.db.patch(args.id, patchData);
@@ -947,7 +950,7 @@ export const createSubscriptionPlanTemplate = mutation({
       name: args.name.trim(),
       description: args.description?.trim() || undefined,
       price: args.price,
-      currency: args.currency?.trim() || "ETB",
+      currency: "ETB",
       features: args.features,
       maxBranches: args.maxBranches,
       maxUsers: args.maxUsers,
@@ -997,7 +1000,7 @@ export const updateSubscriptionPlanTemplate = mutation({
       ...args.data,
       name: args.data.name?.trim(),
       description: args.data.description?.trim(),
-      currency: args.data.currency?.trim(),
+      currency: "ETB",
       updatedAt: Date.now(),
     });
 
@@ -1042,6 +1045,53 @@ export const deleteSubscriptionPlanTemplate = mutation({
     });
 
     return { success: true };
+  },
+});
+
+export const normalizeSubscriptionCurrenciesToETB = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const plans = await ctx.db.query("subscription_plans").take(1000);
+    const templates = await ctx.db
+      .query("subscription_plan_templates")
+      .take(1000);
+
+    let plansUpdated = 0;
+    for (const plan of plans) {
+      if (plan.currency !== "ETB") {
+        await ctx.db.patch(plan._id, { currency: "ETB" });
+        plansUpdated += 1;
+      }
+    }
+
+    let templatesUpdated = 0;
+    for (const template of templates) {
+      if (template.currency !== "ETB") {
+        await ctx.db.patch(template._id, { currency: "ETB" });
+        templatesUpdated += 1;
+      }
+    }
+
+    if (plansUpdated > 0 || templatesUpdated > 0) {
+      await ctx.db.insert("audit_logs", {
+        userId: admin._id,
+        action: "normalize_subscription_currency_etb",
+        entityId: "subscription_currency",
+        entityType: "subscription_plan",
+        details: `Normalized currency to ETB for ${plansUpdated} plans and ${templatesUpdated} templates.`,
+        timestamp: Date.now(),
+      });
+    }
+
+    return {
+      success: true,
+      plansUpdated,
+      templatesUpdated,
+    };
   },
 });
 

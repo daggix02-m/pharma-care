@@ -7,6 +7,8 @@ import { Menu, X, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import HeroSection from "./HeroSection";
 import ServicesSection from "./ServicesSection";
 import FeaturesSection from "./FeaturesSection";
@@ -16,6 +18,20 @@ import ContactSection from "./ContactSection";
 import Footer from "./Footer";
 import { LabBackground } from "@/components/shared/LabBackground";
 
+interface LandingSectionConfig {
+  sectionId: string;
+  displayOrder: number;
+}
+
+const DEFAULT_SECTION_ORDER = [
+  "hero",
+  "services",
+  "features",
+  "testimonials",
+  "cta",
+  "contact",
+];
+
 function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrollY, setScrollY] = useState(0);
@@ -23,6 +39,46 @@ function LandingPage() {
   const headerRef = useRef(null);
   const progressBarRef = useRef(null);
   const navigate = useNavigate();
+  const landingPageData = useQuery(
+    api.public.landingPage.getLandingPageContent,
+  );
+
+  const sectionConfig: LandingSectionConfig[] = landingPageData?.sections || [];
+  const sectionContent = landingPageData?.content || {};
+  const sectionOrder = sectionConfig
+    .slice()
+    .sort(
+      (a: LandingSectionConfig, b: LandingSectionConfig) =>
+        a.displayOrder - b.displayOrder,
+    )
+    .map((section: LandingSectionConfig) => section.sectionId);
+
+  const effectiveSectionOrder =
+    sectionOrder.length > 0 ? sectionOrder : DEFAULT_SECTION_ORDER;
+
+  const enabledSections = new Set(sectionOrder);
+
+  const shouldShow = (sectionId: string) =>
+    sectionOrder.length === 0 || enabledSections.has(sectionId);
+
+  const renderSection = (sectionId: string) => {
+    switch (sectionId) {
+      case "hero":
+        return <HeroSection key="hero" />;
+      case "services":
+        return <ServicesSection key="services" />;
+      case "features":
+        return <FeaturesSection key="features" />;
+      case "testimonials":
+        return <TestimonialsSection key="testimonials" />;
+      case "cta":
+        return <CTASection key="cta" content={sectionContent.cta as any} />;
+      case "contact":
+        return <ContactSection key="contact" />;
+      default:
+        return null;
+    }
+  };
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -107,13 +163,15 @@ function LandingPage() {
             <Logo className="[&>span]:hidden md:[&>span]:block" />
           </div>
           <nav className="hidden md:flex gap-8">
-            <a
-              href="#services"
-              onClick={(e) => handleSmoothScroll(e, "services")}
-              className="text-sm font-medium transition-colors hover:text-primary text-muted-foreground"
-            >
-              Services
-            </a>
+            {shouldShow("services") && (
+              <a
+                href="#services"
+                onClick={(e) => handleSmoothScroll(e, "services")}
+                className="text-sm font-medium transition-colors hover:text-primary text-muted-foreground"
+              >
+                Services
+              </a>
+            )}
             <a
               href="/about"
               onClick={() => handleNavigation("/about")}
@@ -121,20 +179,24 @@ function LandingPage() {
             >
               About
             </a>
-            <a
-              href="#testimonials"
-              onClick={(e) => handleSmoothScroll(e, "testimonials")}
-              className="text-sm font-medium transition-colors hover:text-primary text-muted-foreground"
-            >
-              Testimonials
-            </a>
-            <a
-              href="#contact"
-              onClick={(e) => handleSmoothScroll(e, "contact")}
-              className="text-sm font-medium transition-colors hover:text-primary text-muted-foreground"
-            >
-              Contact
-            </a>
+            {shouldShow("testimonials") && (
+              <a
+                href="#testimonials"
+                onClick={(e) => handleSmoothScroll(e, "testimonials")}
+                className="text-sm font-medium transition-colors hover:text-primary text-muted-foreground"
+              >
+                Testimonials
+              </a>
+            )}
+            {shouldShow("contact") && (
+              <a
+                href="#contact"
+                onClick={(e) => handleSmoothScroll(e, "contact")}
+                className="text-sm font-medium transition-colors hover:text-primary text-muted-foreground"
+              >
+                Contact
+              </a>
+            )}
           </nav>
           <div className="hidden md:flex items-center gap-3">
             <ThemeToggle />
@@ -183,14 +245,16 @@ function LandingPage() {
             </button>
           </div>
           <nav className="container grid gap-4 pb-8 pt-6 px-4">
-            <a
-              href="#services"
-              onClick={(e) => handleSmoothScroll(e, "services")}
-              className="flex items-center justify-between rounded-lg px-4 py-2 text-lg font-medium hover:bg-accent"
-            >
-              Services
-              <ChevronRight className="h-4 w-4" />
-            </a>
+            {shouldShow("services") && (
+              <a
+                href="#services"
+                onClick={(e) => handleSmoothScroll(e, "services")}
+                className="flex items-center justify-between rounded-lg px-4 py-2 text-lg font-medium hover:bg-accent"
+              >
+                Services
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            )}
             <a
               href="/about"
               onClick={() => handleNavigation("/about")}
@@ -199,22 +263,26 @@ function LandingPage() {
               About
               <ChevronRight className="h-4 w-4" />
             </a>
-            <a
-              href="#testimonials"
-              onClick={(e) => handleSmoothScroll(e, "testimonials")}
-              className="flex items-center justify-between rounded-lg px-4 py-2 text-lg font-medium hover:bg-accent"
-            >
-              Testimonials
-              <ChevronRight className="h-4 w-4" />
-            </a>
-            <a
-              href="#contact"
-              onClick={(e) => handleSmoothScroll(e, "contact")}
-              className="flex items-center justify-between rounded-lg px-4 py-2 text-lg font-medium hover:bg-accent"
-            >
-              Contact
-              <ChevronRight className="h-4 w-4" />
-            </a>
+            {shouldShow("testimonials") && (
+              <a
+                href="#testimonials"
+                onClick={(e) => handleSmoothScroll(e, "testimonials")}
+                className="flex items-center justify-between rounded-lg px-4 py-2 text-lg font-medium hover:bg-accent"
+              >
+                Testimonials
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            )}
+            {shouldShow("contact") && (
+              <a
+                href="#contact"
+                onClick={(e) => handleSmoothScroll(e, "contact")}
+                className="flex items-center justify-between rounded-lg px-4 py-2 text-lg font-medium hover:bg-accent"
+              >
+                Contact
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            )}
             <div className="flex flex-col gap-3 pt-4">
               <div className="flex items-center justify-between px-4 py-2">
                 <span className="text-sm text-muted-foreground">Theme</span>
@@ -240,12 +308,21 @@ function LandingPage() {
 
       {/* Main Content */}
       <main className="flex-1 relative z-10 pt-16">
-        <HeroSection />
-        <ServicesSection />
-        <FeaturesSection />
-        <TestimonialsSection />
-        <CTASection />
-        <ContactSection />
+        {effectiveSectionOrder
+          .filter((sectionId) =>
+            [
+              "hero",
+              "services",
+              "features",
+              "testimonials",
+              "cta",
+              "contact",
+            ].includes(sectionId),
+          )
+          .filter((sectionId) =>
+            sectionOrder.length === 0 ? true : enabledSections.has(sectionId),
+          )
+          .map((sectionId) => renderSection(sectionId))}
       </main>
 
       {/* Footer */}

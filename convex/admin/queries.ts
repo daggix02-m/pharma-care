@@ -1,14 +1,15 @@
 // @ts-ignore
 import { query } from "../_generated/server";
 import { v } from "convex/values";
-import { requireAdmin } from "../lib/auth";
+import { checkAdmin } from "../lib/auth";
 
 export const getDashboardStats = query({
   args: {
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const pharmacies = await ctx.db.query("pharmacies").take(1000);
     const branches = await ctx.db.query("branches").take(1000);
@@ -29,7 +30,8 @@ export const getPharmacies = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
     return await ctx.db.query("pharmacies").take(1000);
   },
 });
@@ -40,7 +42,8 @@ export const getBranches = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
     const branches = await ctx.db.query("branches").take(args.limit || 100);
     const pharmacyIds = [...new Set(branches.map((b: any) => b.pharmacyId))];
     const pharmacies = await Promise.all(
@@ -63,7 +66,8 @@ export const getPendingBranches = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
     const branches = await ctx.db
       .query("branches")
       .filter((q: any) => q.eq(q.field("status"), "pending"))
@@ -111,11 +115,13 @@ export const getPendingPharmacyApplications = query({
     search: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const pharmacies = await ctx.db
       .query("pharmacies")
       .filter((q: any) => q.eq(q.field("status"), "pending"))
+      .order("desc")
       .take(200);
 
     const rows = await Promise.all(
@@ -128,11 +134,20 @@ export const getPendingPharmacyApplications = query({
           pharmacyName: pharmacy.name,
           pharmacyEmail: pharmacy.pharmacyEmail,
           licenseCode: pharmacy.licenseCode,
+          signupLocation: pharmacy.signupLocation,
           submittedAt: pharmacy._creationTime,
           status: pharmacy.status,
+          selectedTier: pharmacy.subscriptionTier,
+          recommendedTier: pharmacy.recommendedSubscriptionTier,
+          paymentStatus: pharmacy.paymentStatus,
+          plannedBranches: pharmacy.plannedBranches,
+          plannedBranchLocations: pharmacy.plannedBranchLocations,
+          plannedStaffTotal: pharmacy.plannedStaffTotal,
+          plannedStaffBreakdown: pharmacy.plannedStaffBreakdown,
           ownerId: owner?._id,
           ownerName: owner?.full_name || "Unknown",
           ownerEmail: owner?.email || "",
+          ownerPhone: owner?.phone || "",
         };
       }),
     );
@@ -146,6 +161,9 @@ export const getPendingPharmacyApplications = query({
       return (
         row.pharmacyName?.toLowerCase().includes(search) ||
         row.pharmacyEmail?.toLowerCase().includes(search) ||
+        row.licenseCode?.toLowerCase().includes(search) ||
+        row.signupLocation?.toLowerCase().includes(search) ||
+        row.ownerPhone?.toLowerCase().includes(search) ||
         row.ownerName?.toLowerCase().includes(search) ||
         row.ownerEmail?.toLowerCase().includes(search)
       );
@@ -158,7 +176,8 @@ export const getAllManagers = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
     return await ctx.db
       .query("users")
       .filter((q: any) => q.eq(q.field("role"), "manager"))
@@ -171,7 +190,8 @@ export const getPendingManagers = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
     return await ctx.db
       .query("users")
       .filter((q: any) =>
@@ -189,7 +209,8 @@ export const getAuditLogs = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
     const logs = await ctx.db.query("audit_logs").order("desc").take(50);
     return Promise.all(
       logs.map(async (log: any) => {
@@ -209,7 +230,8 @@ export const getDashboardBranches = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const branches = await ctx.db.query("branches").take(100);
 
@@ -231,7 +253,8 @@ export const getDashboardUsers = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const users = await ctx.db.query("users").take(100);
 
@@ -256,7 +279,8 @@ export const getDashboardSales = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const sales = await ctx.db.query("sales").take(100);
 
@@ -322,7 +346,8 @@ export const getBranchById = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const branch = await ctx.db.get(args.id);
     if (!branch) {
@@ -346,7 +371,8 @@ export const getActivatedManagers = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const managers = await ctx.db
       .query("users")
@@ -382,7 +408,8 @@ export const getManagersByBranch = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const branch = await ctx.db.get(args.branchId);
     if (!branch) {
@@ -408,12 +435,18 @@ export const getSubscriptionPlans = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
-    return await ctx.db
+    const plans = await ctx.db
       .query("subscription_plans")
       .filter((q: any) => q.eq(q.field("isActive"), true))
       .take(100);
+
+    return plans.map((plan: any) => ({
+      ...plan,
+      currency: "ETB",
+    }));
   },
 });
 
@@ -422,9 +455,14 @@ export const getAllSubscriptionPlans = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
-    return await ctx.db.query("subscription_plans").take(200);
+    const plans = await ctx.db.query("subscription_plans").take(200);
+    return plans.map((plan: any) => ({
+      ...plan,
+      currency: "ETB",
+    }));
   },
 });
 
@@ -433,7 +471,8 @@ export const getPlanUsageCounts = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const plans = await ctx.db.query("subscription_plans").take(200);
     const pharmacies = await ctx.db.query("pharmacies").take(2000);
@@ -458,9 +497,16 @@ export const getSubscriptionPlanTemplates = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
-    return await ctx.db.query("subscription_plan_templates").take(200);
+    const templates = await ctx.db
+      .query("subscription_plan_templates")
+      .take(200);
+    return templates.map((template: any) => ({
+      ...template,
+      currency: "ETB",
+    }));
   },
 });
 
@@ -470,7 +516,8 @@ export const getSubscriptionHistory = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const history = await ctx.db
       .query("subscription_history")
@@ -497,7 +544,8 @@ export const getSubscriptionAnalytics = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const pharmacies = await ctx.db.query("pharmacies").take(1000);
     const subscriptionHistory = await ctx.db
@@ -579,7 +627,8 @@ export const getPharmacySubscriptionDetails = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) {
@@ -629,7 +678,8 @@ export const getPharmacyDetail = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) throw new Error("Pharmacy not found");
@@ -709,7 +759,8 @@ export const getFlaggedAccounts = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const users = await ctx.db
       .query("users")
@@ -737,7 +788,8 @@ export const getDiagnosticSessions = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return [];
 
     const sessions = await ctx.db
       .query("diagnostic_sessions")
@@ -765,7 +817,13 @@ export const getPendingAppeals = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin)
+      return {
+        managerFlagAppeals: [],
+        adminActionAppeals: [],
+        totalPending: 0,
+      };
 
     const managerFlagAppeals = await ctx.db
       .query("manager_flags")
@@ -865,7 +923,8 @@ export const getPendingCounts = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return { managers: 0, branches: 0 };
 
     // Get counts only - much more efficient than fetching all records
     const [managers, branches] = await Promise.all([
@@ -887,10 +946,30 @@ export const getPendingCounts = query({
   },
 });
 
+export const getPendingApprovalsCount = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return { pendingApprovals: 0 };
+
+    const pendingApplications = await ctx.db
+      .query("pharmacies")
+      .filter((q: any) => q.eq(q.field("status"), "pending"))
+      .take(1000);
+
+    return {
+      pendingApprovals: pendingApplications.length,
+    };
+  },
+});
+
 export const getAdminOverview = query({
   args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx: any, args: any) => {
-    await requireAdmin(ctx, args.sessionToken);
+    const admin = await checkAdmin(ctx, args.sessionToken);
+    if (!admin) return null;
 
     const [
       pharmacies,
@@ -931,6 +1010,13 @@ export const getAdminOverview = query({
       (m: any) => m.status === "active",
     ).length;
 
+    const activeSubscriptions = pharmacies.filter(
+      (pharmacy: any) =>
+        pharmacy.status === "active" &&
+        typeof pharmacy.subscriptionTier === "string" &&
+        pharmacy.subscriptionTier.trim().length > 0,
+    ).length;
+
     const monthlyRevenue = subscriptions
       .filter((s: any) => {
         const createdAt = new Date(s.createdAt || 0);
@@ -962,6 +1048,7 @@ export const getAdminOverview = query({
         totalManagers: managers.length,
         activeManagers,
         monthlyRevenue,
+        activeSubscriptions,
         totalPlans: subscriptionPlans.length,
         flaggedCount: flaggedAccounts.length,
         appealsCount: managerFlagAppeals.length + adminActionAppeals.length,

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { action } from "../_generated/server";
+import { internalAction } from "../_generated/server";
 
 const getEmailLogoUrl = (): string => {
   const explicitLogoUrl = process.env.EMAIL_LOGO_URL?.trim();
@@ -16,6 +16,57 @@ const getEmailLogoUrl = (): string => {
 };
 
 const EMAIL_LOGO_URL = getEmailLogoUrl();
+
+type ResendErrorDetails = {
+  message: string;
+  name?: string;
+  statusCode?: number;
+};
+
+const parseResendErrorDetails = (errorText: string): ResendErrorDetails => {
+  try {
+    const parsed = JSON.parse(errorText) as {
+      message?: string;
+      name?: string;
+      statusCode?: number;
+    };
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return {
+        message: parsed.message,
+        name: parsed.name,
+        statusCode: parsed.statusCode,
+      };
+    }
+  } catch {
+    // Ignore JSON parsing issues and fall back to raw text.
+  }
+
+  return { message: errorText };
+};
+
+const parseResendErrorMessage = (errorText: string): string => {
+  return parseResendErrorDetails(errorText).message;
+};
+
+const isResendSandboxRecipientError = (errorText: string): boolean => {
+  const message = parseResendErrorMessage(errorText).toLowerCase();
+  return (
+    message.includes(
+      "you can only send testing emails to your own email address",
+    ) || message.includes("verify a domain at resend.com/domains")
+  );
+};
+
+const extractSandboxAllowedEmail = (errorText: string): string | null => {
+  const message = parseResendErrorMessage(errorText);
+  const match = message.match(/\(([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\)/i);
+  return match?.[1] ?? null;
+};
+
+const isResendUnverifiedDomainError = (errorText: string): boolean => {
+  const message = parseResendErrorMessage(errorText).toLowerCase();
+  return message.includes("domain is not verified");
+};
 
 // Email templates
 const createAdminNotificationEmail = (data: {
@@ -138,7 +189,7 @@ const createUserReplyEmail = (data: {
 });
 
 // Send email using Resend API
-export const sendEmail = action({
+export const sendEmail = internalAction({
   args: {
     to: v.string(),
     subject: v.string(),
@@ -146,7 +197,7 @@ export const sendEmail = action({
     apiKey: v.string(),
     testMode: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     // In test mode, just log the email
     if (args.testMode) {
       console.log("[TEST MODE] Would send email:");
@@ -157,11 +208,17 @@ export const sendEmail = action({
     }
 
     try {
+      if (!args.apiKey.trim()) {
+        throw new Error(
+          "Resend API key is missing. Add a valid key in site settings before sending emails.",
+        );
+      }
+
       const configuredFrom = process.env.RESEND_FROM_EMAIL?.trim();
       const primaryFrom =
         configuredFrom || "PharmaCare <noreply@pharmacare.io>";
 
-      const sendWithFrom = async (from: string) => {
+      const sendWithFrom = async (from: string, to: string) => {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -170,7 +227,7 @@ export const sendEmail = action({
           },
           body: JSON.stringify({
             from,
-            to: args.to,
+            to,
             subject: args.subject,
             html: args.html,
           }),
@@ -185,23 +242,106 @@ export const sendEmail = action({
         return { ok: true as const, id: data.id };
       };
 
-      const result = await sendWithFrom(primaryFrom);
+      const result = await sendWithFrom(primaryFrom, args.to);
 
       if (!result.ok) {
         const needsFallback =
-          result.status === 403 &&
-          result.errorText.includes("domain is not verified") &&
-          !configuredFrom;
+          isResendUnverifiedDomainError(result.errorText) && !configuredFrom;
 
         if (needsFallback) {
           const fallbackResult = await sendWithFrom(
             "PharmaCare <onboarding@resend.dev>",
+            args.to,
           );
           if (fallbackResult.ok) {
             return { success: true, id: fallbackResult.id, fallbackFrom: true };
           }
 
+          if (isResendSandboxRecipientError(fallbackResult.errorText)) {
+            const sandboxAllowedEmail = extractSandboxAllowedEmail(
+              fallbackResult.errorText,
+            );
+            if (
+              sandboxAllowedEmail &&
+              sandboxAllowedEmail.toLowerCase() !== args.to.toLowerCase()
+            ) {
+              const rerouteResult = await sendWithFrom(
+                "PharmaCare <onboarding@resend.dev>",
+                sandboxAllowedEmail,
+              );
+              if (rerouteResult.ok) {
+                console.warn(
+                  `Resend sandbox restriction: rerouted email from ${args.to} to ${sandboxAllowedEmail}. Verify a domain to send to live recipients.`,
+                );
+                return {
+                  success: true,
+                  id: rerouteResult.id,
+                  sandboxRerouted: true,
+                  originalTo: args.to,
+                  reroutedTo: sandboxAllowedEmail,
+                };
+              }
+            }
+
+            console.error(
+              `Resend sandbox restriction still blocking delivery. Fallback failed: ${parseResendErrorMessage(fallbackResult.errorText)}`,
+            );
+            return {
+              success: false,
+              error: "Sandbox restriction: recipient not authorized",
+              details: parseResendErrorMessage(fallbackResult.errorText),
+            };
+          }
+
           throw new Error(`Resend API error: ${fallbackResult.errorText}`);
+        }
+
+        if (isResendSandboxRecipientError(result.errorText)) {
+          const sandboxAllowedEmail = extractSandboxAllowedEmail(
+            result.errorText,
+          );
+          const fallbackRecipient = sandboxAllowedEmail || args.to;
+          const fallbackResult = await sendWithFrom(
+            "PharmaCare <onboarding@resend.dev>",
+            fallbackRecipient,
+          );
+
+          if (fallbackResult.ok) {
+            if (fallbackRecipient.toLowerCase() !== args.to.toLowerCase()) {
+              console.warn(
+                `Resend sandbox restriction: rerouted email from ${args.to} to ${fallbackRecipient}. Verify a domain to send to live recipients.`,
+              );
+              return {
+                success: true,
+                id: fallbackResult.id,
+                sandboxRerouted: true,
+                originalTo: args.to,
+                reroutedTo: fallbackRecipient,
+              };
+            }
+
+            console.warn(
+              `Resend sandbox restriction: sent with onboarding sender to ${fallbackRecipient}. Verify a domain and configure RESEND_FROM_EMAIL for full live delivery.`,
+            );
+            return {
+              success: true,
+              id: fallbackResult.id,
+              sandboxFallbackFrom: true,
+              originalTo: args.to,
+              fallbackTo: fallbackRecipient,
+            };
+          }
+
+          // [FIX] Don't crash if we are still in sandbox mode and the fallback failed
+          // This prevents the whole action from failing when the recipient is invalid in sandbox
+          console.error(
+            `Resend sandbox restriction still blocking delivery. Fallback failed: ${parseResendErrorMessage(fallbackResult.errorText)}`,
+          );
+          return {
+            success: false,
+            error: "Sandbox restriction: recipient not authorized",
+            details: parseResendErrorMessage(fallbackResult.errorText),
+          };
         }
 
         throw new Error(`Resend API error: ${result.errorText}`);
@@ -274,13 +414,13 @@ export const sendUserReply = async (
 };
 
 // Test email function
-export const sendTestEmail = action({
+export const sendTestEmail = internalAction({
   args: {
     to: v.string(),
     apiKey: v.string(),
     testMode: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: any, args: any): Promise<any> => {
     const testHtml = `
 <!DOCTYPE html>
 <html>

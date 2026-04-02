@@ -12,7 +12,7 @@ function HeroSection() {
 
   const content = useQuery(api.public.landingPage.getLandingPageSection, {
     sectionKey: "hero",
-  });
+  }) as any;
 
   useEffect(() => {
     if (sectionRef.current) {

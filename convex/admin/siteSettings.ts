@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { action, internalQuery, mutation, query } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { mutation, query } from "../_generated/server";
+import { requireAdmin } from "../lib/auth";
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -42,7 +43,9 @@ export const getSiteSettingsAdmin = query({
   args: {
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const settings = await ctx.db.query("site_settings").first();
 
     if (!settings) {
@@ -65,8 +68,11 @@ export const updateSiteSettings = mutation({
     contactAddress: v.optional(v.string()),
     resendApiKey: v.optional(v.string()),
     testMode: v.boolean(),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const existing = await ctx.db.query("site_settings").first();
 
     const settingsData = {
@@ -93,8 +99,11 @@ export const updateSiteSettings = mutation({
 export const toggleTestMode = mutation({
   args: {
     testMode: v.boolean(),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.sessionToken);
+
     const existing = await ctx.db.query("site_settings").first();
 
     if (!existing) {
@@ -117,41 +126,31 @@ export const toggleTestMode = mutation({
 });
 
 // Send test email
-export const sendTestEmail = action({
+export const sendSiteTestEmail = mutation({
   args: {
     to: v.string(),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const settings: { resendApiKey: string; testMode: boolean } | null =
-      await ctx.runQuery(
-        internal.admin.siteSettings.getEmailSettingsForTestEmail,
-        {},
-      );
+    await requireAdmin(ctx, args.sessionToken);
+
+    const settings = await ctx.db.query("site_settings").first();
 
     if (!settings || !settings.resendApiKey) {
       throw new Error("Email service not configured");
     }
 
-    return await ctx.runAction(internal.lib.email.sendTestEmail, {
+    await ctx.scheduler.runAfter(0, internal.lib.email.sendTestEmail, {
       to: args.to,
       apiKey: settings.resendApiKey,
       testMode: settings.testMode,
     });
-  },
-});
-
-export const getEmailSettingsForTestEmail = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.db.query("site_settings").first();
-
-    if (!settings) {
-      return null;
-    }
 
     return {
-      resendApiKey: settings.resendApiKey,
-      testMode: settings.testMode,
+      success: true,
+      message: settings.testMode
+        ? "Test mode active. Email logged in backend console."
+        : "Test email queued successfully.",
     };
   },
 });

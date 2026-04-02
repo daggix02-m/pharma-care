@@ -1,6 +1,6 @@
-import { query } from '../_generated/server';
-import { v } from 'convex/values';
-import { requireCashier } from '../lib/auth';
+import { query } from "../_generated/server";
+import { v } from "convex/values";
+import { requireCashier } from "../lib/auth";
 
 export const getDashboardStats = query({
   args: {
@@ -10,8 +10,8 @@ export const getDashboardStats = query({
     const user = await requireCashier(ctx, args.sessionToken);
 
     const sales = await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
       .collect();
 
     // Summing today's sales could be done by filtering timestamps (Convex has _creationTime)
@@ -35,13 +35,13 @@ export const getProducts = query({
     const user = await requireCashier(ctx, args.sessionToken);
 
     if (!user.branchId) {
-      throw new Error('Unauthorized: Cashier only');
+      throw new Error("Unauthorized: Cashier only");
     }
 
     // Cashiers just need to list products to sell them
     return await ctx.db
-      .query('medicines')
-      .filter((q) => q.eq(q.field('branchId'), user.branchId))
+      .query("medicines")
+      .filter((q) => q.eq(q.field("branchId"), user.branchId))
       .collect();
   },
 });
@@ -57,9 +57,9 @@ export const getDailySales = query({
     today.setHours(0, 0, 0, 0);
 
     return await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
-      .filter((q) => q.gte(q.field('_creationTime'), today.getTime()));
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
+      .filter((q) => q.gte(q.field("_creationTime"), today.getTime()));
   },
 });
 
@@ -72,7 +72,7 @@ export const searchMedicines = query({
     const user = await requireCashier(ctx, args.sessionToken);
 
     if (!user.branchId) {
-      throw new Error('Unauthorized: Cashier only');
+      throw new Error("Unauthorized: Cashier only");
     }
 
     if (!args.query.trim()) {
@@ -80,15 +80,15 @@ export const searchMedicines = query({
     }
 
     const medicines = await ctx.db
-      .query('medicines')
-      .filter((q) => q.eq(q.field('branchId'), user.branchId))
+      .query("medicines")
+      .filter((q) => q.eq(q.field("branchId"), user.branchId))
       .collect();
 
     const filtered = medicines.filter(
       (m) =>
         m.name.toLowerCase().includes(args.query.toLowerCase()) ||
         m.category?.toLowerCase().includes(args.query.toLowerCase()) ||
-        m.manufacturer?.toLowerCase().includes(args.query.toLowerCase())
+        m.manufacturer?.toLowerCase().includes(args.query.toLowerCase()),
     );
 
     // Transform to snake_case for frontend compatibility
@@ -116,16 +116,16 @@ export const getTransactions = query({
     const user = await requireCashier(ctx, args.sessionToken);
 
     return await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
-      .order('desc')
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
+      .order("desc")
       .collect();
   },
 });
 
 export const getTransactionDetails = query({
   args: {
-    transactionId: v.id('sales'),
+    transactionId: v.id("sales"),
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -133,7 +133,7 @@ export const getTransactionDetails = query({
 
     const sale = await ctx.db.get(args.transactionId);
     if (!sale || sale.cashierId !== user._id) {
-      throw new Error('Transaction not found or unauthorized');
+      throw new Error("Transaction not found or unauthorized");
     }
 
     const items = await Promise.all(
@@ -141,10 +141,10 @@ export const getTransactionDetails = query({
         const medicine = await ctx.db.get(item.medicineId);
         return {
           ...item,
-          medicineName: medicine?.name || 'Unknown',
-          category: medicine?.category || 'Unknown',
+          medicineName: medicine?.name || "Unknown",
+          category: medicine?.category || "Unknown",
         };
-      })
+      }),
     );
 
     return { ...sale, items };
@@ -153,14 +153,20 @@ export const getTransactionDetails = query({
 
 export const getReceipt = query({
   args: {
-    saleId: v.id('sales'),
+    saleId: v.id("sales"),
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireCashier(ctx, args.sessionToken);
 
     const sale = await ctx.db.get(args.saleId);
-    if (!sale) throw new Error('Sale not found');
+    if (!sale) throw new Error("Sale not found");
+    if (sale.cashierId !== user._id) {
+      throw new Error("Unauthorized: Sale does not belong to this cashier");
+    }
+    if (user.branchId && sale.branchId !== user.branchId) {
+      throw new Error("Unauthorized: Sale is outside your branch");
+    }
 
     const branch = await ctx.db.get(sale.branchId);
     const cashier = await ctx.db.get(sale.cashierId);
@@ -170,10 +176,10 @@ export const getReceipt = query({
         const medicine = await ctx.db.get(item.medicineId);
         return {
           ...item,
-          medicineName: medicine?.name || 'Unknown',
-          manufacturer: medicine?.manufacturer || 'Unknown',
+          medicineName: medicine?.name || "Unknown",
+          manufacturer: medicine?.manufacturer || "Unknown",
         };
-      })
+      }),
     );
 
     return {
@@ -196,15 +202,15 @@ export const getReturnableSales = query({
     today.setDate(today.getDate() - 7); // Last 7 days
 
     return await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
-      .filter((q) => q.gte(q.field('_creationTime'), today.getTime()));
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
+      .filter((q) => q.gte(q.field("_creationTime"), today.getTime()));
   },
 });
 
 export const getReturnableItems = query({
   args: {
-    saleId: v.id('sales'),
+    saleId: v.id("sales"),
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -212,7 +218,7 @@ export const getReturnableItems = query({
 
     const sale = await ctx.db.get(args.saleId);
     if (!sale || sale.cashierId !== user._id) {
-      throw new Error('Sale not found or unauthorized');
+      throw new Error("Sale not found or unauthorized");
     }
 
     return await Promise.all(
@@ -220,11 +226,11 @@ export const getReturnableItems = query({
         const medicine = await ctx.db.get(item.medicineId);
         return {
           ...item,
-          medicineName: medicine?.name || 'Unknown',
-          category: medicine?.category || 'Unknown',
+          medicineName: medicine?.name || "Unknown",
+          category: medicine?.category || "Unknown",
           canReturn: true, // All items can be returned
         };
-      })
+      }),
     );
   },
 });
@@ -237,8 +243,8 @@ export const getSalesSummary = query({
     const user = await requireCashier(ctx, args.sessionToken);
 
     const sales = await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
       .collect();
 
     const totalRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0);
@@ -246,16 +252,16 @@ export const getSalesSummary = query({
 
     // Calculate payment method breakdowns
     const cashPayments = sales
-      .filter((s) => s.paymentMethod === 'cash')
+      .filter((s) => s.paymentMethod === "cash")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const cardPayments = sales
-      .filter((s) => s.paymentMethod === 'card')
+      .filter((s) => s.paymentMethod === "card")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const mobilePayments = sales
-      .filter((s) => s.paymentMethod === 'mobile')
+      .filter((s) => s.paymentMethod === "mobile")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const bankTransferPayments = sales
-      .filter((s) => s.paymentMethod === 'bank_transfer')
+      .filter((s) => s.paymentMethod === "bank_transfer")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const cashTotal = cashPayments;
     const cardTotal = cardPayments;
@@ -263,8 +269,8 @@ export const getSalesSummary = query({
     const bankTransferTotal = bankTransferPayments;
 
     // Count by payment method
-    const cashCount = sales.filter((s) => s.paymentMethod === 'cash').length;
-    const cardCount = sales.filter((s) => s.paymentMethod === 'card').length;
+    const cashCount = sales.filter((s) => s.paymentMethod === "cash").length;
+    const cardCount = sales.filter((s) => s.paymentMethod === "card").length;
 
     // Additional snake_case fields for compatibility
     const totalRefunds = 0;
@@ -321,7 +327,11 @@ export const getSalesSummary = query({
       otherPayments: 0,
       otherCount: 0,
       // Additional fields expected by FinancialOperations.tsx
-      topCategories: [] as { categoryName: string; totalSales: number; itemCount: number }[],
+      topCategories: [] as {
+        categoryName: string;
+        totalSales: number;
+        itemCount: number;
+      }[],
       periodStart: null as number | null,
       periodEnd: null as number | null,
     };
@@ -338,8 +348,8 @@ export const getPaymentsReport = query({
     const user = await requireCashier(ctx, args.sessionToken);
 
     let sales = await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
       .collect();
 
     if (args.startDate !== undefined && args.startDate !== null) {
@@ -378,7 +388,7 @@ export const getReturnsReport = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireCashier(ctx, args.sessionToken);
+    await requireCashier(ctx, args.sessionToken);
 
     // For now, return empty report (returns feature to be implemented)
     return {
@@ -398,9 +408,9 @@ export const getSessions = query({
 
     // For now, return current user's sales as sessions (to be enhanced)
     await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
-      .order('desc')
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
+      .order("desc")
       .take(1);
 
     const now = Date.now();
@@ -414,7 +424,7 @@ export const getSessions = query({
         endTime: null,
         totalSales: 0,
         totalAmount: 0,
-        status: 'active',
+        status: "active",
         openingBalance: 0,
         closingBalance: 0,
         // snake_case fields for compatibility
@@ -443,9 +453,9 @@ export const getShiftSummary = query({
     today.setHours(0, 0, 0, 0);
 
     const sales = await ctx.db
-      .query('sales')
-      .filter((q) => q.eq(q.field('cashierId'), user._id))
-      .filter((q) => q.gte(q.field('_creationTime'), today.getTime()))
+      .query("sales")
+      .filter((q) => q.eq(q.field("cashierId"), user._id))
+      .filter((q) => q.gte(q.field("_creationTime"), today.getTime()))
       .collect();
 
     const totalRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0);
@@ -453,18 +463,18 @@ export const getShiftSummary = query({
     const averageTransaction = totalSales > 0 ? totalRevenue / totalSales : 0;
     const itemsSold = sales.reduce(
       (sum, s) => sum + s.items.reduce((iSum, i) => iSum + i.quantity, 0),
-      0
+      0,
     );
 
     // Calculate payment method totals
     const cashSales = sales
-      .filter((s) => s.paymentMethod === 'cash')
+      .filter((s) => s.paymentMethod === "cash")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const cardSales = sales
-      .filter((s) => s.paymentMethod === 'card')
+      .filter((s) => s.paymentMethod === "card")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const mobileSales = sales
-      .filter((s) => s.paymentMethod === 'mobile')
+      .filter((s) => s.paymentMethod === "mobile")
       .reduce((sum, s) => sum + s.totalAmount, 0);
     const transactionCount = sales.length;
     const averageSale = averageTransaction;
@@ -475,7 +485,7 @@ export const getShiftSummary = query({
       totalRevenue,
       averageTransaction,
       itemsSold,
-      date: today.toISOString().split('T')[0],
+      date: today.toISOString().split("T")[0],
       // snake_case fields for compatibility
       total_sales: totalRevenue,
       transaction_count: transactionCount,
@@ -487,9 +497,9 @@ export const getShiftSummary = query({
       // Additional fields expected by frontend
       cashier_name: user.full_name,
       cashier_id: user._id,
-      branch_name: 'Main Branch',
+      branch_name: "Main Branch",
       start_time: today.getTime(),
-      duration: '8h 0m',
+      duration: "8h 0m",
       categories: [],
     };
   },
@@ -500,7 +510,7 @@ export const getPendingPayments = query({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireCashier(ctx, args.sessionToken);
+    await requireCashier(ctx, args.sessionToken);
 
     // For now, return empty (pending payments to be implemented)
     return [];
@@ -509,7 +519,7 @@ export const getPendingPayments = query({
 
 export const getPaymentDetails = query({
   args: {
-    saleId: v.id('sales'),
+    saleId: v.id("sales"),
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -517,7 +527,7 @@ export const getPaymentDetails = query({
 
     const sale = await ctx.db.get(args.saleId);
     if (!sale || sale.cashierId !== user._id) {
-      throw new Error('Sale not found or unauthorized');
+      throw new Error("Sale not found or unauthorized");
     }
 
     return {

@@ -121,7 +121,7 @@ function ServicesSection() {
 
   const content = useQuery(api.public.landingPage.getLandingPageSection, {
     sectionKey: "services",
-  });
+  }) as any;
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);

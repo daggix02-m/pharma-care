@@ -77,6 +77,7 @@ const NAV_CONFIG: Record<string, NavItem[]> = {
     { label: "Overview", path: "/manager?tab=overview", icon: LayoutDashboard },
     { label: "Branches", path: "/manager?tab=branches", icon: Building2 },
     { label: "Staff", path: "/manager?tab=staff", icon: Users },
+    { label: "Transfers", path: "/manager?tab=transfers", icon: Package },
     { label: "Audit Trail", path: "/manager?tab=audit", icon: ClipboardList },
     { label: "Settings", path: "/manager?tab=settings", icon: Settings },
   ],
@@ -332,19 +333,18 @@ export const TopBar = React.memo(function TopBar({ className }: TopBarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const headerRef = React.useRef<HTMLElement>(null);
 
-  // OPTIMIZATION: Combined pending counts query
-  // Reduces queries from 2 to 1, eliminates N+1 pattern
+  // Approvals badge should mirror admin approvals page exactly.
   const { sessionToken } = useAuth();
-  const pendingCounts = useQuery(
-    api.admin.queries.getPendingCounts,
+  const pendingApprovals = useQuery(
+    api.admin.queries.getPendingApprovalsCount,
     userRole === "admin" && sessionToken ? { sessionToken } : "skip",
   );
 
   // Memoized computations
   const pendingCount = React.useMemo(() => {
     if (userRole !== "admin") return 0;
-    return (pendingCounts?.managers || 0) + (pendingCounts?.branches || 0);
-  }, [userRole, pendingCounts]);
+    return pendingApprovals?.pendingApprovals || 0;
+  }, [userRole, pendingApprovals]);
 
   const pharmacyName = React.useMemo(() => {
     return (
