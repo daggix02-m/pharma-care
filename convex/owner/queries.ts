@@ -17,7 +17,7 @@ export const getMyMessages = query({
 
     const messages = await ctx.db
       .query("owner_messages")
-      .withIndex("by_pharmacyId", (q: any) => q.eq("pharmacyId", pharmacyId))
+      .withIndex("by_pharmacy", (q: any) => q.eq("pharmacyId", pharmacyId))
       .order("desc")
       .collect();
 
@@ -60,7 +60,7 @@ export const getPendingActions = query({
 
     const adminActions = await ctx.db
       .query("admin_actions")
-      .withIndex("by_pharmacyId", (q: any) =>
+      .withIndex("by_target_pharmacy", (q: any) =>
         q.eq("targetPharmacyId", pharmacyId),
       )
       .order("desc")
@@ -179,7 +179,13 @@ export const getMyPharmacyDetail = query({
 
     const pharmacy = await ctx.db.get(owner.pharmacyId);
     if (!pharmacy) {
-      throw new Error("Pharmacy not found");
+      return {
+        pharmacy: null,
+        branches: [],
+        staff: [],
+        signupProfile: null,
+        missingPharmacy: true,
+      };
     }
 
     const branches = await ctx.db
@@ -196,10 +202,31 @@ export const getMyPharmacyDetail = query({
       )
       .take(500);
 
+    const signupProfile = {
+      ownerName: owner.full_name || "",
+      ownerEmail: owner.email || "",
+      ownerPhone: owner.phone || "",
+      name: pharmacy.name || "",
+      pharmacyEmail: pharmacy.pharmacyEmail || "",
+      licenseCode: pharmacy.licenseCode || "",
+      signupLocation:
+        pharmacy.signupLocation || pharmacy.plannedBranchLocations?.[0] || "",
+      selectedTier: pharmacy.subscriptionTier || "",
+      recommendedTier: pharmacy.recommendedSubscriptionTier || "",
+      paymentStatus: pharmacy.paymentStatus || "",
+      plannedBranches: pharmacy.plannedBranches,
+      plannedBranchLocations: pharmacy.plannedBranchLocations || [],
+      plannedStaffTotal: pharmacy.plannedStaffTotal,
+      plannedStaffBreakdown: pharmacy.plannedStaffBreakdown,
+      submittedAt: pharmacy._creationTime,
+    };
+
     return {
       pharmacy,
       branches,
       staff,
+      signupProfile,
+      missingPharmacy: false,
     };
   },
 });

@@ -22,11 +22,7 @@ import {
   TrendingUp,
   DollarSign,
   Flag,
-  AlertTriangle,
   MessageSquare,
-  Phone,
-  ChevronUp,
-  ChevronDown,
   ExternalLink,
   Plus,
   Pencil,
@@ -68,8 +64,24 @@ interface Pharmacy {
   _id: string;
   name: string;
   pharmacyEmail?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  licenseCode?: string;
+  submittedAt?: number;
   status: string;
+  paymentStatus?: string;
   signupLocation?: string;
+  selectedTier?: string;
+  recommendedTier?: string;
+  plannedBranches?: number;
+  plannedBranchLocations?: string[];
+  plannedStaffTotal?: number;
+  plannedStaffBreakdown?: {
+    pharmacists?: number;
+    managers?: number;
+    cashiers?: number;
+  };
   address?: {
     street?: string;
     city?: string;
@@ -83,33 +95,16 @@ interface Pharmacy {
 
 const getPharmacyLocationLabel = (pharmacy: Pharmacy): string => {
   if (pharmacy.signupLocation?.trim()) return pharmacy.signupLocation;
+  if (pharmacy.plannedBranchLocations?.length) {
+    const firstPlanned = pharmacy.plannedBranchLocations[0]?.trim();
+    if (firstPlanned) return firstPlanned;
+  }
   if (pharmacy.address?.city && pharmacy.address?.country) {
     return `${pharmacy.address.city}, ${pharmacy.address.country}`;
   }
   if (pharmacy.address?.city) return pharmacy.address.city;
   return "Location not provided";
 };
-
-interface Branch {
-  _id: string;
-  name: string;
-  address?: string;
-  status: string;
-  pharmacyId?: string;
-}
-
-interface Manager {
-  _id: string;
-  id?: string;
-  user_id?: string;
-  full_name: string;
-  email: string;
-  status: string;
-  is_active?: boolean;
-  branch_name?: string;
-  location?: string;
-  branchId?: string;
-}
 
 export function AdminDashboard() {
   const [searchParams] = useSearchParams();
@@ -239,6 +234,17 @@ export function AdminDashboard() {
 
 function OverviewSection() {
   const { sessionToken } = useAuth();
+  const navigate = useNavigate();
+  const [escalationStatusFilter, setEscalationStatusFilter] = useState<
+    "all" | "pending" | "resolved"
+  >("pending");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditActionFilter, setAuditActionFilter] = useState<string>("all");
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+  const [selectedEscalationId, setSelectedEscalationId] =
+    useState<Id<"ai_escalations"> | null>(null);
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [resolvingEscalation, setResolvingEscalation] = useState(false);
 
   // OPTIMIZATION: Single query instead of 8 separate queries
   // Reduces load time from 4.5s to ~1.2s (73% improvement)
@@ -256,14 +262,28 @@ function OverviewSection() {
     api.ai.queries.getEscalationStats,
     sessionToken ? { sessionToken } : "skip",
   );
+  const escalationList = useQuery(
+    api.ai.queries.getEscalations,
+    sessionToken
+      ? {
+          sessionToken,
+          status:
+            escalationStatusFilter === "all"
+              ? undefined
+              : escalationStatusFilter,
+        }
+      : "skip",
+  );
   const recentAuditLogs = useQuery(
     api.admin.queries.getAuditLogs,
     sessionToken ? { sessionToken } : "skip",
   );
+  const resolveEscalation = useMutation(api.admin.mutations.resolveEscalation);
 
   const isLoading =
     overview === undefined ||
     aiEscalations === undefined ||
+    escalationList === undefined ||
     recentAuditLogs === undefined;
 
   const formatActionLabel = (action: string) =>
@@ -313,6 +333,94 @@ function OverviewSection() {
     };
   }, [stats, aiEscalations, isLoading]);
 
+  const pendingAppealsPreview = useMemo(() => {
+    const managerAppeals = (pendingAppeals?.managerFlagAppeals || []).map(
+      (appeal: any) => ({
+        id: `manager-${appeal.id || appeal._id || Math.random()}`,
+        type: "Manager Flag Appeal",
+        owner: appeal.ownerName || "Unknown",
+      }),
+    );
+    const adminAppeals = (pendingAppeals?.adminActionAppeals || []).map(
+      (appeal: any) => ({
+        id: `admin-${appeal.id || appeal._id || Math.random()}`,
+        type: "Admin Action Appeal",
+        owner: appeal.ownerName || "Unknown",
+      }),
+    );
+    return [...managerAppeals, ...adminAppeals].slice(0, 4);
+  }, [pendingAppeals]);
+
+  const activePlansCount = useMemo(
+    () => (subscriptionPlans || []).filter((plan: any) => plan.isActive).length,
+    [subscriptionPlans],
+  );
+
+  const filteredEscalations = useMemo(() => {
+    if (!escalationList) return [];
+    return escalationList.slice(0, 6);
+  }, [escalationList]);
+
+  const recentActions = useMemo(() => {
+    const logs = recentAuditLogs || [];
+    const actionFilter = auditActionFilter.trim().toLowerCase();
+    const searchFilter = auditSearch.trim().toLowerCase();
+
+    return logs
+      .filter((log: any) => {
+        const action = String(log.action || "").toLowerCase();
+        const details = String(log.details || "").toLowerCase();
+        const name = String(log.user_name || "").toLowerCase();
+
+        if (actionFilter !== "all" && action !== actionFilter) {
+          return false;
+        }
+
+        if (!searchFilter) {
+          return true;
+        }
+
+        return (
+          action.includes(searchFilter) ||
+          details.includes(searchFilter) ||
+          name.includes(searchFilter)
+        );
+      })
+      .slice(0, 5);
+  }, [recentAuditLogs, auditActionFilter, auditSearch]);
+
+  const auditActionOptions = useMemo(() => {
+    const actions = new Set<string>();
+    (recentAuditLogs || []).forEach((log: any) => {
+      if (log.action) actions.add(String(log.action));
+    });
+    return ["all", ...Array.from(actions).slice(0, 8)];
+  }, [recentAuditLogs]);
+
+  const handleResolveEscalation = async () => {
+    if (!selectedEscalationId) return;
+    if (!resolutionNote.trim()) {
+      toast.error("Resolution note is required");
+      return;
+    }
+
+    setResolvingEscalation(true);
+    try {
+      await resolveEscalation({
+        escalationId: selectedEscalationId,
+        resolution: resolutionNote.trim(),
+      });
+      toast.success("Escalation resolved successfully");
+      setResolveDialogOpen(false);
+      setResolutionNote("");
+      setSelectedEscalationId(null);
+    } catch (error) {
+      toast.error("Failed to resolve escalation");
+    } finally {
+      setResolvingEscalation(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -335,7 +443,9 @@ function OverviewSection() {
           change={displayStats.activePharmacies}
           changeLabel="Active"
           icon={Building2}
-          color="text-primary"
+          tone="teal"
+          onClick={() => navigate("/admin?tab=pharmacies")}
+          actionLabel="Open Pharmacies"
         />
         <MetricCard
           title="Total Branches"
@@ -343,7 +453,9 @@ function OverviewSection() {
           change={displayStats.activeBranches}
           changeLabel="Active"
           icon={Store}
-          color="text-blue-600"
+          tone="blue"
+          onClick={() => navigate("/admin?tab=pharmacies")}
+          actionLabel="Inspect Network"
         />
         <MetricCard
           title="Managers"
@@ -351,7 +463,9 @@ function OverviewSection() {
           change={displayStats.activeManagers}
           changeLabel="Active"
           icon={Users}
-          color="text-primary"
+          tone="amber"
+          onClick={() => navigate("/admin?tab=pharmacies")}
+          actionLabel="View Managers"
         />
         <MetricCard
           title="Monthly Revenue"
@@ -359,28 +473,31 @@ function OverviewSection() {
           change={displayStats.activeSubscriptions}
           changeLabel="Active Subscriptions"
           icon={DollarSign}
-          color="text-primary"
+          tone="emerald"
+          onClick={() => navigate("/admin?tab=subscriptions")}
+          actionLabel="Manage Plans"
         />
       </div>
 
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        {/* v4.0: Flagged Accounts Widget */}
         <Card className="minimal-card border-l-4 border-l-amber-500">
           <CardHeader className="pb-4">
             <CardTitle className="text-[14px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Flag className="w-4 h-4 text-amber-600" />
-              Flagged Accounts
-              {displayStats.flaggedCount > 0 && (
+              Operational Alerts
+              {(displayStats.flaggedCount > 0 ||
+                displayStats.pendingAppealsCount > 0) && (
                 <Badge variant="destructive" className="ml-2">
-                  {displayStats.flaggedCount}
+                  {displayStats.flaggedCount + displayStats.pendingAppealsCount}
                 </Badge>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {displayStats.flaggedCount > 0 ? (
-              <div className="space-y-2">
-                {flaggedAccounts?.slice(0, 3).map((account: any) => (
+            {displayStats.flaggedCount > 0 ||
+            displayStats.pendingAppealsCount > 0 ? (
+              <div className="space-y-3">
+                {(flaggedAccounts || []).slice(0, 3).map((account: any) => (
                   <div
                     key={account._id}
                     className="flex items-center justify-between p-4 rounded-xl border border-border/40 hover:border-amber-300 transition-colors bg-amber-50/30"
@@ -398,95 +515,73 @@ function OverviewSection() {
                         </p>
                       </div>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] bg-amber-100 text-amber-800 border-amber-300"
-                    >
-                      Flagged
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-amber-100 text-amber-800 border-amber-300"
+                      >
+                        Flagged
+                      </Badge>
+                      {account.pharmacyId ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-[11px]"
+                          onClick={() =>
+                            navigate(`/admin/pharmacies/${account.pharmacyId}`)
+                          }
+                        >
+                          Open
+                          <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
+                {pendingAppealsPreview.map((appeal) => (
+                  <div
+                    key={appeal.id}
+                    className="flex items-center justify-between p-4 rounded-xl border border-border/40 hover:border-blue-300 transition-colors bg-blue-50/30"
+                  >
+                    <div>
+                      <p className="font-semibold text-[14px]">{appeal.type}</p>
+                      <p className="text-[12px] text-muted-foreground">
+                        From: {appeal.owner}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-[11px]"
+                      onClick={() => navigate("/admin/appeals")}
+                    >
+                      Review
+                      <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={() => navigate("/admin/appeals")}
+                >
+                  Open Appeal Review Queue
+                </Button>
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Flag className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No flagged accounts</p>
+                <p className="text-sm">No operational alerts</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* v4.0: Pending Appeals Widget */}
         <Card className="minimal-card border-l-4 border-l-blue-500">
           <CardHeader className="pb-4">
             <CardTitle className="text-[14px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-blue-600" />
-              Pending Appeals
-              {displayStats.pendingAppealsCount > 0 && (
-                <Badge variant="default" className="ml-2">
-                  {displayStats.pendingAppealsCount}
-                </Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {displayStats.pendingAppealsCount > 0 ? (
-              <div className="space-y-2">
-                {pendingAppeals?.managerFlagAppeals
-                  ?.slice(0, 2)
-                  .map((appeal: any) => (
-                    <div
-                      key={appeal.id}
-                      className="flex items-center justify-between p-4 rounded-xl border border-border/40 hover:border-blue-300 transition-colors bg-blue-50/30"
-                    >
-                      <div>
-                        <p className="font-semibold text-[14px]">
-                          Manager Flag Appeal
-                        </p>
-                        <p className="text-[12px] text-muted-foreground">
-                          From: {appeal.ownerName || "Unknown"}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-[10px]">
-                        Pending Review
-                      </Badge>
-                    </div>
-                  ))}
-                {pendingAppeals?.adminActionAppeals
-                  ?.slice(0, 2)
-                  .map((appeal: any) => (
-                    <div
-                      key={appeal.id}
-                      className="flex items-center justify-between p-4 rounded-xl border border-border/40 hover:border-blue-300 transition-colors bg-blue-50/30"
-                    >
-                      <div>
-                        <p className="font-semibold text-[14px]">
-                          Admin Action Appeal
-                        </p>
-                        <p className="text-[12px] text-muted-foreground">
-                          From: {appeal.ownerName || "Unknown"}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-[10px]">
-                        Pending Review
-                      </Badge>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No pending appeals</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* v4.0: AI Escalations Widget */}
-        <Card className="minimal-card border-l-4 border-l-purple-500">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-[14px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-purple-600" />
+              <MessageSquare className="w-4 h-4 text-blue-600" />
               AI Assistant Escalations
               {displayStats.aiEscalationsPending > 0 && (
                 <Badge variant="secondary" className="ml-2">
@@ -496,8 +591,8 @@ function OverviewSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-4 rounded-xl border border-border/40 bg-purple-50/30">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border/40 bg-blue-50/30">
                 <div>
                   <p className="font-semibold text-[14px]">
                     Today's Escalations
@@ -507,43 +602,95 @@ function OverviewSection() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-purple-600">
+                  <p className="text-2xl font-bold text-blue-700">
                     {displayStats.aiEscalationsPending}
                   </p>
                   <p className="text-[10px] text-muted-foreground">pending</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
-                <div className="text-center p-2 rounded-lg bg-muted/30">
-                  <Phone className="w-4 h-4 mx-auto mb-1 text-emerald-600" />
-                  <p className="text-[10px] text-muted-foreground">Phone</p>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted/30">
-                  <Mail className="w-4 h-4 mx-auto mb-1 text-blue-600" />
-                  <p className="text-[10px] text-muted-foreground">Email</p>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted/30">
-                  <AlertTriangle className="w-4 h-4 mx-auto mb-1 text-amber-600" />
-                  <p className="text-[10px] text-muted-foreground">
-                    Complaints
-                  </p>
-                </div>
+              <div className="flex items-center gap-2">
+                {(["all", "pending", "resolved"] as const).map((status) => (
+                  <Button
+                    key={status}
+                    size="sm"
+                    variant={
+                      escalationStatusFilter === status ? "default" : "outline"
+                    }
+                    className="h-8 text-[11px] capitalize"
+                    onClick={() => setEscalationStatusFilter(status)}
+                  >
+                    {status}
+                  </Button>
+                ))}
               </div>
+
+              {filteredEscalations.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground text-sm rounded-xl border border-dashed">
+                  No escalations in this filter.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredEscalations.map((escalation: any) => (
+                    <div
+                      key={escalation._id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/50 bg-background"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold truncate">
+                          {escalation.pharmacy?.name || "Unassigned Pharmacy"}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {escalation.user?.name || "Unknown user"} •{" "}
+                          {formatActionLabel(escalation.type || "escalation")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] capitalize",
+                            escalation.status === "pending"
+                              ? "border-amber-300 text-amber-700 bg-amber-50"
+                              : "border-emerald-300 text-emerald-700 bg-emerald-50",
+                          )}
+                        >
+                          {escalation.status}
+                        </Badge>
+                        {escalation.status === "pending" ? (
+                          <Button
+                            size="sm"
+                            className="h-8 text-[11px]"
+                            onClick={() => {
+                              setSelectedEscalationId(escalation._id);
+                              setResolutionNote("");
+                              setResolveDialogOpen(true);
+                            }}
+                          >
+                            Resolve
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Existing: Subscription Plans */}
         <Card className="minimal-card">
           <CardHeader className="pb-4">
             <CardTitle className="text-[14px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              Subscription Plans
+              Subscription Health
+              <Badge variant="outline" className="ml-2 text-[10px]">
+                {activePlansCount} active
+              </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {subscriptionPlans?.slice(0, 4).map((plan: any) => (
+              {(subscriptionPlans || []).slice(0, 4).map((plan: any) => (
                 <div
                   key={plan._id}
                   className="flex items-center justify-between p-4 rounded-xl border border-border/40 hover:border-border transition-colors"
@@ -580,9 +727,35 @@ function OverviewSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {recentAuditLogs.length > 0 ? (
+            <div className="space-y-3 mb-3">
+              <Input
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                placeholder="Search actions, details, actor..."
+                className="h-9"
+              />
+              <div className="flex flex-wrap gap-2">
+                {auditActionOptions.map((option) => (
+                  <Button
+                    key={option}
+                    variant={
+                      auditActionFilter === option ? "default" : "outline"
+                    }
+                    size="sm"
+                    className="h-7 px-2 text-[10px] uppercase tracking-wide"
+                    onClick={() => setAuditActionFilter(option)}
+                  >
+                    {option === "all"
+                      ? "All Actions"
+                      : formatActionLabel(option)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {recentActions.length > 0 ? (
               <div className="space-y-2">
-                {recentAuditLogs.slice(0, 3).map((log: any) => (
+                {recentActions.map((log: any) => (
                   <div
                     key={log._id}
                     className="flex items-center gap-4 p-4 rounded-xl border border-border/40"
@@ -603,12 +776,59 @@ function OverviewSection() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground text-sm">
-                No recent activity
+                No activity matches your filters
               </div>
             )}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full mt-3"
+              onClick={() => navigate("/admin?tab=audit-logs")}
+            >
+              View Full Audit Logs
+            </Button>
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resolve AI Escalation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Add a resolution note so this action is documented in the audit
+              trail.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={resolutionNote}
+            onChange={(e) => setResolutionNote(e.target.value)}
+            placeholder="Describe what was done to resolve this issue"
+            className="min-h-[110px]"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resolvingEscalation}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleResolveEscalation();
+              }}
+              disabled={resolvingEscalation}
+            >
+              {resolvingEscalation ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Resolving...
+                </span>
+              ) : (
+                "Resolve Escalation"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -618,6 +838,15 @@ function ApprovalsSection() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [reasonError, setReasonError] = useState("");
+  const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState<
+    null | "preview" | "execute"
+  >(null);
+  const [cleanupStats, setCleanupStats] = useState<any | null>(null);
 
   const pendingApplications = useQuery(
     api.admin.queries.getPendingPharmacyApplications,
@@ -630,8 +859,66 @@ function ApprovalsSection() {
   const rejectApplication = useMutation(
     api.admin.mutations.rejectPharmacyApplication,
   );
+  const cleanupLegacyRejectedStates = useMutation(
+    api.admin.mutations.cleanupLegacyRejectedOwnerStates,
+  );
 
   const isLoading = pendingApplications === undefined;
+  const rejectionReasonTrimmed = rejectionReason.trim();
+  const isReasonValid = rejectionReasonTrimmed.length >= 10;
+
+  const submitRejection = async () => {
+    if (!selectedApplication) return;
+    if (!isReasonValid) {
+      setReasonError("Rejection reason must be at least 10 characters.");
+      toast.error("Rejection reason is required");
+      return;
+    }
+
+    setReasonError("");
+    setRejectingId(selectedApplication.pharmacyId);
+    try {
+      await rejectApplication({
+        pharmacyId: selectedApplication.pharmacyId,
+        reason: rejectionReasonTrimmed,
+        sessionToken: sessionToken || undefined,
+      });
+      toast.success("Application rejected");
+      setRejectDialogOpen(false);
+      setSelectedApplication(null);
+      setRejectionReason("");
+    } catch (err) {
+      toast.error("Failed to reject application");
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  const runLegacyCleanup = async (dryRun: boolean) => {
+    setCleanupLoading(dryRun ? "preview" : "execute");
+    try {
+      const stats = await cleanupLegacyRejectedStates({
+        sessionToken: sessionToken || undefined,
+        dryRun,
+        limit: 500,
+      });
+      setCleanupStats(stats);
+      if (dryRun) {
+        toast.success(
+          `Preview complete: ${stats.cleanedOwners} rejected owner states eligible for cleanup`,
+        );
+        return;
+      }
+      toast.success(
+        `Cleanup complete: removed ${stats.cleanedOwners} rejected owner states`,
+      );
+      setCleanupDialogOpen(false);
+    } catch (err) {
+      toast.error("Failed to run legacy cleanup");
+    } finally {
+      setCleanupLoading(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -648,9 +935,19 @@ function ApprovalsSection() {
           <CardTitle className="text-base font-semibold">
             Pharmacy Applications
           </CardTitle>
-          <Badge variant="secondary" className="rounded-full px-2.5">
-            {pendingApplications.length}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="rounded-full px-2.5">
+              {pendingApplications.length}
+            </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setCleanupDialogOpen(true)}
+            >
+              Legacy Cleanup
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="relative mb-4 max-w-md">
@@ -674,132 +971,299 @@ function ApprovalsSection() {
             <div className="grid gap-4">
               {pendingApplications.map((application: any) => (
                 <div
-                  key={application.pharmacyId}
+                  key={application.pharmacyId || application.ownerId}
                   className="flex items-center justify-between p-5 rounded-2xl border border-border/40 bg-secondary/10 hover:bg-secondary/20 transition-colors"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-background border border-border/60 flex items-center justify-center">
-                      <Store className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-[15px]">
-                        {application.pharmacyName}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5" />
-                        {application.ownerEmail || "No owner email"}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5" />
-                        {application.pharmacyEmail || "No pharmacy email"}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5" />
-                        {application.ownerPhone || "No owner phone"}
-                      </p>
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            License:
-                          </span>{" "}
-                          {application.licenseCode || "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Location:
-                          </span>{" "}
-                          {application.signupLocation || "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Owner Name:
-                          </span>{" "}
-                          {application.ownerName || "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Selected Tier:
-                          </span>{" "}
-                          {application.selectedTier?.toUpperCase() || "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Recommended:
-                          </span>{" "}
-                          {application.recommendedTier?.toUpperCase() || "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Planned Branches:
-                          </span>{" "}
-                          {application.plannedBranches ?? "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Planned Staff:
-                          </span>{" "}
-                          {application.plannedStaffTotal ?? "N/A"}
-                        </p>
-                        <p className="sm:col-span-2">
-                          <span className="font-semibold text-foreground">
-                            Branch Locations:
-                          </span>{" "}
-                          {application.plannedBranchLocations?.length
-                            ? application.plannedBranchLocations.join(", ")
-                            : "N/A"}
-                        </p>
-                        <p className="sm:col-span-2">
-                          <span className="font-semibold text-foreground">
-                            Staff Breakdown:
-                          </span>{" "}
-                          {application.plannedStaffBreakdown
-                            ? `${application.plannedStaffBreakdown.pharmacists} pharmacists, ${application.plannedStaffBreakdown.managers} managers, ${application.plannedStaffBreakdown.cashiers} cashiers`
-                            : "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Payment:
-                          </span>{" "}
-                          {application.paymentStatus || "N/A"}
-                        </p>
-                        <p>
-                          <span className="font-semibold text-foreground">
-                            Submitted:
-                          </span>{" "}
-                          {formatDateTime(application.submittedAt)}
-                        </p>
+                  {(() => {
+                    const snapshot = application.signupSnapshot;
+                    const step1Pharmacy = snapshot?.step1Pharmacy;
+                    const step1Operations = snapshot?.step1Operations;
+                    const step2Subscription = snapshot?.step2Subscription;
+                    const step3Owner = snapshot?.step3Owner;
+                    const step4Review = snapshot?.step4Review;
+
+                    const snapshotPrimaryLocation = String(
+                      step1Pharmacy?.primaryLocation || "",
+                    ).trim();
+                    const persistedPrimaryLocation = String(
+                      application.signupLocation ||
+                        application.primaryLocation ||
+                        "",
+                    ).trim();
+                    const snapshotBranchLocations = (
+                      step1Operations?.branchLocations || []
+                    )
+                      .map((location: string) => String(location || "").trim())
+                      .filter(Boolean);
+                    const persistedBranchLocations = (
+                      application.plannedBranchLocations || []
+                    )
+                      .map((location: string) => String(location || "").trim())
+                      .filter(Boolean);
+
+                    const pharmacyName =
+                      step1Pharmacy?.pharmacyName || application.pharmacyName;
+                    const ownerEmail =
+                      step3Owner?.email ||
+                      application.ownerEmail ||
+                      "No owner email";
+                    const pharmacyEmail =
+                      step1Pharmacy?.pharmacyEmail ||
+                      application.pharmacyEmail ||
+                      "No pharmacy email";
+                    const ownerPhone =
+                      step3Owner?.phone ||
+                      application.ownerPhone ||
+                      "No owner phone";
+
+                    const licenseLabel =
+                      step1Pharmacy?.licenseLabel || "License Number";
+                    const licenseValue =
+                      step1Pharmacy?.licenseCode ||
+                      application.licenseCode ||
+                      "N/A";
+                    const primaryLocationLabel =
+                      step1Pharmacy?.primaryLocationLabel || "Primary Location";
+                    const primaryLocationValue =
+                      snapshotPrimaryLocation ||
+                      persistedPrimaryLocation ||
+                      snapshotBranchLocations[0] ||
+                      persistedBranchLocations[0] ||
+                      "Not provided";
+                    const pharmacyEmailLabel =
+                      step1Pharmacy?.pharmacyEmailLabel ||
+                      "Pharmacy Email (Optional)";
+
+                    const ownerNameLabel = step3Owner?.nameLabel || "Full Name";
+                    const ownerNameValue =
+                      step3Owner?.fullName || application.ownerName || "N/A";
+                    const ownerEmailLabel =
+                      step3Owner?.emailLabel || "Email Address";
+                    const ownerPhoneLabel =
+                      step3Owner?.phoneLabel || "Phone Number";
+
+                    const selectedLabel =
+                      step2Subscription?.selectedLabel || "Selected";
+                    const selectedValue =
+                      step2Subscription?.selectedTier ||
+                      application.selectedTier ||
+                      "";
+                    const recommendedLabel =
+                      step2Subscription?.recommendedLabel || "Recommended";
+                    const recommendedValue =
+                      step2Subscription?.recommendedTier ||
+                      application.recommendedTier ||
+                      "";
+
+                    const totalBranchesLabel =
+                      step1Operations?.totalBranchesLabel || "Total Branches";
+                    const totalBranchesRaw =
+                      step1Operations?.totalBranches ??
+                      application.plannedBranches;
+                    const totalBranchesValue = totalBranchesRaw ?? "N/A";
+                    const totalStaffLabel =
+                      step1Operations?.totalStaffLabel || "Total Staff";
+                    const totalStaffValue =
+                      step1Operations?.totalStaff ??
+                      application.plannedStaffTotal ??
+                      "N/A";
+                    const branchSetupLabel =
+                      step1Operations?.branchSetupLabel || "Branch Locations";
+
+                    const resolvedBranchLocations =
+                      snapshotBranchLocations.length
+                        ? snapshotBranchLocations
+                        : persistedBranchLocations;
+
+                    const parsedTotalBranches = Number(totalBranchesRaw);
+                    const totalBranchesCount = Number.isFinite(
+                      parsedTotalBranches,
+                    )
+                      ? parsedTotalBranches
+                      : 0;
+
+                    const branchSetupValue = resolvedBranchLocations.length
+                      ? resolvedBranchLocations.join(", ")
+                      : totalBranchesCount >= 1 &&
+                          primaryLocationValue !== "Not provided"
+                        ? primaryLocationValue
+                        : "Not provided";
+                    const breakdownLabel =
+                      step1Operations?.breakdownLabel || "Breakdown";
+                    const pharmacists =
+                      step1Operations?.pharmacists ??
+                      application.plannedStaffBreakdown?.pharmacists;
+                    const managers =
+                      step1Operations?.managers ??
+                      application.plannedStaffBreakdown?.managers;
+                    const cashiers =
+                      step1Operations?.cashiers ??
+                      application.plannedStaffBreakdown?.cashiers;
+
+                    const termsAcceptedLabel =
+                      step4Review?.termsAcceptedLabel || "Terms Accepted";
+                    const termsAcceptedValue =
+                      step4Review?.termsAccepted === undefined
+                        ? "N/A"
+                        : step4Review.termsAccepted
+                          ? "Yes"
+                          : "No";
+
+                    return (
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-background border border-border/60 flex items-center justify-center">
+                          <Store className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-[15px]">
+                            {pharmacyName}
+                          </p>
+                          <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5" />
+                            {ownerEmail}
+                          </p>
+                          {!application.pharmacyId && (
+                            <p className="text-[12px] text-amber-700 mt-1">
+                              Waiting for linked pharmacy record before
+                              approval.
+                            </p>
+                          )}
+                          {application.previousRejection && (
+                            <div className="mt-2">
+                              <Badge
+                                variant="outline"
+                                className="rounded-full border-amber-300 bg-amber-50 text-amber-800 text-[10px] font-semibold"
+                                title={
+                                  application.previousRejection.rejectionReason
+                                }
+                              >
+                                Previous rejection on{" "}
+                                {formatDateTime(
+                                  application.previousRejection.rejectedAt,
+                                )}
+                              </Badge>
+                            </div>
+                          )}
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {licenseLabel}:
+                              </span>{" "}
+                              {licenseValue}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {primaryLocationLabel}:
+                              </span>{" "}
+                              {primaryLocationValue}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {ownerNameLabel}:
+                              </span>{" "}
+                              {ownerNameValue}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {selectedLabel}:
+                              </span>{" "}
+                              {selectedValue
+                                ? selectedValue.toUpperCase()
+                                : "N/A"}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {recommendedLabel}:
+                              </span>{" "}
+                              {recommendedValue
+                                ? recommendedValue.toUpperCase()
+                                : "N/A"}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {totalBranchesLabel}:
+                              </span>{" "}
+                              {totalBranchesValue}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {totalStaffLabel}:
+                              </span>{" "}
+                              {totalStaffValue}
+                            </p>
+                            <p className="sm:col-span-2">
+                              <span className="font-semibold text-foreground">
+                                {branchSetupLabel}:
+                              </span>{" "}
+                              {branchSetupValue}
+                            </p>
+                            {totalBranchesCount > 1 &&
+                              resolvedBranchLocations.length > 0 &&
+                              resolvedBranchLocations.length <
+                                totalBranchesCount && (
+                                <p className="sm:col-span-2 text-amber-700">
+                                  {totalBranchesCount} branches planned; only{" "}
+                                  {resolvedBranchLocations.length} location
+                                  {resolvedBranchLocations.length === 1
+                                    ? ""
+                                    : "s"}{" "}
+                                  captured.
+                                </p>
+                              )}
+                            <p className="sm:col-span-2">
+                              <span className="font-semibold text-foreground">
+                                {breakdownLabel}:
+                              </span>{" "}
+                              {pharmacists !== undefined &&
+                              managers !== undefined &&
+                              cashiers !== undefined
+                                ? `${pharmacists} pharmacists, ${managers} managers, ${cashiers} cashiers`
+                                : "N/A"}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {pharmacyEmailLabel}:
+                              </span>{" "}
+                              {pharmacyEmail}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {ownerEmailLabel}:
+                              </span>{" "}
+                              {ownerEmail}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {ownerPhoneLabel}:
+                              </span>{" "}
+                              {ownerPhone}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-foreground">
+                                {termsAcceptedLabel}:
+                              </span>{" "}
+                              {termsAcceptedValue}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                   <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="rounded-full h-10 w-10 text-destructive hover:bg-destructive/5"
-                      onClick={async () => {
-                        const reason = window.prompt(
-                          "Rejection reason (required):",
-                          "Application does not meet requirements",
-                        );
-                        if (!reason?.trim()) {
-                          toast.error("Rejection reason is required");
-                          return;
-                        }
-                        setRejectingId(application.pharmacyId);
-                        try {
-                          await rejectApplication({
-                            pharmacyId: application.pharmacyId,
-                            reason,
-                            sessionToken: sessionToken || undefined,
-                          });
-                          toast.success("Application rejected");
-                        } catch (err) {
-                          toast.error("Failed to reject application");
-                        } finally {
-                          setRejectingId(null);
-                        }
+                      onClick={() => {
+                        setSelectedApplication(application);
+                        setRejectionReason("");
+                        setReasonError("");
+                        setRejectDialogOpen(true);
                       }}
-                      disabled={rejectingId === application.pharmacyId}
+                      disabled={
+                        !application.pharmacyId ||
+                        rejectingId === application.pharmacyId
+                      }
                     >
                       {rejectingId === application.pharmacyId ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -811,6 +1275,12 @@ function ApprovalsSection() {
                       size="sm"
                       className="rounded-xl h-10 px-5 gap-2"
                       onClick={async () => {
+                        if (!application.pharmacyId) {
+                          toast.error(
+                            "Cannot approve yet: pharmacy record is still being created.",
+                          );
+                          return;
+                        }
                         setApprovingId(application.pharmacyId);
                         try {
                           await approveApplication({
@@ -824,7 +1294,10 @@ function ApprovalsSection() {
                           setApprovingId(null);
                         }
                       }}
-                      disabled={approvingId === application.pharmacyId}
+                      disabled={
+                        !application.pharmacyId ||
+                        approvingId === application.pharmacyId
+                      }
                     >
                       {approvingId === application.pharmacyId ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -840,6 +1313,199 @@ function ApprovalsSection() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Application</AlertDialogTitle>
+            <AlertDialogDescription>
+              A rejection reason is required and will be recorded for future
+              applications.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Rejection reason *</label>
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => {
+                setRejectionReason(e.target.value);
+                if (reasonError) {
+                  setReasonError("");
+                }
+              }}
+              placeholder="Describe what requirements were not met and what must be corrected"
+              className="min-h-[120px]"
+            />
+            {reasonError && (
+              <p className="text-xs font-medium text-destructive">
+                {reasonError}
+              </p>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(rejectingId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void submitRejection();
+              }}
+              disabled={Boolean(rejectingId) || !isReasonValid}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {rejectingId ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Rejecting...
+                </span>
+              ) : (
+                "Reject Application"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cleanup Legacy Rejected States</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes old rejected owner/pharmacy records and keeps their
+              rejection history for 12 months.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Always run preview first. Then execute cleanup if the numbers look
+              correct.
+            </p>
+            {cleanupStats && (
+              <div className="rounded-lg border bg-muted/30 p-3 text-xs space-y-2">
+                <p>
+                  Rejected owners scanned: {cleanupStats.scannedRejectedOwners}
+                </p>
+                <p>Owners cleaned: {cleanupStats.cleanedOwners}</p>
+                <p>
+                  History records created: {cleanupStats.historyRecordsCreated}
+                </p>
+                <p>
+                  Orphan rejected pharmacies removed:{" "}
+                  {cleanupStats.deletedOrphanRejectedPharmacies}
+                </p>
+                {Array.isArray(cleanupStats.previewOwners) &&
+                  cleanupStats.previewOwners.length > 0 && (
+                    <div className="pt-2 border-t border-border/40 space-y-2">
+                      <p className="font-semibold text-foreground">
+                        Preview Accounts ({cleanupStats.previewOwners.length})
+                      </p>
+                      <div className="max-h-56 overflow-auto pr-1 space-y-2">
+                        {cleanupStats.previewOwners.map(
+                          (owner: any, index: number) => (
+                            <div
+                              key={`${owner.ownerId}-${index}`}
+                              className="rounded-md border border-border/50 bg-background/70 p-2"
+                            >
+                              <p className="font-medium text-foreground">
+                                {owner.ownerName || "Unknown owner"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {owner.ownerEmail || "No email"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Pharmacy: {owner.pharmacyName || "N/A"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Primary Location (set during signup):{" "}
+                                {owner.signupLocation || "N/A"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Branch Setup (from signup):{" "}
+                                {owner.plannedBranchLocations?.length
+                                  ? owner.plannedBranchLocations.join(", ")
+                                  : "No branch setup provided"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                License: {owner.licenseCode || "N/A"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Phone: {owner.ownerPhone || "N/A"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Status: owner {owner.ownerStatus || "unknown"}
+                                {", pharmacy "}
+                                {owner.pharmacyStatus || "missing"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Rejection: {owner.rejectionReason}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Rejected at: {formatDateTime(owner.rejectedAt)}
+                              </p>
+                              <p className="text-muted-foreground">
+                                History:{" "}
+                                {owner.historyAlreadyExists
+                                  ? "exists"
+                                  : "new record"}
+                              </p>
+                              <p className="text-muted-foreground">
+                                Retains until:{" "}
+                                {formatDateTime(owner.retentionUntil)}
+                              </p>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(cleanupLoading)}>
+              Close
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void runLegacyCleanup(true);
+              }}
+              disabled={Boolean(cleanupLoading)}
+            >
+              {cleanupLoading === "preview" ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Previewing...
+                </span>
+              ) : (
+                "Run Preview"
+              )}
+            </Button>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void runLegacyCleanup(false);
+              }}
+              disabled={Boolean(cleanupLoading)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cleanupLoading === "execute" ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Cleaning...
+                </span>
+              ) : (
+                "Execute Cleanup"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -847,78 +1513,28 @@ function ApprovalsSection() {
 function PharmaciesSection() {
   const { sessionToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [expandedPharmacyId, setExpandedPharmacyId] = useState<string | null>(
-    null,
-  );
   const navigate = useNavigate();
 
   const pharmacies = useQuery(
     api.admin.queries.getPharmacies,
     sessionToken ? { sessionToken } : "skip",
   );
-  const branches = useQuery(
-    api.admin.queries.getBranches,
-    sessionToken ? { sessionToken } : "skip",
-  );
-  const managers = useQuery(
-    api.admin.queries.getAllManagers,
-    sessionToken ? { sessionToken } : "skip",
-  );
   const deletePharmacy = useMutation(api.admin.mutations.deletePharmacy);
 
-  const isLoading =
-    pharmacies === undefined ||
-    branches === undefined ||
-    managers === undefined;
-
-  const pharmacyData = useMemo(() => {
-    const data: Record<
-      string,
-      {
-        branches: Branch[];
-        managers: Manager[];
-        branchCount: number;
-        managerCount: number;
-      }
-    > = {};
-    if (branches && managers && pharmacies) {
-      pharmacies.forEach((p: Pharmacy) => {
-        const pharmacyBranches = branches.filter(
-          (b: Branch) => b.pharmacyId === p._id,
-        );
-        const branchIds = pharmacyBranches.map((b: Branch) => b._id);
-        const pharmacyManagers = managers.filter(
-          (m: Manager) => m.branchId && branchIds.includes(m.branchId),
-        );
-
-        data[p._id] = {
-          branches: pharmacyBranches,
-          managers: pharmacyManagers,
-          branchCount: pharmacyBranches.length,
-          managerCount: pharmacyManagers.length,
-        };
-      });
-    }
-    return data;
-  }, [pharmacies, branches, managers]);
+  const isLoading = pharmacies === undefined;
 
   const filteredPharmacies = useMemo(() => {
     if (!pharmacies) return [];
     return pharmacies.filter((p: Pharmacy) => {
+      const isApproved = p.status === "active" || p.status === "approved";
+      if (!isApproved) return false;
+
       const matchesSearch =
         p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.pharmacyEmail?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesFilter = filter === "all" || p.status === filter;
-      return matchesSearch && matchesFilter;
+      return matchesSearch;
     });
-  }, [pharmacies, searchQuery, filter]);
-
-  const toggleExpand = (pharmacyId: string) => {
-    setExpandedPharmacyId(
-      expandedPharmacyId === pharmacyId ? null : pharmacyId,
-    );
-  };
+  }, [pharmacies, searchQuery]);
 
   if (isLoading)
     return (
@@ -939,44 +1555,31 @@ function PharmaciesSection() {
             className="pl-10 h-11 rounded-xl"
           />
         </div>
-        <div className="flex items-center gap-2">
-          {(["all", "active", "pending"] as const).map((s) => (
-            <Button
-              key={s}
-              variant={filter === s ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setFilter(s)}
-              className="capitalize rounded-lg h-9 text-[12px] font-semibold"
-            >
-              {s}
-            </Button>
-          ))}
-        </div>
+        <div />
       </div>
 
       <div className="space-y-4">
+        {filteredPharmacies.length === 0 && (
+          <Card className="minimal-card">
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              No approved pharmacies match your search.
+            </CardContent>
+          </Card>
+        )}
         {filteredPharmacies.map((pharmacy: Pharmacy) => {
-          const data = pharmacyData[pharmacy._id] || {
-            branches: [],
-            managers: [],
-            branchCount: 0,
-            managerCount: 0,
-          };
-          const isExpanded = expandedPharmacyId === pharmacy._id;
+          const plannedBranchCount = pharmacy.plannedBranches || 0;
+          const plannedManagerCount =
+            pharmacy.plannedStaffBreakdown?.managers || 0;
 
           return (
             <Card
               key={pharmacy._id}
-              className={cn(
-                "minimal-card overflow-hidden transition-all duration-300",
-                isExpanded && "border-primary/30",
-              )}
+              className="minimal-card overflow-hidden transition-all duration-300 hover:border-primary/40"
             >
-              {/* Header - Always visible */}
               <CardContent className="p-5">
                 <div
                   className="flex items-start gap-4 cursor-pointer"
-                  onClick={() => toggleExpand(pharmacy._id)}
+                  onClick={() => navigate(`/admin/pharmacies/${pharmacy._id}`)}
                 >
                   <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-primary shrink-0">
                     <Building2 className="w-7 h-7" />
@@ -1003,39 +1606,40 @@ function PharmaciesSection() {
                         >
                           {pharmacy.status}
                         </Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleExpand(pharmacy._id);
-                          }}
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-medium"
                         >
-                          {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                          )}
-                        </Button>
+                          Dashboard
+                        </Badge>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 mt-3 text-[12px] text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <Store className="w-3.5 h-3.5" />
-                        <span>{data.branchCount} branches</span>
+                        <span>{plannedBranchCount} planned branches</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5" />
-                        <span>{data.managerCount} managers</span>
+                        <span>{plannedManagerCount} planned managers</span>
                       </div>
-                      {pharmacy.subscriptionTier && (
+                      {(pharmacy.selectedTier || pharmacy.subscriptionTier) && (
                         <Badge
                           variant="outline"
                           className="text-[10px] font-medium"
                         >
-                          {pharmacy.subscriptionTier}
+                          {(
+                            pharmacy.selectedTier || pharmacy.subscriptionTier
+                          )?.toUpperCase()}
+                        </Badge>
+                      )}
+                      {pharmacy.recommendedTier && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-medium"
+                        >
+                          Rec: {pharmacy.recommendedTier.toUpperCase()}
                         </Badge>
                       )}
                     </div>
@@ -1046,10 +1650,106 @@ function PharmaciesSection() {
                         {getPharmacyLocationLabel(pharmacy)}
                       </span>
                     </div>
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          Owner:
+                        </span>{" "}
+                        {pharmacy.ownerName || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          Owner Email:
+                        </span>{" "}
+                        {pharmacy.ownerEmail || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          Owner Phone:
+                        </span>{" "}
+                        {pharmacy.ownerPhone || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          License:
+                        </span>{" "}
+                        {pharmacy.licenseCode || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          Planned Branches:
+                        </span>{" "}
+                        {pharmacy.plannedBranches ?? "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          Planned Staff:
+                        </span>{" "}
+                        {pharmacy.plannedStaffTotal ?? "N/A"}
+                      </p>
+                      <p className="sm:col-span-2">
+                        <span className="font-semibold text-foreground">
+                          Branch Locations:
+                        </span>{" "}
+                        {pharmacy.plannedBranchLocations?.length
+                          ? pharmacy.plannedBranchLocations.join(", ")
+                          : "N/A"}
+                      </p>
+                      <p className="sm:col-span-2">
+                        <span className="font-semibold text-foreground">
+                          Staff Breakdown:
+                        </span>{" "}
+                        {pharmacy.plannedStaffBreakdown
+                          ? `${pharmacy.plannedStaffBreakdown.pharmacists || 0} pharmacists, ${pharmacy.plannedStaffBreakdown.managers || 0} managers, ${pharmacy.plannedStaffBreakdown.cashiers || 0} cashiers`
+                          : "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">
+                          Submitted:
+                        </span>{" "}
+                        {pharmacy.submittedAt
+                          ? formatDateTime(pharmacy.submittedAt)
+                          : "N/A"}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+                      <div className="rounded-lg border border-border/50 bg-background p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">
+                          Planned Branches
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {plannedBranchCount}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-background p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">
+                          Planned Managers
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {plannedManagerCount}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-background p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">
+                          Planned Staff
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {pharmacy.plannedStaffTotal ?? "N/A"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-background p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">
+                          Payment
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {pharmacy.paymentStatus || "N/A"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-border/40">
                   <Button
                     variant="outline"
@@ -1061,7 +1761,7 @@ function PharmaciesSection() {
                     }}
                   >
                     <ExternalLink className="w-3 h-3 mr-1.5" />
-                    Full Details
+                    Open Dashboard
                   </Button>
                   <Button
                     variant="ghost"
@@ -1077,105 +1777,6 @@ function PharmaciesSection() {
                   </Button>
                 </div>
               </CardContent>
-
-              {/* Expanded Content */}
-              {isExpanded && (
-                <div className="px-5 pb-5 border-t border-border/40 bg-muted/20">
-                  <div className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Branches List */}
-                    <div>
-                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                        <Store className="w-3.5 h-3.5" />
-                        Branches ({data.branchCount})
-                      </h4>
-                      {data.branches.length > 0 ? (
-                        <div className="space-y-2">
-                          {data.branches.slice(0, 3).map((branch: Branch) => (
-                            <div
-                              key={branch._id}
-                              className="flex items-center gap-2 text-[12px] p-2 bg-background rounded-lg border border-border/40"
-                            >
-                              <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0">
-                                <Store className="w-3 h-3 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">
-                                  {branch.name}
-                                </p>
-                                {branch.address && (
-                                  <p className="text-[10px] text-muted-foreground truncate">
-                                    {branch.address}
-                                  </p>
-                                )}
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] shrink-0"
-                              >
-                                {branch.status}
-                              </Badge>
-                            </div>
-                          ))}
-                          {data.branches.length > 3 && (
-                            <p className="text-[10px] text-muted-foreground text-center">
-                              +{data.branches.length - 3} more branches
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-[12px] text-muted-foreground italic">
-                          No branches
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Managers List */}
-                    <div>
-                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                        <Users className="w-3.5 h-3.5" />
-                        Managers ({data.managerCount})
-                      </h4>
-                      {data.managers.length > 0 ? (
-                        <div className="space-y-2">
-                          {data.managers.slice(0, 3).map((manager: Manager) => (
-                            <div
-                              key={manager._id}
-                              className="flex items-center gap-2 text-[12px] p-2 bg-background rounded-lg border border-border/40"
-                            >
-                              <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center shrink-0 text-[10px] font-bold text-primary">
-                                {manager.full_name?.charAt(0)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">
-                                  {manager.full_name}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {manager.email}
-                                </p>
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] shrink-0"
-                              >
-                                {manager.status}
-                              </Badge>
-                            </div>
-                          ))}
-                          {data.managers.length > 3 && (
-                            <p className="text-[10px] text-muted-foreground text-center">
-                              +{data.managers.length - 3} more managers
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-[12px] text-muted-foreground italic">
-                          No managers
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </Card>
           );
         })}
@@ -1660,10 +2261,47 @@ function FeedbacksSection() {
 
 function AuditLogsSection() {
   const { sessionToken } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [actionFilter, setActionFilter] = useState("all");
   const logs = useQuery(
     api.admin.queries.getAuditLogs,
     sessionToken ? { sessionToken } : "skip",
   );
+
+  const formattedAction = (action: string) =>
+    action
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+
+  const actionOptions = useMemo(() => {
+    if (!logs) return ["all"];
+    const unique = Array.from(new Set(logs.map((log: any) => log.action)));
+    return ["all", ...unique.slice(0, 10)];
+  }, [logs]);
+
+  const filteredLogs = useMemo(() => {
+    if (!logs) return [];
+    const query = searchQuery.trim().toLowerCase();
+    return logs
+      .filter((log: any) =>
+        actionFilter === "all" ? true : String(log.action) === actionFilter,
+      )
+      .filter((log: any) => {
+        if (!query) return true;
+        return [
+          String(log.action || ""),
+          String(log.details || ""),
+          String(log.user_name || ""),
+          String(log.user_email || ""),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
+      })
+      .slice(0, 30);
+  }, [logs, actionFilter, searchQuery]);
+
   if (!logs)
     return (
       <div className="flex justify-center py-20">
@@ -1672,36 +2310,88 @@ function AuditLogsSection() {
     );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      {logs.slice(0, 15).map((log: any, idx: number) => (
-        <div
-          key={log._id || idx}
-          className="flex gap-4 p-4 rounded-2xl border border-border/40 bg-card hover:border-border transition-colors"
-        >
-          <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-            <Activity className="w-4 h-4 text-primary" />
+    <div className="max-w-5xl mx-auto space-y-4">
+      <Card className="minimal-card">
+        <CardContent className="p-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatPill label="Showing" value={filteredLogs.length} />
+            <StatPill label="Total logs" value={logs.length} />
+            <StatPill
+              label="Unique actions"
+              value={Math.max(actionOptions.length - 1, 0)}
+            />
+            <StatPill
+              label="Active filter"
+              value={formattedAction(actionFilter)}
+            />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-              <p className="font-semibold text-[14px]">{log.action}</p>
-              <span className="text-[11px] text-muted-foreground font-mono">
-                {new Date(log.timestamp).toLocaleTimeString()}
-              </span>
+
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by action, actor, or details..."
+                className="pl-9"
+              />
             </div>
-            <p className="text-[12px] text-muted-foreground line-clamp-2">
-              {log.details || "System event recorded"}
-            </p>
-            <div className="mt-2 flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center text-[8px] font-bold text-primary">
-                {log.user_name?.charAt(0)}
+            <div className="flex flex-wrap gap-2">
+              {actionOptions.map((action) => (
+                <Button
+                  key={action}
+                  variant={actionFilter === action ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-[11px]"
+                  onClick={() => setActionFilter(action)}
+                >
+                  {action === "all" ? "All Actions" : formattedAction(action)}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {filteredLogs.length === 0 ? (
+        <Card className="minimal-card">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No audit logs match the current filters.
+          </CardContent>
+        </Card>
+      ) : (
+        filteredLogs.map((log: any, idx: number) => (
+          <div
+            key={log._id || idx}
+            className="flex gap-4 p-4 rounded-2xl border border-border/40 bg-card hover:border-border transition-colors"
+          >
+            <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+              <Activity className="w-4 h-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-semibold text-[14px]">
+                  {formattedAction(log.action || "activity")}
+                </p>
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {new Date(log.timestamp).toLocaleTimeString()}
+                </span>
               </div>
-              <span className="text-[11px] font-medium text-muted-foreground">
-                {log.user_name}
-              </span>
+              <p className="text-[12px] text-muted-foreground line-clamp-2">
+                {log.details || "System event recorded"}
+              </p>
+              <div className="mt-2 flex items-center gap-1.5">
+                <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center text-[8px] font-bold text-primary">
+                  {log.user_name?.charAt(0)}
+                </div>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {log.user_name} ({log.user_email})
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 }
@@ -1730,6 +2420,9 @@ function SubscriptionsSection() {
   );
   const normalizeCurrencies = useMutation(
     api.admin.mutations.normalizeSubscriptionCurrenciesToETB,
+  );
+  const syncPlansFromSignupDefaults = useMutation(
+    api.admin.mutations.syncPlansFromSignupDefaults,
   );
   const updateTemplate = useMutation(
     api.admin.mutations.updateSubscriptionPlanTemplate,
@@ -1811,6 +2504,7 @@ function SubscriptionsSection() {
   const [baselineDraft, setBaselineDraft] = useState<PlanDraft>(emptyDraft);
   const [newFeature, setNewFeature] = useState("");
   const [saving, setSaving] = useState(false);
+  const [syncingPlans, setSyncingPlans] = useState(false);
   const [templatesSeeded, setTemplatesSeeded] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] =
     useState<Id<"subscription_plan_templates"> | null>(null);
@@ -2182,6 +2876,22 @@ function SubscriptionsSection() {
     }
   };
 
+  const syncFromSignup = async () => {
+    setSyncingPlans(true);
+    try {
+      const result = await syncPlansFromSignupDefaults({ sessionToken });
+      toast.success(
+        `Synced plans from signup defaults. Created ${result.created}, updated ${result.updated}.`,
+      );
+    } catch (error: any) {
+      toast.error(
+        error?.message || "Failed to sync plans from signup defaults",
+      );
+    } finally {
+      setSyncingPlans(false);
+    }
+  };
+
   const applyTemplateToDraft = () => {
     if (!selectedTemplate) {
       toast.error("Select a template first");
@@ -2368,6 +3078,15 @@ function SubscriptionsSection() {
             Control global plan pricing, limits, and availability from one
             workspace.
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void syncFromSignup()}
+            disabled={syncingPlans}
+          >
+            {syncingPlans ? "Syncing..." : "Sync Plans From Signup Form"}
+          </Button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
           <StatPill label="Total plans" value={stats.total} />
@@ -2946,11 +3665,23 @@ function SettingsSection() {
     resendApiKey: "",
     testMode: true,
   });
+  const [initialFormData, setInitialFormData] = useState({
+    contactEmail: "",
+    contactPhone: "",
+    contactAddress: "",
+    testMode: true,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const hasSavedApiKey = Boolean(settings?.resendApiKey) || apiKeyConfigured;
   const hasPendingApiKey = formData.resendApiKey.trim().length > 0;
+  const isDirty =
+    hasPendingApiKey ||
+    formData.contactEmail !== initialFormData.contactEmail ||
+    formData.contactPhone !== initialFormData.contactPhone ||
+    formData.contactAddress !== initialFormData.contactAddress ||
+    formData.testMode !== initialFormData.testMode;
   const maskedSavedApiKey = useMemo(() => {
     const apiKey = settings?.resendApiKey;
     if (!apiKey) {
@@ -2973,14 +3704,22 @@ function SettingsSection() {
 
   useEffect(() => {
     if (settings) {
-      setApiKeyConfigured(Boolean(settings.resendApiKey));
-      setFormData({
+      const nextInitial = {
         contactEmail: settings.contactEmail || "daggi.x02@gmail.com",
         contactPhone: settings.contactPhone || "",
         contactAddress: settings.contactAddress || "",
-        resendApiKey: "", // Never show the actual API key
         testMode: settings.testMode ?? true,
+      };
+
+      setApiKeyConfigured(Boolean(settings.resendApiKey));
+      setFormData({
+        contactEmail: nextInitial.contactEmail,
+        contactPhone: nextInitial.contactPhone,
+        contactAddress: nextInitial.contactAddress,
+        resendApiKey: "", // Never show the actual API key
+        testMode: nextInitial.testMode,
       });
+      setInitialFormData(nextInitial);
     }
   }, [settings]);
 
@@ -3001,6 +3740,12 @@ function SettingsSection() {
         sessionToken: sessionTokenArg,
       });
       setFormData((prev) => ({ ...prev, resendApiKey: "" }));
+      setInitialFormData({
+        contactEmail: formData.contactEmail,
+        contactPhone: formData.contactPhone,
+        contactAddress: formData.contactAddress,
+        testMode: formData.testMode,
+      });
       if (hasPendingApiKey) {
         setApiKeyConfigured(true);
       }
@@ -3023,7 +3768,7 @@ function SettingsSection() {
         testMode: newTestMode,
         sessionToken: sessionTokenArg,
       });
-      setFormData({ ...formData, testMode: newTestMode });
+      setFormData((prev) => ({ ...prev, testMode: newTestMode }));
       toast.success(newTestMode ? "Test mode enabled" : "Live mode enabled");
     } catch (error) {
       toast.error("Failed to toggle test mode");
@@ -3191,7 +3936,7 @@ function SettingsSection() {
 
           <Button
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isLoading || !isDirty}
             className="w-full h-11 rounded-xl font-bold tracking-tight mt-4"
           >
             {isLoading ? (
@@ -3202,6 +3947,19 @@ function SettingsSection() {
             ) : (
               "Save Changes"
             )}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={!isDirty || isLoading}
+            onClick={() => {
+              setFormData({
+                ...initialFormData,
+                resendApiKey: "",
+              });
+            }}
+          >
+            Reset Unsaved Changes
           </Button>
         </CardContent>
       </Card>
@@ -3248,32 +4006,62 @@ function SettingsSection() {
 function MetricCard({
   title,
   value,
-  change: _change,
+  change,
   changeLabel,
   icon: Icon,
-  color,
+  tone,
+  onClick,
+  actionLabel,
 }: {
   title: string;
   value: string | number;
   change?: string | number;
   changeLabel: string;
   icon: any;
-  color: string;
+  tone: "teal" | "blue" | "amber" | "emerald";
+  onClick?: () => void;
+  actionLabel?: string;
 }) {
+  const toneClass = {
+    teal: "text-primary bg-primary/10",
+    blue: "text-blue-700 bg-blue-100",
+    amber: "text-amber-700 bg-amber-100",
+    emerald: "text-emerald-700 bg-emerald-100",
+  };
+
   return (
-    <Card className="minimal-card p-6 flex flex-col justify-between">
-      <div className="flex items-center justify-between mb-8">
+    <Card
+      className={cn(
+        "minimal-card p-6 flex flex-col justify-between transition-all",
+        onClick
+          ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 focus-within:ring-2 focus-within:ring-primary/30"
+          : "",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!onClick) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+    >
+      <div className="flex items-center justify-between mb-6">
         <div
           className={cn(
-            "w-10 h-10 rounded-xl bg-secondary flex items-center justify-center",
-            color,
+            "w-10 h-10 rounded-xl flex items-center justify-center",
+            toneClass[tone],
           )}
         >
           <Icon className="w-5 h-5" />
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          {changeLabel}
-        </span>
+        {change !== undefined ? (
+          <span className="text-[11px] font-semibold text-muted-foreground">
+            {changeLabel}: <span className="text-foreground">{change}</span>
+          </span>
+        ) : null}
       </div>
       <div>
         <h3 className="text-3xl font-display font-bold tracking-tighter mb-1">
@@ -3282,6 +4070,12 @@ function MetricCard({
         <p className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">
           {title}
         </p>
+        {actionLabel ? (
+          <p className="text-[11px] text-primary mt-2 inline-flex items-center gap-1">
+            {actionLabel}
+            <ExternalLink className="w-3.5 h-3.5" />
+          </p>
+        ) : null}
       </div>
     </Card>
   );

@@ -12,7 +12,12 @@ export async function getAuthenticatedUser(ctx: any, sessionToken?: string) {
         q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
-    return user;
+
+    // If Convex identity exists but isn't mapped to an app user yet,
+    // fall back to session-token auth instead of treating as unauthenticated.
+    if (user) {
+      return user;
+    }
   }
 
   // Fallback: lookup by session token
@@ -52,7 +57,7 @@ export async function requireAdmin(ctx: any, sessionToken?: string) {
 }
 
 /**
- * Require manager or admin role
+ * Require manager role
  */
 export async function requireManager(ctx: any, sessionToken?: string) {
   const user = await getAuthenticatedUser(ctx, sessionToken);
@@ -61,15 +66,15 @@ export async function requireManager(ctx: any, sessionToken?: string) {
     throw new Error("Unauthorized");
   }
 
-  if (!["admin", "manager"].includes(user.role)) {
-    throw new Error("Unauthorized: Manager or Admin only");
+  if (user.role !== "manager") {
+    throw new Error("Unauthorized: Manager only");
   }
 
   return user;
 }
 
 /**
- * Require pharmacist, manager, or admin role
+ * Require pharmacist role
  */
 export async function requirePharmacist(ctx: any, sessionToken?: string) {
   const user = await getAuthenticatedUser(ctx, sessionToken);
@@ -78,15 +83,15 @@ export async function requirePharmacist(ctx: any, sessionToken?: string) {
     throw new Error("Unauthorized");
   }
 
-  if (!["admin", "manager", "pharmacist"].includes(user.role)) {
-    throw new Error("Unauthorized: Pharmacist, Manager, or Admin only");
+  if (user.role !== "pharmacist") {
+    throw new Error("Unauthorized: Pharmacist only");
   }
 
   return user;
 }
 
 /**
- * Require cashier, pharmacist, manager, or admin role
+ * Require cashier role
  */
 export async function requireCashier(ctx: any, sessionToken?: string) {
   const user = await getAuthenticatedUser(ctx, sessionToken);
@@ -95,7 +100,7 @@ export async function requireCashier(ctx: any, sessionToken?: string) {
     throw new Error("Unauthorized");
   }
 
-  if (!["admin", "manager", "pharmacist", "cashier"].includes(user.role)) {
+  if (user.role !== "cashier") {
     throw new Error("Unauthorized");
   }
 
@@ -103,7 +108,23 @@ export async function requireCashier(ctx: any, sessionToken?: string) {
 }
 
 /**
- * Require owner or admin role
+ * Check if user is admin (returns null instead of throwing)
+ */
+export async function checkAdmin(ctx: any, sessionToken?: string) {
+  const user = await getAuthenticatedUser(ctx, sessionToken);
+  if (!user || user.role !== "admin") return null;
+  return user;
+}
+
+/**
+ * Check if user is authenticated (returns null instead of throwing)
+ */
+export async function checkAuth(ctx: any, sessionToken?: string) {
+  return await getAuthenticatedUser(ctx, sessionToken);
+}
+
+/**
+ * Require admin role
  */
 export async function requireOwner(ctx: any, sessionToken?: string) {
   const user = await getAuthenticatedUser(ctx, sessionToken);

@@ -37,10 +37,12 @@ export default defineSchema({
     // v4.0 Activity fields
     lastActionPerformed: v.optional(v.string()),
     totalActionsLast30Days: v.optional(v.number()),
+    canApproveStockTransfers: v.optional(v.boolean()),
+    stockApprovalDelegatedBy: v.optional(v.id("users")),
+    stockApprovalDelegatedAt: v.optional(v.number()),
+    stockApprovalDelegationExpiresAt: v.optional(v.number()),
 
     // Migration fields
-    migratedFromClerk: v.optional(v.boolean()),
-    clerkId: v.optional(v.string()), // Keep for reference during migration
     mustResetPassword: v.optional(v.boolean()),
     migrationCompletedAt: v.optional(v.number()),
 
@@ -52,8 +54,7 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_role", ["role"])
     .index("by_pharmacy", ["pharmacyId"])
-    .index("by_branch", ["branchId"])
-    .index("by_clerk_id", ["clerkId"]),
+    .index("by_branch", ["branchId"]),
 
   pharmacies: defineTable({
     name: v.string(),
@@ -85,6 +86,7 @@ export default defineSchema({
     taxId: v.optional(v.string()),
     // v4.0 Contact & Location fields
     primaryContactPhone: v.optional(v.string()),
+    signupLocation: v.optional(v.string()),
     address: v.optional(
       v.object({
         street: v.string(),
@@ -134,6 +136,50 @@ export default defineSchema({
         pharmacists: v.number(),
         managers: v.number(),
         cashiers: v.number(),
+      }),
+    ),
+    signupSnapshot: v.optional(
+      v.object({
+        step1Pharmacy: v.object({
+          pharmacyNameLabel: v.string(),
+          pharmacyName: v.string(),
+          licenseLabel: v.string(),
+          licenseCode: v.string(),
+          primaryLocationLabel: v.string(),
+          primaryLocation: v.string(),
+          pharmacyEmailLabel: v.string(),
+          pharmacyEmail: v.string(),
+        }),
+        step1Operations: v.object({
+          totalBranchesLabel: v.string(),
+          totalBranches: v.number(),
+          branchSetupLabel: v.string(),
+          branchLocations: v.array(v.string()),
+          totalStaffLabel: v.string(),
+          totalStaff: v.number(),
+          breakdownLabel: v.string(),
+          pharmacists: v.number(),
+          managers: v.number(),
+          cashiers: v.number(),
+        }),
+        step2Subscription: v.object({
+          selectedLabel: v.string(),
+          selectedTier: v.string(),
+          recommendedLabel: v.string(),
+          recommendedTier: v.string(),
+        }),
+        step3Owner: v.object({
+          nameLabel: v.string(),
+          fullName: v.string(),
+          emailLabel: v.string(),
+          email: v.string(),
+          phoneLabel: v.string(),
+          phone: v.string(),
+        }),
+        step4Review: v.object({
+          termsAcceptedLabel: v.string(),
+          termsAccepted: v.boolean(),
+        }),
       }),
     ),
     recommendedSubscriptionTier: v.optional(v.string()),
@@ -283,6 +329,52 @@ export default defineSchema({
     notes: v.optional(v.string()),
   }).index("by_branch", ["branchId"]),
 
+  stock_transfer_requests: defineTable({
+    pharmacyId: v.id("pharmacies"),
+    requesterUserId: v.id("users"),
+    requesterRole: v.union(v.literal("manager"), v.literal("pharmacist")),
+    fromBranchId: v.id("branches"),
+    toBranchId: v.id("branches"),
+    sourceMedicineId: v.id("medicines"),
+    medicineSnapshot: v.object({
+      name: v.string(),
+      category: v.string(),
+      manufacturer: v.optional(v.string()),
+      barcode: v.optional(v.string()),
+      genericName: v.optional(v.string()),
+      price: v.number(),
+    }),
+    quantity: v.number(),
+    urgency: v.union(v.literal("low"), v.literal("normal"), v.literal("high")),
+    reason: v.string(),
+    notes: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending_owner"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("fulfilled"),
+      v.literal("cancelled"),
+    ),
+    approvedByUserId: v.optional(v.id("users")),
+    approvedByRole: v.optional(
+      v.union(v.literal("owner"), v.literal("manager")),
+    ),
+    approvedAt: v.optional(v.number()),
+    rejectedByUserId: v.optional(v.id("users")),
+    rejectedByRole: v.optional(
+      v.union(v.literal("owner"), v.literal("manager")),
+    ),
+    rejectedAt: v.optional(v.number()),
+    rejectionReason: v.optional(v.string()),
+    fulfilledAt: v.optional(v.number()),
+    fulfillmentAuditId: v.optional(v.string()),
+  })
+    .index("by_pharmacy", ["pharmacyId"])
+    .index("by_requester", ["requesterUserId"])
+    .index("by_status", ["status"])
+    .index("by_from_branch", ["fromBranchId"])
+    .index("by_to_branch", ["toBranchId"]),
+
   subscription_plans: defineTable({
     name: v.string(), // "Basic", "Premium", "Enterprise"
     code: v.string(), // "basic", "premium", "enterprise"
@@ -359,7 +451,9 @@ export default defineSchema({
     ownerNotifiedAt: v.optional(v.number()),
     ownerNotified: v.boolean(),
     actionStatus: v.string(), // "active", "lifted_by_admin", "lifted_by_owner"
-  }).index("by_target_user", ["targetUserId"]),
+  })
+    .index("by_target_user", ["targetUserId"])
+    .index("by_target_pharmacy", ["targetPharmacyId"]),
 
   manager_flags: defineTable({
     managerId: v.id("users"),
@@ -584,6 +678,25 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_ip", ["ipAddress"]),
 
+  rejected_owner_applications: defineTable({
+    ownerEmail: v.string(),
+    ownerName: v.optional(v.string()),
+    ownerPhone: v.optional(v.string()),
+    pharmacyName: v.optional(v.string()),
+    pharmacyEmail: v.optional(v.string()),
+    licenseCode: v.optional(v.string()),
+    signupLocation: v.optional(v.string()),
+    rejectionReason: v.string(),
+    rejectedAt: v.number(),
+    retentionUntil: v.number(),
+    rejectedByAdminId: v.optional(v.id("users")),
+    sourceOwnerId: v.optional(v.string()),
+    sourcePharmacyId: v.optional(v.string()),
+  })
+    .index("by_owner_email", ["ownerEmail"])
+    .index("by_retention_until", ["retentionUntil"])
+    .index("by_owner_email_and_rejected_at", ["ownerEmail", "rejectedAt"]),
+
   // Landing Page: Testimonials with approval workflow
   testimonials: defineTable({
     ownerId: v.id("users"),
@@ -760,14 +873,7 @@ export default defineSchema({
     identifier: v.string(),
     token: v.string(),
     expires: v.number(),
-  }).index("by_identifier_token", ["identifier", "token"]),
-
-  // Migration tracking
-  migration_status: defineTable({
-    userId: v.id("users"),
-    migratedFrom: v.string(), // "clerk"
-    migratedAt: v.number(),
-    passwordResetSent: v.boolean(),
-    emailVerified: v.boolean(),
-  }).index("by_user_id", ["userId"]),
+  })
+    .index("by_identifier", ["identifier"])
+    .index("by_identifier_token", ["identifier", "token"]),
 });

@@ -50,7 +50,6 @@ export const storeUser = mutation({
 
       if (pendingUser) {
         await ctx.db.patch(pendingUser._id, {
-          clerkId: identity.subject,
           tokenIdentifier: identity.tokenIdentifier,
           full_name: pendingUser.full_name || identity.name || "",
         });
@@ -62,7 +61,6 @@ export const storeUser = mutation({
 
         return {
           ...pendingUser,
-          clerkId: identity.subject,
           tokenIdentifier: identity.tokenIdentifier,
           pharmacy,
         };
@@ -74,7 +72,6 @@ export const storeUser = mutation({
 
     // If it's a completely new user, create it
     const newUserId = await ctx.db.insert("users", {
-      clerkId: identity.subject,
       tokenIdentifier: identity.tokenIdentifier,
       full_name: identity.name || "",
       email: identity.email || "",

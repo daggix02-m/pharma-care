@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -20,6 +20,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -83,9 +93,12 @@ interface StatCardProps {
   value: string | number;
   icon: React.ElementType;
   color: string;
+  onClick?: () => void;
+  actionLabel?: string;
 }
 
 export function PharmacistDashboard() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const validTabs = [
@@ -135,7 +148,9 @@ export function PharmacistDashboard() {
       <Tabs value={activeTab} className="w-full">
         <div ref={contentRef}>
           <TabsContent value="overview" className="mt-0 focus:outline-none">
-            <OverviewTab />
+            <OverviewTab
+              onNavigateTab={(tab) => navigate(`/pharmacist?tab=${tab}`)}
+            />
           </TabsContent>
 
           <TabsContent value="medicines" className="mt-0 focus:outline-none">
@@ -159,7 +174,11 @@ export function PharmacistDashboard() {
   );
 }
 
-function OverviewTab() {
+function OverviewTab({
+  onNavigateTab,
+}: {
+  onNavigateTab: (tab: string) => void;
+}) {
   const { sessionToken } = useAuth();
   const stats = useQuery(
     api.pharmacist.queries.getDashboardStats,
@@ -204,26 +223,56 @@ function OverviewTab() {
           value={stats.totalMedicines}
           icon={Pill}
           color="text-primary"
+          onClick={() => onNavigateTab("medicines")}
+          actionLabel="Manage"
         />
         <StatCard
           title="Low Stock"
           value={stats.lowStockItems}
           icon={AlertTriangle}
           color="text-destructive"
+          onClick={() => onNavigateTab("stock")}
+          actionLabel="Request"
         />
         <StatCard
           title="Near Expiry"
           value={expiringMedicines.length}
           icon={Clock}
           color="text-amber-600"
+          onClick={() => onNavigateTab("expiry")}
+          actionLabel="Review"
         />
         <StatCard
           title="Today's Sales"
           value={`ETB ${stats.todaySales.toLocaleString()}`}
           icon={DollarSign}
           color="text-primary"
+          onClick={() => onNavigateTab("reports")}
+          actionLabel="Analyze"
         />
       </div>
+
+      <Card className="minimal-card">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">
+            Quick Actions
+          </CardTitle>
+          <CardDescription>
+            Fast access to critical inventory workflows
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <Button variant="outline" onClick={() => onNavigateTab("medicines")}>
+            Inventory
+          </Button>
+          <Button variant="outline" onClick={() => onNavigateTab("expiry")}>
+            Expiry Alerts
+          </Button>
+          <Button variant="outline" onClick={() => onNavigateTab("stock")}>
+            Stock Requests
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {lowStockMedicines.length > 0 && (
@@ -289,9 +338,31 @@ function OverviewTab() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  color,
+  onClick,
+  actionLabel,
+}: StatCardProps) {
   return (
-    <Card className="minimal-card p-6">
+    <Card
+      className={cn(
+        "minimal-card p-6 transition-all",
+        onClick ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : "",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onClick) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div className="flex items-center justify-between mb-4">
         <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           {title}
@@ -306,6 +377,11 @@ function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
         </div>
       </div>
       <div className="text-2xl font-display font-bold">{value}</div>
+      {actionLabel ? (
+        <p className="text-[11px] font-semibold text-primary mt-2 uppercase tracking-wide">
+          {actionLabel}
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -331,8 +407,12 @@ function MedicinesTab() {
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
+  const [deletingMedicine, setDeletingMedicine] = useState<Medicine | null>(
+    null,
+  );
 
   const [newMedicine, setNewMedicine] = useState({
     name: "",
@@ -459,6 +539,21 @@ function MedicinesTab() {
     }
   };
 
+  const handleDeleteMedicine = async () => {
+    if (!deletingMedicine) return;
+    try {
+      setSaving(true);
+      await removeMedicineMutation({ id: deletingMedicine._id });
+      toast.success("Medicine removed");
+      setDeleteDialogOpen(false);
+      setDeletingMedicine(null);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to remove medicine");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -546,9 +641,10 @@ function MedicinesTab() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 rounded-lg text-destructive"
-                      onClick={() =>
-                        removeMedicineMutation({ id: medicine._id })
-                      }
+                      onClick={() => {
+                        setDeletingMedicine(medicine);
+                        setDeleteDialogOpen(true);
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -707,6 +803,30 @@ function MedicinesTab() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete medicine?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingMedicine?.name} will be removed from inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteMedicine();
+              }}
+              disabled={saving}
+            >
+              {saving ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -791,6 +911,17 @@ function StockRequestsTab() {
   const createStockRequest = useMutation(
     api.pharmacist.mutations.createStockRequest,
   );
+  const requestTransfer = useMutation(
+    (api as any).stockTransfers.requestStockTransfer,
+  );
+  const transferOptions = useQuery(
+    (api as any).stockTransfers.getTransferFormOptions,
+    sessionToken ? { sessionToken } : "skip",
+  );
+  const transferRequests = useQuery(
+    (api as any).stockTransfers.getTransferRequestsForPharmacy,
+    sessionToken ? { sessionToken } : "skip",
+  );
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const [requestForm, setRequestForm] = useState({
     medicineId: "",
@@ -799,6 +930,15 @@ function StockRequestsTab() {
     notes: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    toBranchId: "",
+    sourceMedicineId: "",
+    quantity: "",
+    urgency: "normal",
+    reason: "",
+    notes: "",
+  });
   const requests = useQuery(
     api.pharmacist.queries.getStockRequests,
     sessionToken ? { sessionToken } : "skip",
@@ -879,6 +1019,205 @@ function StockRequestsTab() {
           ),
         )}
       </div>
+
+      <Card className="minimal-card">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">
+            Branch Transfer Request
+          </CardTitle>
+          <CardDescription>
+            Request stock movement from your branch to another branch.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="grid gap-3 md:grid-cols-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (
+                !transferForm.toBranchId ||
+                !transferForm.sourceMedicineId ||
+                !transferForm.quantity ||
+                !transferForm.reason.trim()
+              ) {
+                toast.error("Please complete all transfer request fields");
+                return;
+              }
+
+              try {
+                setTransferSubmitting(true);
+                await requestTransfer({
+                  fromBranchId: transferOptions?.actorBranchId,
+                  toBranchId: transferForm.toBranchId,
+                  sourceMedicineId: transferForm.sourceMedicineId,
+                  quantity: Number(transferForm.quantity),
+                  urgency: transferForm.urgency,
+                  reason: transferForm.reason.trim(),
+                  notes: transferForm.notes.trim() || undefined,
+                  sessionToken: sessionToken || undefined,
+                });
+                toast.success("Transfer request submitted");
+                setTransferForm({
+                  toBranchId: "",
+                  sourceMedicineId: "",
+                  quantity: "",
+                  urgency: "normal",
+                  reason: "",
+                  notes: "",
+                });
+              } catch (error: any) {
+                toast.error(error?.message || "Failed to request transfer");
+              } finally {
+                setTransferSubmitting(false);
+              }
+            }}
+          >
+            <div className="space-y-1">
+              <Label>Destination Branch</Label>
+              <select
+                value={transferForm.toBranchId}
+                onChange={(e) =>
+                  setTransferForm((prev) => ({
+                    ...prev,
+                    toBranchId: e.target.value,
+                  }))
+                }
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select branch</option>
+                {(transferOptions?.branches || [])
+                  .filter(
+                    (branch: any) =>
+                      branch._id !== transferOptions?.actorBranchId,
+                  )
+                  .map((branch: any) => (
+                    <option key={branch._id} value={branch._id}>
+                      {branch.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Medicine</Label>
+              <select
+                value={transferForm.sourceMedicineId}
+                onChange={(e) =>
+                  setTransferForm((prev) => ({
+                    ...prev,
+                    sourceMedicineId: e.target.value,
+                  }))
+                }
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select medicine</option>
+                {(
+                  transferOptions?.medicinesBySource?.[
+                    transferOptions?.actorBranchId || ""
+                  ] || []
+                ).map((medicine: any) => (
+                  <option key={medicine._id} value={medicine._id}>
+                    {medicine.name} (Stock: {medicine.stock})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min={1}
+                value={transferForm.quantity}
+                onChange={(e) =>
+                  setTransferForm((prev) => ({
+                    ...prev,
+                    quantity: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Urgency</Label>
+              <select
+                value={transferForm.urgency}
+                onChange={(e) =>
+                  setTransferForm((prev) => ({
+                    ...prev,
+                    urgency: e.target.value,
+                  }))
+                }
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Reason</Label>
+              <Input
+                value={transferForm.reason}
+                onChange={(e) =>
+                  setTransferForm((prev) => ({
+                    ...prev,
+                    reason: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Notes</Label>
+              <Textarea
+                rows={2}
+                value={transferForm.notes}
+                onChange={(e) =>
+                  setTransferForm((prev) => ({
+                    ...prev,
+                    notes: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="md:col-span-2 flex justify-end">
+              <Button type="submit" disabled={transferSubmitting}>
+                {transferSubmitting
+                  ? "Submitting..."
+                  : "Submit Transfer Request"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="minimal-card">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">
+            Transfer Request History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {(transferRequests || []).map((request: any) => (
+            <div
+              key={request._id}
+              className="rounded-lg border border-border/40 p-3"
+            >
+              <p className="font-medium text-sm">
+                {request.medicineSnapshot?.name} · {request.quantity} units
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {request.fromBranchName} to {request.toBranchName}
+              </p>
+              <Badge className="capitalize mt-2">
+                {request.status.replace(/_/g, " ")}
+              </Badge>
+            </div>
+          ))}
+          {!transferRequests?.length && (
+            <p className="text-sm text-muted-foreground">
+              No transfer requests yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Dialog open={newRequestOpen} onOpenChange={setNewRequestOpen}>
         <DialogContent>

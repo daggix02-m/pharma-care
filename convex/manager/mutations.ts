@@ -292,48 +292,11 @@ export const createSale = mutation({
     chapaReference: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
-
-    const cashier = await ctx.db
-      .query("users")
-      .withIndex("by_tokenIdentifier", (q: any) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-
-    if (!cashier) {
-      throw new Error("Unauthorized");
-    }
-
-    // Deduct inventory
-    for (const item of args.items) {
-      const medicine = await ctx.db.get(item.medicineId);
-      if (!medicine) throw new Error(`Medicine ${item.medicineId} not found`);
-      if (medicine.stock < item.quantity) {
-        throw new Error(`Insufficient stock for ${medicine.name}`);
-      }
-      await ctx.db.patch(medicine._id, {
-        stock: medicine.stock - item.quantity,
-      });
-    }
-
-    const saleId = await ctx.db.insert("sales", {
-      branchId: args.branchId,
-      cashierId: cashier._id,
-      totalAmount: args.totalAmount,
-      status: "completed",
-      customerName: args.customerName,
-      customerPhone: args.customerPhone,
-      paymentMethod: args.paymentMethod,
-      chapaTransactionId: args.chapaTransactionId,
-      chapaPaymentMethod: args.chapaPaymentMethod,
-      chapaStatus: args.chapaTransactionId ? "success" : undefined,
-      chapaReference: args.chapaReference,
-      items: args.items,
-    });
-
-    return { success: true, saleId };
+    void ctx;
+    void args;
+    throw new Error(
+      "Sales are cashier-only. Please use cashier POS operations.",
+    );
   },
 });
 
@@ -374,7 +337,6 @@ export const createStaff = mutation({
       pharmacyId: manager.pharmacyId,
       status: "pending",
       tokenIdentifier: `pending_${args.email}`,
-      clerkId: "pending",
     });
 
     return { success: true, userId };
@@ -421,7 +383,7 @@ export const resetStaffPassword = mutation({
       );
     }
 
-    // Note: Password reset is handled by Clerk
+    // Password reset workflow is handled via the platform auth flow.
     await ctx.db.insert("audit_logs", {
       userId: manager._id,
       action: "password_reset",
@@ -431,7 +393,10 @@ export const resetStaffPassword = mutation({
       timestamp: Date.now(),
     });
 
-    return { success: true, message: "Password reset initiated via Clerk" };
+    return {
+      success: true,
+      message: "Password reset request has been recorded",
+    };
   },
 });
 
@@ -551,88 +516,11 @@ export const transferStock = mutation({
     quantity: v.number(),
   },
   handler: async (ctx: any, args: any) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
-
-    const manager = await ctx.db
-      .query("users")
-      .withIndex("by_tokenIdentifier", (q: any) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-
-    if (!manager || manager.role !== "manager") {
-      throw new Error("Unauthorized: Manager only");
-    }
-
-    const medicine = await ctx.db.get(args.medicineId);
-    if (!medicine) throw new Error("Medicine not found");
-
-    const fromBranch = await ctx.db.get(args.fromBranchId);
-    const toBranch = await ctx.db.get(args.toBranchId);
-
-    if (!fromBranch || !toBranch) {
-      throw new Error("Branch not found");
-    }
-
-    if (
-      fromBranch.pharmacyId !== manager.pharmacyId ||
-      toBranch.pharmacyId !== manager.pharmacyId
-    ) {
-      throw new Error("Unauthorized: Branches do not belong to your pharmacy");
-    }
-
-    if (medicine.branchId !== args.fromBranchId) {
-      throw new Error("Medicine is not in the source branch");
-    }
-
-    if (medicine.stock < args.quantity) {
-      throw new Error("Insufficient stock in source branch");
-    }
-
-    // Check if medicine exists in target branch
-    const existingMedicines = await ctx.db
-      .query("medicines")
-      .filter((q: any) =>
-        q.and(
-          q.eq(q.field("branchId"), args.toBranchId),
-          q.eq(q.field("name"), medicine.name),
-        ),
-      )
-      .collect();
-
-    if (existingMedicines.length > 0) {
-      // Update existing medicine
-      const targetMedicine = existingMedicines[0];
-      await ctx.db.patch(targetMedicine._id, {
-        stock: targetMedicine.stock + args.quantity,
-      });
-      await ctx.db.patch(args.medicineId, {
-        stock: medicine.stock - args.quantity,
-      });
-    } else {
-      // Create new medicine in target branch
-      await ctx.db.insert("medicines", {
-        ...medicine,
-        _id: undefined,
-        branchId: args.toBranchId,
-        stock: args.quantity,
-      });
-      await ctx.db.patch(args.medicineId, {
-        stock: medicine.stock - args.quantity,
-      });
-    }
-
-    await ctx.db.insert("audit_logs", {
-      userId: manager._id,
-      action: "stock_transfer",
-      entityId: args.medicineId,
-      entityType: "medicine",
-      details: `Transferred ${args.quantity} units of ${medicine.name} from ${fromBranch.name} to ${toBranch.name}`,
-      timestamp: Date.now(),
-    });
-
-    return { success: true };
+    void ctx;
+    void args;
+    throw new Error(
+      "Direct stock transfers are disabled. Submit a stock transfer request and use owner/delegated approval.",
+    );
   },
 });
 

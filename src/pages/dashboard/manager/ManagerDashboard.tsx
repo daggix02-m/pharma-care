@@ -1,5 +1,6 @@
+import * as React from "react";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -28,6 +29,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,12 +77,14 @@ import { useAuth } from "@/contexts/AuthContext";
 const PAGE_SIZE = 15;
 
 export function ManagerDashboard() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const validTabs = [
     "overview",
     "branches",
     "staff",
+    "transfers",
     "audit",
     "settings",
   ] as const;
@@ -124,7 +128,9 @@ export function ManagerDashboard() {
       <Tabs value={activeTab} className="w-full">
         <div ref={contentRef}>
           <TabsContent value="overview" className="mt-0 focus:outline-none">
-            <OverviewTab />
+            <OverviewTab
+              onNavigateTab={(tab) => navigate(`/manager?tab=${tab}`)}
+            />
           </TabsContent>
 
           <TabsContent value="branches" className="mt-0 focus:outline-none">
@@ -133,6 +139,10 @@ export function ManagerDashboard() {
 
           <TabsContent value="staff" className="mt-0 focus:outline-none">
             <StaffTab />
+          </TabsContent>
+
+          <TabsContent value="transfers" className="mt-0 focus:outline-none">
+            <TransferRequestsTab />
           </TabsContent>
 
           <TabsContent value="audit" className="mt-0 focus:outline-none">
@@ -148,7 +158,11 @@ export function ManagerDashboard() {
   );
 }
 
-function OverviewTab() {
+function OverviewTab({
+  onNavigateTab,
+}: {
+  onNavigateTab: (tab: string) => void;
+}) {
   const { sessionToken } = useAuth();
   const stats = useQuery(
     api.manager.queries.getDashboardStats,
@@ -181,26 +195,56 @@ function OverviewTab() {
           value={stats.totalStaff}
           icon={Users}
           color="text-primary"
+          onClick={() => onNavigateTab("staff")}
+          actionLabel="Manage"
         />
         <StatCard
           title="Branches"
           value={stats.totalBranches}
           icon={Building2}
           color="text-primary"
+          onClick={() => onNavigateTab("branches")}
+          actionLabel="Review"
         />
         <StatCard
           title="Total Revenue"
           value={`ETB ${stats.totalRevenue.toLocaleString()}`}
           icon={DollarSign}
           color="text-primary"
+          onClick={() => onNavigateTab("audit")}
+          actionLabel="Audit"
         />
         <StatCard
           title="Low Stock Items"
           value={stats.lowStockItems}
           icon={Package}
           color="text-destructive"
+          onClick={() => onNavigateTab("transfers")}
+          actionLabel="Transfer"
         />
       </div>
+
+      <Card className="minimal-card">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">
+            Quick Actions
+          </CardTitle>
+          <CardDescription>
+            Jump directly to your most-used workflows
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <Button variant="outline" onClick={() => onNavigateTab("branches")}>
+            Open Branches
+          </Button>
+          <Button variant="outline" onClick={() => onNavigateTab("staff")}>
+            Open Staff
+          </Button>
+          <Button variant="outline" onClick={() => onNavigateTab("transfers")}>
+            Open Transfers
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card className="minimal-card">
         <CardHeader>
@@ -253,11 +297,35 @@ interface StatCardProps {
   value: string | number;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  onClick?: () => void;
+  actionLabel?: string;
 }
 
-function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  color,
+  onClick,
+  actionLabel,
+}: StatCardProps) {
   return (
-    <Card className="minimal-card p-6">
+    <Card
+      className={cn(
+        "minimal-card p-6 transition-all",
+        onClick ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : "",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onClick) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div className="flex items-center justify-between mb-4">
         <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           {title}
@@ -272,6 +340,11 @@ function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
         </div>
       </div>
       <div className="text-2xl font-display font-bold">{value}</div>
+      {actionLabel ? (
+        <p className="text-[11px] text-primary mt-2 uppercase tracking-wide font-semibold">
+          {actionLabel}
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -983,7 +1056,7 @@ function AuditTrailTab() {
   );
   const loading = logs === undefined;
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType] = useState("all");
+  const [filterType, setFilterType] = useState("all");
   const [currentPage] = useState(1);
 
   const getActionType = (action: string) => {
@@ -1045,6 +1118,25 @@ function AuditTrailTab() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 h-10 rounded-xl bg-background border-border/40"
             />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: "all", label: "All" },
+              { value: "create", label: "Create" },
+              { value: "update", label: "Update" },
+              { value: "delete", label: "Delete" },
+              { value: "inventory", label: "Inventory" },
+            ].map((type) => (
+              <Button
+                key={type.value}
+                size="sm"
+                variant={filterType === type.value ? "default" : "outline"}
+                onClick={() => setFilterType(type.value)}
+                className="h-8 text-[11px]"
+              >
+                {type.label}
+              </Button>
+            ))}
           </div>
         </div>
         <div className="divide-y divide-border/40">
@@ -1142,6 +1234,407 @@ function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function TransferRequestsTab() {
+  const { sessionToken } = useAuth();
+  const [statusFilter, setStatusFilter] = useState("all");
+  const transferOptions = useQuery(
+    (api as any).stockTransfers.getTransferFormOptions,
+    sessionToken ? { sessionToken } : "skip",
+  );
+  const transferRequests = useQuery(
+    (api as any).stockTransfers.getTransferRequestsForPharmacy,
+    sessionToken
+      ? {
+          sessionToken,
+          status: statusFilter === "all" ? undefined : statusFilter,
+        }
+      : "skip",
+  );
+  const requestTransfer = useMutation(
+    (api as any).stockTransfers.requestStockTransfer,
+  );
+  const approveTransfer = useMutation(
+    (api as any).stockTransfers.approveStockTransferRequest,
+  );
+  const rejectTransfer = useMutation(
+    (api as any).stockTransfers.rejectStockTransferRequest,
+  );
+
+  const [submitting, setSubmitting] = useState(false);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedRequestForReject, setSelectedRequestForReject] =
+    useState<any>(null);
+  const [rejectionReason, setRejectionReason] = useState(
+    "Insufficient justification",
+  );
+  const [approvalLoadingId, setApprovalLoadingId] = useState<string | null>(
+    null,
+  );
+  const [form, setForm] = useState({
+    fromBranchId: "",
+    toBranchId: "",
+    sourceMedicineId: "",
+    quantity: "",
+    urgency: "normal",
+    reason: "",
+    notes: "",
+  });
+
+  React.useEffect(() => {
+    if (!transferOptions) return;
+    if (!form.fromBranchId && transferOptions.actorBranchId) {
+      setForm((prev) => ({
+        ...prev,
+        fromBranchId: transferOptions.actorBranchId,
+      }));
+    }
+  }, [transferOptions, form.fromBranchId]);
+
+  const medicinesForSource =
+    transferOptions?.medicinesBySource?.[form.fromBranchId] || [];
+
+  const handleSubmitRequest = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (
+      !form.fromBranchId ||
+      !form.toBranchId ||
+      !form.sourceMedicineId ||
+      !form.quantity ||
+      !form.reason.trim()
+    ) {
+      toast.error("Please complete all required transfer fields");
+      return;
+    }
+    if (form.fromBranchId === form.toBranchId) {
+      toast.error("Source and destination branches must be different");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await requestTransfer({
+        fromBranchId: form.fromBranchId,
+        toBranchId: form.toBranchId,
+        sourceMedicineId: form.sourceMedicineId,
+        quantity: Number(form.quantity),
+        urgency: form.urgency,
+        reason: form.reason.trim(),
+        notes: form.notes.trim() || undefined,
+        sessionToken: sessionToken || undefined,
+      });
+      toast.success("Transfer request submitted");
+      setForm((prev) => ({
+        ...prev,
+        toBranchId: "",
+        sourceMedicineId: "",
+        quantity: "",
+        urgency: "normal",
+        reason: "",
+        notes: "",
+      }));
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to submit transfer request");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const canApprove = Boolean(transferOptions?.canApproveAsManager);
+
+  const submitRejection = async () => {
+    if (!selectedRequestForReject) return;
+    if (!rejectionReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
+    try {
+      setRejectingId(selectedRequestForReject._id);
+      await rejectTransfer({
+        requestId: selectedRequestForReject._id,
+        rejectionReason: rejectionReason.trim(),
+        sessionToken: sessionToken || undefined,
+      });
+      toast.success("Transfer request rejected");
+      setRejectDialogOpen(false);
+      setSelectedRequestForReject(null);
+      setRejectionReason("Insufficient justification");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to reject transfer");
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="minimal-card">
+        <CardHeader>
+          <CardTitle>Request Branch Transfer</CardTitle>
+          <CardDescription>
+            Managers can request stock transfers. Approval requires owner or
+            delegated manager access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={handleSubmitRequest}
+            className="grid gap-4 md:grid-cols-2"
+          >
+            <div className="space-y-1.5">
+              <Label>Source Branch</Label>
+              <Select
+                value={form.fromBranchId}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    fromBranchId: value,
+                    sourceMedicineId: "",
+                  }))
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select source branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(transferOptions?.branches || []).map((branch: any) => (
+                    <SelectItem key={branch._id} value={branch._id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Destination Branch</Label>
+              <Select
+                value={form.toBranchId}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, toBranchId: value }))
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select destination branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(transferOptions?.branches || []).map((branch: any) => (
+                    <SelectItem key={branch._id} value={branch._id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Medicine</Label>
+              <Select
+                value={form.sourceMedicineId}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, sourceMedicineId: value }))
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select medicine" />
+                </SelectTrigger>
+                <SelectContent>
+                  {medicinesForSource.map((medicine: any) => (
+                    <SelectItem key={medicine._id} value={medicine._id}>
+                      {medicine.name} (Stock: {medicine.stock})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min={1}
+                value={form.quantity}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, quantity: e.target.value }))
+                }
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Reason</Label>
+              <Input
+                value={form.reason}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, reason: e.target.value }))
+                }
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Urgency</Label>
+              <Select
+                value={form.urgency}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, urgency: value }))
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Input
+                value={form.notes}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="md:col-span-2 flex items-center justify-between">
+              <Badge variant={canApprove ? "default" : "secondary"}>
+                {canApprove
+                  ? "Delegated approval enabled"
+                  : "Owner approval required"}
+              </Badge>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl"
+              >
+                {submitting ? "Submitting..." : "Submit Transfer Request"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="minimal-card">
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>Transfer Requests</CardTitle>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-48 h-10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="pending_owner">Pending Approval</SelectItem>
+                <SelectItem value="fulfilled">Fulfilled</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(transferRequests || []).map((request: any) => (
+            <div
+              key={request._id}
+              className="rounded-xl border border-border/40 p-4"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-sm">
+                    {request.medicineSnapshot?.name} · {request.quantity} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {request.fromBranchName} to {request.toBranchName} ·
+                    Requested by {request.requesterName}
+                  </p>
+                </div>
+                <Badge className="capitalize">
+                  {request.status.replace(/_/g, " ")}
+                </Badge>
+              </div>
+              {canApprove && request.status === "pending_owner" && (
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    className="rounded-lg"
+                    disabled={approvalLoadingId === request._id}
+                    onClick={async () => {
+                      try {
+                        setApprovalLoadingId(request._id);
+                        await approveTransfer({
+                          requestId: request._id,
+                          sessionToken: sessionToken || undefined,
+                        });
+                        toast.success("Transfer approved and fulfilled");
+                      } catch (error: any) {
+                        toast.error(
+                          error?.message || "Failed to approve transfer",
+                        );
+                      } finally {
+                        setApprovalLoadingId(null);
+                      }
+                    }}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={rejectingId === request._id}
+                    onClick={() => {
+                      setSelectedRequestForReject(request);
+                      setRejectionReason("Insufficient justification");
+                      setRejectDialogOpen(true);
+                    }}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+          {!transferRequests?.length && (
+            <p className="text-sm text-muted-foreground">
+              No transfer requests yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Transfer Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              Add a reason to document why this request was rejected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            className="min-h-[110px]"
+            placeholder="Provide rejection reason"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(rejectingId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void submitRejection();
+              }}
+              disabled={Boolean(rejectingId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {rejectingId ? "Rejecting..." : "Reject Request"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

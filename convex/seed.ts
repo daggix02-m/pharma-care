@@ -43,7 +43,6 @@ export const seedAdmin = mutation({
       full_name: args.fullName,
       role: "admin",
       status: "active",
-      clerkId: "seed_admin", // Placeholder until first login
       tokenIdentifier: "seed_admin", // Placeholder until first login
     });
 
@@ -126,7 +125,6 @@ export const seedAdminWithCredentials = mutation({
       mfaEnabled: false,
       activeSessionsCount: 0,
       passwordLastChanged: Date.now(),
-      clerkId: "seed_admin",
       tokenIdentifier: "seed_admin",
     });
 

@@ -58,14 +58,79 @@ interface AuthContextValue {
   sessionToken: string | null;
 }
 
+type SignInResult = {
+  success: boolean;
+  message: string;
+  code?: string;
+  userId?: string;
+  sessionToken?: string;
+  role?: string;
+};
+
 interface SignupData {
   email: string;
   password: string;
   full_name: string;
-  pharmacyDetails?: {
+  phone: string;
+  pharmacyDetails: {
     name: string;
     licenseNumber: string;
     location: string;
+    pharmacyEmail?: string;
+  };
+  operations: {
+    totalBranches: number;
+    branchLocations: string[];
+    totalStaff: number;
+    pharmacistCount: number;
+    managerCount: number;
+    cashierCount: number;
+  };
+  subscription: {
+    selectedTier: string;
+    recommendedTier: string;
+  };
+  signupSnapshot: {
+    step1Pharmacy: {
+      pharmacyNameLabel: string;
+      pharmacyName: string;
+      licenseLabel: string;
+      licenseCode: string;
+      primaryLocationLabel: string;
+      primaryLocation: string;
+      pharmacyEmailLabel: string;
+      pharmacyEmail: string;
+    };
+    step1Operations: {
+      totalBranchesLabel: string;
+      totalBranches: number;
+      branchSetupLabel: string;
+      branchLocations: string[];
+      totalStaffLabel: string;
+      totalStaff: number;
+      breakdownLabel: string;
+      pharmacists: number;
+      managers: number;
+      cashiers: number;
+    };
+    step2Subscription: {
+      selectedLabel: string;
+      selectedTier: string;
+      recommendedLabel: string;
+      recommendedTier: string;
+    };
+    step3Owner: {
+      nameLabel: string;
+      fullName: string;
+      emailLabel: string;
+      email: string;
+      phoneLabel: string;
+      phone: string;
+    };
+    step4Review: {
+      termsAcceptedLabel: string;
+      termsAccepted: boolean;
+    };
   };
 }
 
@@ -136,13 +201,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setError(null);
 
     try {
-      const result = await signInMutation({
+      const result = (await signInMutation({
         email: normalizeEmail(email),
         password,
-      });
+      })) as SignInResult;
 
-      if (result.success) {
-        // Store session token
+      if (!result.success) {
+        const errorMessage = result.message || "Login failed";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return;
+      }
+
+      if (result.sessionToken && result.role) {
         localStorage.setItem("sessionToken", result.sessionToken);
         setSessionToken(result.sessionToken);
 
@@ -199,7 +270,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         email: normalizeEmail(userData.email),
         password: userData.password,
         full_name: userData.full_name,
+        phone: userData.phone,
         pharmacyDetails: userData.pharmacyDetails,
+        operations: userData.operations,
+        subscription: userData.subscription,
+        signupSnapshot: userData.signupSnapshot,
       });
 
       if (result.success) {
@@ -223,13 +298,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setIsLoading(true);
 
     try {
-      const result = await requestPasswordResetMutation({
+      await requestPasswordResetMutation({
         email: normalizeEmail(email),
       });
-
-      if (result.success) {
-        toast.success(result.message);
-      }
     } catch (err: any) {
       console.error("[AuthContext] Password reset request error:", err);
       const errorMessage = err.message || "Failed to request password reset";
@@ -248,16 +319,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setIsLoading(true);
 
     try {
-      const result = await resetPasswordMutation({
+      await resetPasswordMutation({
         token,
         email: normalizeEmail(email),
         newPassword,
       });
-
-      if (result.success) {
-        toast.success(result.message);
-        window.location.href = "/auth/login";
-      }
     } catch (err: any) {
       console.error("[AuthContext] Password reset error:", err);
       const errorMessage = err.message || "Failed to reset password";

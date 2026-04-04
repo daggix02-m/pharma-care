@@ -8,6 +8,14 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ETHIOPIAN_PHONE_REGEX = /^(\+251|0)?[79]\d{8}$/;
+
+const normalizeTierCode = (tier: string | undefined | null): string =>
+  String(tier || "")
+    .trim()
+    .toLowerCase();
+
 function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -141,44 +149,307 @@ async function findUserByEmail(ctx: any, email: string) {
   );
 }
 
+async function getPreviousRejectionForEmail(ctx: any, email: string) {
+  const normalizedEmail = normalizeEmail(email);
+  const rows = await ctx.db
+    .query("rejected_owner_applications")
+    .withIndex("by_owner_email_and_rejected_at", (q: any) =>
+      q.eq("ownerEmail", normalizedEmail),
+    )
+    .order("desc")
+    .take(1);
+
+  const latest = rows[0];
+  if (!latest || latest.retentionUntil < Date.now()) {
+    return null;
+  }
+
+  return {
+    rejectionReason: latest.rejectionReason,
+    rejectedAt: latest.rejectedAt,
+    pharmacyName: latest.pharmacyName,
+  };
+}
+
+async function validateAndNormalizeSignupPayload(
+  ctx: any,
+  args: any,
+  normalizedEmail: string,
+) {
+  if (!args.pharmacyDetails) {
+    throw new Error("Pharmacy details are required for owner registration");
+  }
+
+  if (!args.operations) {
+    throw new Error("Operations details are required for owner registration");
+  }
+
+  if (!args.subscription) {
+    throw new Error("Subscription details are required for owner registration");
+  }
+
+  if (!args.signupSnapshot) {
+    throw new Error("Signup review snapshot is required");
+  }
+
+  const ownerFullName = String(args.full_name || "").trim();
+  if (!ownerFullName) {
+    throw new Error("Owner full name is required");
+  }
+
+  const ownerPhone = String(args.phone || "").trim();
+  const normalizedPhone = ownerPhone.replace(/\s+/g, "");
+  if (!ownerPhone || !ETHIOPIAN_PHONE_REGEX.test(normalizedPhone)) {
+    throw new Error("Valid owner phone number is required");
+  }
+
+  const pharmacyName = String(args.pharmacyDetails.name || "").trim();
+  const licenseNumber = String(args.pharmacyDetails.licenseNumber || "").trim();
+  const location = String(args.pharmacyDetails.location || "").trim();
+  const pharmacyEmailRaw = String(
+    args.pharmacyDetails.pharmacyEmail || "",
+  ).trim();
+  const pharmacyEmail = pharmacyEmailRaw
+    ? normalizeEmail(pharmacyEmailRaw)
+    : undefined;
+
+  if (!pharmacyName) {
+    throw new Error("Pharmacy name is required");
+  }
+  if (!licenseNumber) {
+    throw new Error("License number is required");
+  }
+  if (!location) {
+    throw new Error("Primary location is required");
+  }
+  if (pharmacyEmail && !EMAIL_REGEX.test(pharmacyEmail)) {
+    throw new Error("Pharmacy email is invalid");
+  }
+
+  const totalBranches = Number(args.operations.totalBranches || 0);
+  const totalStaff = Number(args.operations.totalStaff || 0);
+  const pharmacistCount = Number(args.operations.pharmacistCount || 0);
+  const managerCount = Number(args.operations.managerCount || 0);
+  const cashierCount = Number(args.operations.cashierCount || 0);
+
+  if (!Number.isInteger(totalBranches) || totalBranches < 1) {
+    throw new Error("At least one branch is required");
+  }
+  if (!Number.isInteger(totalStaff) || totalStaff < 1) {
+    throw new Error("Total staff must be at least 1");
+  }
+  if (pharmacistCount < 0 || managerCount < 0 || cashierCount < 0) {
+    throw new Error("Staff breakdown values cannot be negative");
+  }
+
+  const normalizedBranchLocations = (args.operations.branchLocations || [])
+    .map((location: string) => String(location || "").trim())
+    .filter(Boolean);
+
+  if (normalizedBranchLocations.length !== totalBranches) {
+    throw new Error("Please provide all branch locations");
+  }
+
+  if (pharmacistCount + managerCount + cashierCount !== totalStaff) {
+    throw new Error("Staff breakdown must equal total staff count");
+  }
+
+  const selectedTier = normalizeTierCode(args.subscription.selectedTier);
+  const recommendedTier = normalizeTierCode(args.subscription.recommendedTier);
+
+  if (!selectedTier) {
+    throw new Error("Please select a subscription plan");
+  }
+  if (!recommendedTier) {
+    throw new Error("Recommended subscription tier is required");
+  }
+
+  const activePlans = await ctx.db
+    .query("subscription_plans")
+    .withIndex("by_active", (q: any) => q.eq("isActive", true))
+    .take(100);
+  const validPlanCodes = new Set(
+    activePlans.map((plan: any) => normalizeTierCode(plan.code)),
+  );
+
+  if (validPlanCodes.size > 0 && !validPlanCodes.has(selectedTier)) {
+    throw new Error("Selected subscription plan is not active");
+  }
+
+  if (
+    validPlanCodes.size > 0 &&
+    recommendedTier &&
+    !validPlanCodes.has(recommendedTier)
+  ) {
+    throw new Error("Recommended subscription plan is not active");
+  }
+
+  const snapshot = args.signupSnapshot;
+  const termsAccepted = Boolean(snapshot?.step4Review?.termsAccepted);
+  if (!termsAccepted) {
+    throw new Error("You must accept terms before submitting signup");
+  }
+
+  const snapshotEmail = normalizeEmail(snapshot?.step3Owner?.email || "");
+  if (snapshotEmail && snapshotEmail !== normalizedEmail) {
+    throw new Error("Owner email does not match signup review data");
+  }
+
+  const canonicalSignupSnapshot = {
+    step1Pharmacy: {
+      pharmacyNameLabel: "Pharmacy Name",
+      pharmacyName,
+      licenseLabel: "License Number",
+      licenseCode: licenseNumber,
+      primaryLocationLabel: "Primary Location (from signup form)",
+      primaryLocation: location,
+      pharmacyEmailLabel: "Pharmacy Email (Optional)",
+      pharmacyEmail: pharmacyEmail || "",
+    },
+    step1Operations: {
+      totalBranchesLabel: "Total Branches",
+      totalBranches,
+      branchSetupLabel: "Branch Setup",
+      branchLocations: normalizedBranchLocations,
+      totalStaffLabel: "Total Staff",
+      totalStaff,
+      breakdownLabel: "Breakdown",
+      pharmacists: pharmacistCount,
+      managers: managerCount,
+      cashiers: cashierCount,
+    },
+    step2Subscription: {
+      selectedLabel: "Selected",
+      selectedTier,
+      recommendedLabel: "Recommended",
+      recommendedTier,
+    },
+    step3Owner: {
+      nameLabel: "Full Name",
+      fullName: ownerFullName,
+      emailLabel: "Email Address",
+      email: normalizedEmail,
+      phoneLabel: "Phone Number",
+      phone: ownerPhone,
+    },
+    step4Review: {
+      termsAcceptedLabel: "Terms Accepted",
+      termsAccepted: true,
+    },
+  };
+
+  return {
+    ownerFullName,
+    ownerPhone,
+    pharmacyDetails: {
+      name: pharmacyName,
+      licenseNumber,
+      location,
+      pharmacyEmail,
+    },
+    operations: {
+      totalBranches,
+      branchLocations: normalizedBranchLocations,
+      totalStaff,
+      pharmacistCount,
+      managerCount,
+      cashierCount,
+    },
+    subscription: {
+      selectedTier,
+      recommendedTier,
+    },
+    canonicalSignupSnapshot,
+  };
+}
+
 // Email/Password Sign Up
 export const signUpWithEmail = mutation({
   args: {
     email: v.string(),
     password: v.string(),
     full_name: v.string(),
-    phone: v.optional(v.string()),
-    pharmacyDetails: v.optional(
-      v.object({
-        name: v.string(),
-        licenseNumber: v.string(),
-        location: v.string(),
-        pharmacyEmail: v.optional(v.string()),
+    phone: v.string(),
+    pharmacyDetails: v.object({
+      name: v.string(),
+      licenseNumber: v.string(),
+      location: v.string(),
+      pharmacyEmail: v.optional(v.string()),
+    }),
+    operations: v.object({
+      totalBranches: v.number(),
+      branchLocations: v.array(v.string()),
+      totalStaff: v.number(),
+      pharmacistCount: v.number(),
+      managerCount: v.number(),
+      cashierCount: v.number(),
+    }),
+    subscription: v.object({
+      selectedTier: v.string(),
+      recommendedTier: v.string(),
+    }),
+    signupSnapshot: v.object({
+      step1Pharmacy: v.object({
+        pharmacyNameLabel: v.string(),
+        pharmacyName: v.string(),
+        licenseLabel: v.string(),
+        licenseCode: v.string(),
+        primaryLocationLabel: v.string(),
+        primaryLocation: v.string(),
+        pharmacyEmailLabel: v.string(),
+        pharmacyEmail: v.string(),
       }),
-    ),
-    operations: v.optional(
-      v.object({
+      step1Operations: v.object({
+        totalBranchesLabel: v.string(),
         totalBranches: v.number(),
+        branchSetupLabel: v.string(),
         branchLocations: v.array(v.string()),
+        totalStaffLabel: v.string(),
         totalStaff: v.number(),
-        pharmacistCount: v.number(),
-        managerCount: v.number(),
-        cashierCount: v.number(),
+        breakdownLabel: v.string(),
+        pharmacists: v.number(),
+        managers: v.number(),
+        cashiers: v.number(),
       }),
-    ),
-    subscription: v.optional(
-      v.object({
+      step2Subscription: v.object({
+        selectedLabel: v.string(),
         selectedTier: v.string(),
+        recommendedLabel: v.string(),
         recommendedTier: v.string(),
       }),
-    ),
+      step3Owner: v.object({
+        nameLabel: v.string(),
+        fullName: v.string(),
+        emailLabel: v.string(),
+        email: v.string(),
+        phoneLabel: v.string(),
+        phone: v.string(),
+      }),
+      step4Review: v.object({
+        termsAcceptedLabel: v.string(),
+        termsAccepted: v.boolean(),
+      }),
+    }),
   },
   handler: async (ctx, args) => {
     const normalizedEmail = normalizeEmail(args.email);
-
-    if (!args.pharmacyDetails) {
-      throw new Error("Pharmacy details are required for owner registration");
-    }
+    const normalizedSignup = await validateAndNormalizeSignupPayload(
+      ctx,
+      args,
+      normalizedEmail,
+    );
+    const {
+      ownerFullName,
+      ownerPhone,
+      pharmacyDetails,
+      operations,
+      subscription,
+      canonicalSignupSnapshot,
+    } = normalizedSignup;
+    const previousRejection = await getPreviousRejectionForEmail(
+      ctx,
+      normalizedEmail,
+    );
 
     const settings = await ctx.db.query("site_settings").first();
     if (!settings?.resendApiKey) {
@@ -205,6 +476,82 @@ export const signUpWithEmail = mutation({
         );
       }
 
+      const normalizedBranchLocations = operations.branchLocations;
+      const fallbackSignupLocation = pharmacyDetails.location;
+      const signupLocation =
+        fallbackSignupLocation || normalizedBranchLocations[0] || undefined;
+      const plannedBranchLocations = normalizedBranchLocations;
+
+      const existingPharmacy = existingUser.pharmacyId
+        ? await ctx.db.get(existingUser.pharmacyId)
+        : null;
+      const existingPharmacyStatus = String(existingPharmacy?.status || "")
+        .trim()
+        .toLowerCase();
+
+      let pharmacyId = existingPharmacy?._id ?? null;
+      const hasPendingPharmacy =
+        existingPharmacyStatus === "pending" ||
+        existingPharmacyStatus === "pending_approval";
+
+      if (!hasPendingPharmacy) {
+        pharmacyId = await ctx.db.insert("pharmacies", {
+          name: pharmacyDetails.name,
+          pharmacyEmail: pharmacyDetails.pharmacyEmail,
+          signupLocation,
+          licenseCode: pharmacyDetails.licenseNumber,
+          staffCount: operations.totalStaff,
+          subscriptionTier: subscription.selectedTier,
+          status: "pending",
+          ownerId: existingUser._id,
+          plannedBranches: operations.totalBranches,
+          plannedBranchLocations,
+          plannedStaffTotal: operations.totalStaff,
+          plannedStaffBreakdown: operations
+            ? {
+                pharmacists: operations.pharmacistCount,
+                managers: operations.managerCount,
+                cashiers: operations.cashierCount,
+              }
+            : undefined,
+          signupSnapshot: canonicalSignupSnapshot,
+          recommendedSubscriptionTier: subscription.recommendedTier,
+          paymentStatus: "pending_approval",
+        });
+      } else if (existingPharmacy) {
+        await ctx.db.patch(existingPharmacy._id, {
+          name: pharmacyDetails.name,
+          pharmacyEmail: pharmacyDetails.pharmacyEmail,
+          signupLocation,
+          licenseCode: pharmacyDetails.licenseNumber,
+          staffCount: operations.totalStaff,
+          subscriptionTier: subscription.selectedTier,
+          status: "pending",
+          plannedBranches: operations.totalBranches,
+          plannedBranchLocations,
+          plannedStaffTotal: operations.totalStaff,
+          plannedStaffBreakdown: operations
+            ? {
+                pharmacists: operations.pharmacistCount,
+                managers: operations.managerCount,
+                cashiers: operations.cashierCount,
+              }
+            : undefined,
+          signupSnapshot: canonicalSignupSnapshot,
+          recommendedSubscriptionTier: subscription.recommendedTier,
+          paymentStatus: "pending_approval",
+        });
+      }
+
+      await ctx.db.patch(existingUser._id, {
+        status: "pending",
+        role: "owner",
+        phone: ownerPhone,
+        full_name: ownerFullName,
+        name: ownerFullName,
+        pharmacyId: pharmacyId || undefined,
+      });
+
       const verifyToken = generateVerificationCode();
       await deleteVerificationTokensForEmail(ctx, normalizedEmail);
       await ctx.db.insert("authVerificationTokens", {
@@ -228,9 +575,10 @@ export const signUpWithEmail = mutation({
       return {
         success: true,
         userId: existingUser._id,
-        pharmacyId: existingUser.pharmacyId ?? null,
+        pharmacyId,
         emailSent: delivery.emailSent,
         deliveryStatus: delivery.status,
+        previousRejection,
         message:
           "Account already exists but is unverified. A new verification email has been sent.",
       };
@@ -248,9 +596,9 @@ export const signUpWithEmail = mutation({
     const userId = await ctx.db.insert("users", {
       email: normalizedEmail,
       emailVerified: false,
-      name: args.full_name,
-      full_name: args.full_name,
-      phone: args.phone,
+      name: ownerFullName,
+      full_name: ownerFullName,
+      phone: ownerPhone,
       passwordHash,
       role: "owner",
       status: "pending",
@@ -261,28 +609,31 @@ export const signUpWithEmail = mutation({
       passwordLastChanged: Date.now(),
     });
 
+    const normalizedBranchLocations = operations.branchLocations;
+    const fallbackSignupLocation = pharmacyDetails.location;
+    const signupLocation =
+      fallbackSignupLocation || normalizedBranchLocations[0] || undefined;
+    const plannedBranchLocations = normalizedBranchLocations;
+
     const pharmacyId = await ctx.db.insert("pharmacies", {
-      name: args.pharmacyDetails.name,
-      pharmacyEmail: args.pharmacyDetails.pharmacyEmail
-        ? normalizeEmail(args.pharmacyDetails.pharmacyEmail)
-        : undefined,
-      signupLocation: args.pharmacyDetails.location,
-      licenseCode: args.pharmacyDetails.licenseNumber,
-      staffCount: args.operations?.totalStaff || 1,
-      subscriptionTier: args.subscription?.selectedTier || "basic",
+      name: pharmacyDetails.name,
+      pharmacyEmail: pharmacyDetails.pharmacyEmail,
+      signupLocation,
+      licenseCode: pharmacyDetails.licenseNumber,
+      staffCount: operations.totalStaff,
+      subscriptionTier: subscription.selectedTier,
       status: "pending",
       ownerId: userId,
-      plannedBranches: args.operations?.totalBranches,
-      plannedBranchLocations: args.operations?.branchLocations,
-      plannedStaffTotal: args.operations?.totalStaff,
-      plannedStaffBreakdown: args.operations
-        ? {
-            pharmacists: args.operations.pharmacistCount,
-            managers: args.operations.managerCount,
-            cashiers: args.operations.cashierCount,
-          }
-        : undefined,
-      recommendedSubscriptionTier: args.subscription?.recommendedTier,
+      plannedBranches: operations.totalBranches,
+      plannedBranchLocations,
+      plannedStaffTotal: operations.totalStaff,
+      plannedStaffBreakdown: {
+        pharmacists: operations.pharmacistCount,
+        managers: operations.managerCount,
+        cashiers: operations.cashierCount,
+      },
+      signupSnapshot: canonicalSignupSnapshot,
+      recommendedSubscriptionTier: subscription.recommendedTier,
       paymentStatus: "pending_approval",
     });
 
@@ -305,7 +656,7 @@ export const signUpWithEmail = mutation({
     const delivery = await queueEmailSend(ctx, {
       to: normalizedEmail,
       subject: "Verify your PharmaCare account",
-      html: `<p>Hello ${args.full_name},</p><p>Welcome to PharmaCare. Verify your email to continue your pharmacy application.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
+      html: `<p>Hello ${ownerFullName},</p><p>Welcome to PharmaCare. Verify your email to continue your pharmacy application.</p><p><a href="${verifyLink}">Verify Email</a></p>`,
       apiKey: settings.resendApiKey,
       testMode: settings.testMode,
     });
@@ -326,6 +677,7 @@ export const signUpWithEmail = mutation({
       pharmacyId,
       emailSent: delivery.emailSent,
       deliveryStatus: delivery.status,
+      previousRejection,
       message:
         "Owner account submitted. Verify your email and wait for admin approval.",
     };

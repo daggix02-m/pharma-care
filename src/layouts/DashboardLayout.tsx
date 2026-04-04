@@ -1,8 +1,6 @@
 import * as React from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { TopBar } from "@/components/dashboard/TopBar";
-import Breadcrumb from "@/components/shared/Breadcrumb";
-import { cn } from "@/lib/utils";
 import gsap from "gsap";
 
 // Page transition wrapper with GSAP
@@ -55,16 +53,6 @@ export const DashboardLayout = React.memo(function DashboardLayout({
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16">
         <div className="w-full max-w-full min-w-0 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden">
-          {/* Breadcrumb Navigation */}
-          <div
-            className={cn(
-              "mb-6",
-              "opacity-70 hover:opacity-100 transition-opacity duration-200",
-            )}
-          >
-            <Breadcrumb />
-          </div>
-
           {/* Page Content with Transition */}
           <PageTransition>
             <div className="min-h-[calc(100vh-200px)] max-w-full min-w-0 overflow-x-hidden">

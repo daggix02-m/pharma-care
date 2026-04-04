@@ -6,7 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layout, MessageSquare, Eye, Check, Star, Clock } from "lucide-react";
+import {
+  Layout,
+  MessageSquare,
+  Eye,
+  Check,
+  Star,
+  Clock,
+  ArrowRight,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import ContentEditor from "./ContentEditor";
 import TestimonialsManager from "./TestimonialsManager";
@@ -76,6 +85,11 @@ export function LandingPageManagement() {
 
   // Check if content exists
   const hasContent = content.length > 0;
+  const activeSectionsCount = sections.filter(
+    (s: LandingPageSection) => s.isEnabled,
+  ).length;
+  const pendingTestimonials = testimonialStats?.pending || 0;
+  const approvedTestimonials = testimonialStats?.approved || 0;
 
   return (
     <div className="space-y-6">
@@ -97,9 +111,59 @@ export function LandingPageManagement() {
         )}
       </div>
 
+      <Card className="border border-border/60 bg-gradient-to-r from-primary/[0.06] via-background to-emerald-500/[0.06]">
+        <CardContent className="p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                Experience Ops
+              </p>
+              <h3 className="text-lg font-semibold mt-1">
+                Manage content, testimonials, and visibility in one flow.
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={activeTab === "content" ? "default" : "outline"}
+                onClick={() => setActiveTab("content")}
+              >
+                Edit Content
+              </Button>
+              <Button
+                size="sm"
+                variant={activeTab === "testimonials" ? "default" : "outline"}
+                onClick={() => setActiveTab("testimonials")}
+                className="gap-1.5"
+              >
+                Review Testimonials
+                {pendingTestimonials > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="h-5 px-1.5 text-[10px]"
+                  >
+                    {pendingTestimonials}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant={activeTab === "sections" ? "default" : "outline"}
+                onClick={() => setActiveTab("sections")}
+              >
+                Toggle Sections
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card
+          className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => setActiveTab("sections")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Layout className="h-4 w-4" />
@@ -108,13 +172,19 @@ export function LandingPageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {sections.filter((s: LandingPageSection) => s.isEnabled).length} /{" "}
-              {sections.length}
+              {activeSectionsCount} / {sections.length}
             </div>
+            <p className="text-xs text-primary mt-2 inline-flex items-center gap-1">
+              Manage visibility
+              <ArrowRight className="h-3.5 w-3.5" />
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => setActiveTab("testimonials")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
@@ -127,16 +197,23 @@ export function LandingPageManagement() {
             </div>
             <div className="flex gap-2 mt-2">
               <Badge variant="secondary" className="text-xs">
-                {testimonialStats?.pending || 0} Pending
+                {pendingTestimonials} Pending
               </Badge>
               <Badge variant="default" className="text-xs">
-                {testimonialStats?.approved || 0} Approved
+                {approvedTestimonials} Approved
               </Badge>
             </div>
+            <p className="text-xs text-primary mt-2 inline-flex items-center gap-1">
+              Review submissions
+              <ArrowRight className="h-3.5 w-3.5" />
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => setActiveTab("testimonials")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Star className="h-4 w-4" />
@@ -150,10 +227,17 @@ export function LandingPageManagement() {
                 / 5.0
               </span>
             </div>
+            <p className="text-xs text-primary mt-2 inline-flex items-center gap-1">
+              Quality overview
+              <ArrowRight className="h-3.5 w-3.5" />
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+          onClick={() => setActiveTab("content")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Clock className="h-4 w-4" />
@@ -170,6 +254,10 @@ export function LandingPageManagement() {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Total edits made
+            </p>
+            <p className="text-xs text-primary mt-2 inline-flex items-center gap-1">
+              Continue editing
+              <ArrowRight className="h-3.5 w-3.5" />
             </p>
           </CardContent>
         </Card>
@@ -206,7 +294,7 @@ export function LandingPageManagement() {
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <Layout className="h-12 w-12 text-muted-foreground mb-4" />
+                <Sparkles className="h-12 w-12 text-primary/50 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Content Found</h3>
                 <p className="text-muted-foreground text-center max-w-md mb-4">
                   Initialize the landing page with default content to get

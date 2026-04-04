@@ -12,12 +12,14 @@ import {
   Activity,
   Package,
   TrendingUp,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { OwnerInternalMessageDialog } from "@/components/shared/messaging/OwnerInternalMessageDialog";
 import {
   Dialog,
@@ -26,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function OwnerDashboard() {
@@ -41,8 +43,23 @@ export function OwnerDashboard() {
     branchId: "",
   });
   const [activeTab, setActiveTab] = React.useState<
-    "overview" | "messaging" | "appeals" | "staff" | "branches"
+    "overview" | "messaging" | "appeals" | "staff" | "branches" | "transfers"
   >("overview");
+  const [delegationHoursByManager, setDelegationHoursByManager] =
+    React.useState<Record<string, string>>({});
+  const [delegatingManagerId, setDelegatingManagerId] = React.useState<
+    string | null
+  >(null);
+  const [decisionLoadingId, setDecisionLoadingId] = React.useState<
+    string | null
+  >(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = React.useState(false);
+  const [selectedTransferRequest, setSelectedTransferRequest] =
+    React.useState<any>(null);
+  const [transferRejectReason, setTransferRejectReason] = React.useState(
+    "Insufficient stock justification",
+  );
+  const [transferStatusFilter, setTransferStatusFilter] = React.useState("all");
 
   const pharmacy = useQuery(
     (api.owner as any).queries.getMyPharmacyDetail,
@@ -67,9 +84,142 @@ export function OwnerDashboard() {
       : "skip",
   );
 
+  const transferRequests = useQuery(
+    (api as any).stockTransfers.getTransferRequestsForPharmacy,
+    (activeTab === "transfers" || activeTab === "overview") && auth.sessionToken
+      ? {
+          sessionToken: auth.sessionToken,
+          status:
+            transferStatusFilter === "all" ? undefined : transferStatusFilter,
+        }
+      : "skip",
+  );
+
+  const delegationManagers = useQuery(
+    (api as any).stockTransfers.getDelegationManagers,
+    activeTab === "transfers" && auth.sessionToken
+      ? { sessionToken: auth.sessionToken }
+      : "skip",
+  );
+
+  const setDelegation = useMutation(
+    (api as any).stockTransfers.setManagerStockApprovalDelegation,
+  );
+  const approveTransfer = useMutation(
+    (api as any).stockTransfers.approveStockTransferRequest,
+  );
+  const rejectTransfer = useMutation(
+    (api as any).stockTransfers.rejectStockTransferRequest,
+  );
+
   const handleSendMessage = () => {
     setMessageDialogOpen(true);
   };
+
+  const signupProfile = pharmacy?.signupProfile;
+  const plannedBreakdown = signupProfile?.plannedStaffBreakdown
+    ? `${signupProfile.plannedStaffBreakdown.pharmacists} pharmacists, ${signupProfile.plannedStaffBreakdown.managers} managers, ${signupProfile.plannedStaffBreakdown.cashiers} cashiers`
+    : "N/A";
+
+  const pharmacyIdentityRows = [
+    { label: "Pharmacy Name", value: signupProfile?.name || "N/A" },
+    {
+      label: "Pharmacy Email",
+      value: signupProfile?.pharmacyEmail || "N/A",
+    },
+    { label: "License Number", value: signupProfile?.licenseCode || "N/A" },
+    {
+      label: "Primary Location",
+      value: signupProfile?.signupLocation || "N/A",
+    },
+  ];
+
+  const operationsRows = [
+    {
+      label: "Planned Branches",
+      value:
+        typeof signupProfile?.plannedBranches === "number"
+          ? signupProfile.plannedBranches.toString()
+          : "N/A",
+    },
+    {
+      label: "Branch Locations",
+      value:
+        signupProfile?.plannedBranchLocations?.length > 0
+          ? signupProfile.plannedBranchLocations.join(", ")
+          : "N/A",
+    },
+    {
+      label: "Planned Staff",
+      value:
+        typeof signupProfile?.plannedStaffTotal === "number"
+          ? signupProfile.plannedStaffTotal.toString()
+          : "N/A",
+    },
+    {
+      label: "Staff Breakdown",
+      value: plannedBreakdown,
+    },
+  ];
+
+  const billingRows = [
+    {
+      label: "Selected Tier",
+      value: signupProfile?.selectedTier
+        ? signupProfile.selectedTier.toUpperCase()
+        : "N/A",
+    },
+    {
+      label: "Recommended Tier",
+      value: signupProfile?.recommendedTier
+        ? signupProfile.recommendedTier.toUpperCase()
+        : "N/A",
+    },
+    {
+      label: "Payment Status",
+      value: signupProfile?.paymentStatus
+        ? signupProfile.paymentStatus.toUpperCase()
+        : "N/A",
+    },
+    {
+      label: "Submitted",
+      value: signupProfile?.submittedAt
+        ? formatDateTime(signupProfile.submittedAt)
+        : "N/A",
+    },
+  ];
+
+  const sectionCards = [
+    {
+      title: "Owner Account",
+      rows: [
+        {
+          label: "Owner Name",
+          value: signupProfile?.ownerName || auth.user?.full_name || "N/A",
+        },
+        {
+          label: "Owner Email",
+          value: signupProfile?.ownerEmail || auth.user?.email || "N/A",
+        },
+        {
+          label: "Owner Phone",
+          value: signupProfile?.ownerPhone || "N/A",
+        },
+      ],
+    },
+    {
+      title: "Pharmacy Identity",
+      rows: pharmacyIdentityRows,
+    },
+    {
+      title: "Operations Snapshot",
+      rows: operationsRows,
+    },
+    {
+      title: "Subscription & Billing",
+      rows: billingRows,
+    },
+  ];
 
   const handleCreateStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -114,14 +264,33 @@ export function OwnerDashboard() {
     value,
     change,
     color,
+    onClick,
+    actionLabel,
   }: {
     icon: React.ElementType;
     label: string;
     value: string | number;
     change?: string;
     color?: string;
+    onClick?: () => void;
+    actionLabel?: string;
   }) => (
-    <Card className="group hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/20">
+    <Card
+      className={cn(
+        "group transition-all duration-300 border-2 hover:border-primary/20",
+        onClick ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5" : "",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onClick) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {label}
@@ -145,9 +314,61 @@ export function OwnerDashboard() {
             {change} from last month
           </p>
         )}
+        {actionLabel ? (
+          <p className="text-[11px] font-semibold text-primary mt-2 uppercase tracking-wide">
+            {actionLabel}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
+
+  const submitTransferRejection = async () => {
+    if (!selectedTransferRequest) return;
+    if (!transferRejectReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
+
+    try {
+      setDecisionLoadingId(selectedTransferRequest._id);
+      await rejectTransfer({
+        requestId: selectedTransferRequest._id,
+        rejectionReason: transferRejectReason.trim(),
+        sessionToken: auth.sessionToken || undefined,
+      });
+      toast.success("Transfer request rejected");
+      setRejectDialogOpen(false);
+      setSelectedTransferRequest(null);
+      setTransferRejectReason("Insufficient stock justification");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to reject transfer");
+    } finally {
+      setDecisionLoadingId(null);
+    }
+  };
+
+  if (pharmacy?.missingPharmacy) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-2 border-orange-500/30 bg-gradient-to-r from-orange-50 to-yellow-50">
+          <CardHeader>
+            <CardTitle>Pharmacy record is unavailable</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-orange-900">
+            <p>
+              Your account is linked to a pharmacy that cannot be found right
+              now.
+            </p>
+            <p>
+              Please contact an administrator to restore or relink your pharmacy
+              profile.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -221,6 +442,7 @@ export function OwnerDashboard() {
           { id: "appeals", label: "Appeals & Actions", icon: ShieldAlert },
           { id: "staff", label: "Staff", icon: Users },
           { id: "branches", label: "Branches", icon: Building2 },
+          { id: "transfers", label: "Transfers", icon: ArrowRightLeft },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -256,24 +478,32 @@ export function OwnerDashboard() {
               label="Total Branches"
               value={pharmacy?.branches?.length || 0}
               color="text-blue-600"
+              onClick={() => setActiveTab("branches")}
+              actionLabel="Open"
             />
             <StatCard
               icon={Users}
               label="Total Staff"
               value={pharmacy?.staff?.length || 0}
               color="text-emerald-600"
+              onClick={() => setActiveTab("staff")}
+              actionLabel="Manage"
             />
             <StatCard
               icon={Activity}
               label="Pending Actions"
               value={pendingActions?.totalCount || 0}
               color="text-orange-600"
+              onClick={() => setActiveTab("appeals")}
+              actionLabel="Review"
             />
             <StatCard
               icon={TrendingUp}
               label="Messages Sent"
               value={messages?.length || 0}
               color="text-purple-600"
+              onClick={() => setActiveTab("messaging")}
+              actionLabel="Inspect"
             />
           </div>
 
@@ -317,6 +547,38 @@ export function OwnerDashboard() {
                     View and edit branches
                   </span>
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Submitted Signup Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 lg:grid-cols-3">
+                {sectionCards.map((section) => (
+                  <div
+                    key={section.title}
+                    className="rounded-xl border border-border/50 bg-gradient-to-br from-secondary/15 to-secondary/5 px-4 py-3"
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary/80 mb-2">
+                      {section.title}
+                    </p>
+                    <div className="space-y-2.5">
+                      {section.rows.map((item) => (
+                        <div key={item.label} className="space-y-0.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+                            {item.label}
+                          </p>
+                          <p className="text-sm font-medium break-words">
+                            {item.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -532,6 +794,202 @@ export function OwnerDashboard() {
         </Card>
       )}
 
+      {activeTab === "transfers" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Manager Approval Delegation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {delegationManagers?.length ? (
+                delegationManagers.map((manager: any) => {
+                  const expiry = manager.stockApprovalDelegationExpiresAt;
+                  const isActive =
+                    manager.canApproveStockTransfers &&
+                    expiry &&
+                    expiry > Date.now();
+                  return (
+                    <div
+                      key={manager._id}
+                      className="rounded-lg border border-border/40 p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                    >
+                      <div>
+                        <p className="font-medium">{manager.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {manager.email}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {isActive && expiry
+                            ? `Delegation expires ${formatDateTime(expiry)}`
+                            : "No active delegation"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={168}
+                          value={delegationHoursByManager[manager._id] || "24"}
+                          onChange={(e) =>
+                            setDelegationHoursByManager((prev) => ({
+                              ...prev,
+                              [manager._id]: e.target.value,
+                            }))
+                          }
+                          className="h-9 w-24"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={delegatingManagerId === manager._id}
+                          onClick={async () => {
+                            try {
+                              setDelegatingManagerId(manager._id);
+                              await setDelegation({
+                                managerId: manager._id,
+                                enabled: true,
+                                durationHours: Number(
+                                  delegationHoursByManager[manager._id] || "24",
+                                ),
+                                sessionToken: auth.sessionToken || undefined,
+                              });
+                              toast.success("Delegation enabled");
+                            } catch (error: any) {
+                              toast.error(
+                                error?.message || "Failed to enable delegation",
+                              );
+                            } finally {
+                              setDelegatingManagerId(null);
+                            }
+                          }}
+                        >
+                          Delegate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={delegatingManagerId === manager._id}
+                          onClick={async () => {
+                            try {
+                              setDelegatingManagerId(manager._id);
+                              await setDelegation({
+                                managerId: manager._id,
+                                enabled: false,
+                                sessionToken: auth.sessionToken || undefined,
+                              });
+                              toast.success("Delegation revoked");
+                            } catch (error: any) {
+                              toast.error(
+                                error?.message || "Failed to revoke delegation",
+                              );
+                            } finally {
+                              setDelegatingManagerId(null);
+                            }
+                          }}
+                        >
+                          Revoke
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No managers found
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>Transfer Approval Queue</CardTitle>
+                <select
+                  value={transferStatusFilter}
+                  onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm sm:w-52"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending_owner">Pending Approval</option>
+                  <option value="fulfilled">Fulfilled</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(transferRequests || []).map((request: any) => (
+                <div
+                  key={request._id}
+                  className="rounded-lg border border-border/40 p-3"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="font-medium text-sm">
+                        {request.medicineSnapshot?.name} · {request.quantity}{" "}
+                        units
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {request.fromBranchName} to {request.toBranchName} · by{" "}
+                        {request.requesterName}
+                      </p>
+                    </div>
+                    <Badge className="capitalize">
+                      {request.status.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                  {request.status === "pending_owner" && (
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={decisionLoadingId === request._id}
+                        onClick={async () => {
+                          try {
+                            setDecisionLoadingId(request._id);
+                            await approveTransfer({
+                              requestId: request._id,
+                              sessionToken: auth.sessionToken || undefined,
+                            });
+                            toast.success("Transfer approved and fulfilled");
+                          } catch (error: any) {
+                            toast.error(
+                              error?.message || "Failed to approve transfer",
+                            );
+                          } finally {
+                            setDecisionLoadingId(null);
+                          }
+                        }}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={decisionLoadingId === request._id}
+                        onClick={() => {
+                          setSelectedTransferRequest(request);
+                          setTransferRejectReason(
+                            "Insufficient stock justification",
+                          );
+                          setRejectDialogOpen(true);
+                        }}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {!transferRequests?.length && (
+                <p className="text-sm text-muted-foreground">
+                  No transfer requests found.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Message Dialog */}
       <OwnerInternalMessageDialog
         open={messageDialogOpen}
@@ -618,6 +1076,39 @@ export function OwnerDashboard() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Transfer Request</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="owner-transfer-reason">Rejection reason</Label>
+            <Textarea
+              id="owner-transfer-reason"
+              value={transferRejectReason}
+              onChange={(e) => setTransferRejectReason(e.target.value)}
+              className="min-h-[120px]"
+              placeholder="Explain why this request is rejected"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRejectDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void submitTransferRejection()}
+              disabled={Boolean(decisionLoadingId)}
+            >
+              {decisionLoadingId ? "Rejecting..." : "Reject Request"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

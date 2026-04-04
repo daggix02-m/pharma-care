@@ -1,7 +1,7 @@
-import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import { useAuth } from '@/contexts/AuthContext';
-import * as React from 'react';
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useAuth } from "@/contexts/AuthContext";
+import * as React from "react";
 
 // Types
 interface Pharmacy {
@@ -31,7 +31,12 @@ const normalizePharmacies = (pharmacies: unknown[]): Pharmacy[] => {
   return pharmacies.map((p: any) => ({
     ...p,
     id: p.id ?? p.branch_id ?? p.branchId ?? crypto.randomUUID(),
-    pharmacy_name: p.pharmacy_name ?? p.branch_name ?? p.branchName ?? p.name ?? 'Unnamed Pharmacy',
+    pharmacy_name:
+      p.pharmacy_name ??
+      p.branch_name ??
+      p.branchName ??
+      p.name ??
+      "Unnamed Pharmacy",
     branch_name: p.branch_name ?? p.branchName ?? p.name,
   }));
 };
@@ -42,19 +47,23 @@ const normalizePharmacies = (pharmacies: unknown[]): Pharmacy[] => {
 const filterPharmaciesByManager = (
   pharmacies: Pharmacy[],
   pharmacyId: string | undefined,
-  userId: string | undefined
+  userId: string | undefined,
 ): Pharmacy[] => {
   if (!pharmacies.length) return pharmacies;
 
   // Filter by pharmacy ID if available
   if (pharmacyId) {
-    const byPharmacy = pharmacies.filter((p) => String(p.pharmacy_id) === String(pharmacyId));
+    const byPharmacy = pharmacies.filter(
+      (p) => String(p.pharmacy_id) === String(pharmacyId),
+    );
     if (byPharmacy.length > 0) return byPharmacy;
   }
 
   // Filter by manager ID if available
   if (userId) {
-    const byManager = pharmacies.filter((p) => String(p.manager_id) === String(userId));
+    const byManager = pharmacies.filter(
+      (p) => String(p.manager_id) === String(userId),
+    );
     if (byManager.length > 0) return byManager;
   }
 
@@ -76,12 +85,17 @@ const filterPharmaciesByManager = (
 export function usePharmacies(): UsePharmaciesReturn {
   const { pharmacyId, userId, userRole, sessionToken } = useAuth();
 
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === "admin";
+  const isManager = userRole === "manager";
 
-  // Select correct query based on role with session token
+  // Select query only for roles that are authorized.
   const pharmaciesData = useQuery(
-    isAdmin ? api.admin.queries.getPharmacies : api.manager.queries.getBranches,
-    sessionToken ? { sessionToken } : 'skip'
+    isAdmin
+      ? api.admin.queries.getPharmacies
+      : isManager
+        ? api.manager.queries.getBranches
+        : api.admin.queries.getPharmacies,
+    sessionToken && (isAdmin || isManager) ? { sessionToken } : "skip",
   );
 
   // Memoize normalized pharmacies to prevent recalculation on every render
@@ -106,7 +120,7 @@ export function usePharmacies(): UsePharmaciesReturn {
       pharmacies: filteredPharmacies,
       loading,
     }),
-    [filteredPharmacies, loading]
+    [filteredPharmacies, loading],
   );
 }
 

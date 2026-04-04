@@ -29,6 +29,75 @@ interface OwnerInfo {
   confirmPassword: string;
 }
 
+interface SignupSnapshot {
+  step1Pharmacy: {
+    pharmacyNameLabel: string;
+    pharmacyName: string;
+    licenseLabel: string;
+    licenseCode: string;
+    primaryLocationLabel: string;
+    primaryLocation: string;
+    pharmacyEmailLabel: string;
+    pharmacyEmail: string;
+  };
+  step1Operations: {
+    totalBranchesLabel: string;
+    totalBranches: number;
+    branchSetupLabel: string;
+    branchLocations: string[];
+    totalStaffLabel: string;
+    totalStaff: number;
+    breakdownLabel: string;
+    pharmacists: number;
+    managers: number;
+    cashiers: number;
+  };
+  step2Subscription: {
+    selectedLabel: string;
+    selectedTier: string;
+    recommendedLabel: string;
+    recommendedTier: string;
+  };
+  step3Owner: {
+    nameLabel: string;
+    fullName: string;
+    emailLabel: string;
+    email: string;
+    phoneLabel: string;
+    phone: string;
+  };
+  step4Review: {
+    termsAcceptedLabel: string;
+    termsAccepted: boolean;
+  };
+}
+
+interface SignupSubmissionData {
+  email: string;
+  password: string;
+  full_name: string;
+  phone: string;
+  pharmacyDetails: {
+    name: string;
+    licenseNumber: string;
+    location: string;
+    pharmacyEmail?: string;
+  };
+  operations: {
+    totalBranches: number;
+    branchLocations: string[];
+    totalStaff: number;
+    pharmacistCount: number;
+    managerCount: number;
+    cashierCount: number;
+  };
+  subscription: {
+    selectedTier: string;
+    recommendedTier: string;
+  };
+  signupSnapshot: SignupSnapshot;
+}
+
 interface Errors {
   [key: string]: string;
 }
@@ -70,6 +139,7 @@ interface SignupState {
   setIsLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   setIsSuccess: (isSuccess: boolean) => void;
+  buildSignupSubmissionData: () => SignupSubmissionData;
 
   // Validation
   validateEmail: (email: string) => boolean;
@@ -211,6 +281,86 @@ export const useSignupStore = create<SignupState>((set, get) => ({
   setIsLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setIsSuccess: (isSuccess) => set({ isSuccess }),
+  buildSignupSubmissionData: () => {
+    const {
+      pharmacyDetails,
+      operationsInfo,
+      subscriptionInfo,
+      ownerInfo,
+      termsAccepted,
+    } = get();
+
+    const cleanedBranchLocations = operationsInfo.branchLocations
+      .map((location) => location.trim())
+      .filter(Boolean);
+
+    return {
+      email: ownerInfo.email,
+      password: ownerInfo.password,
+      full_name: ownerInfo.fullName,
+      phone: ownerInfo.phone,
+      pharmacyDetails: {
+        name: pharmacyDetails.pharmacyName,
+        licenseNumber: pharmacyDetails.licenseCode,
+        location: pharmacyDetails.locations,
+        pharmacyEmail: pharmacyDetails.pharmacyEmail || undefined,
+      },
+      operations: {
+        totalBranches: operationsInfo.totalBranches,
+        branchLocations: cleanedBranchLocations,
+        totalStaff: operationsInfo.totalStaff,
+        pharmacistCount: operationsInfo.pharmacistCount,
+        managerCount: operationsInfo.managerCount,
+        cashierCount: operationsInfo.cashierCount,
+      },
+      subscription: {
+        selectedTier: subscriptionInfo.selectedTier,
+        recommendedTier: subscriptionInfo.recommendedTier,
+      },
+      signupSnapshot: {
+        step1Pharmacy: {
+          pharmacyNameLabel: "Pharmacy Name",
+          pharmacyName: pharmacyDetails.pharmacyName,
+          licenseLabel: "License Number",
+          licenseCode: pharmacyDetails.licenseCode,
+          primaryLocationLabel: "Primary Location (from signup form)",
+          primaryLocation: pharmacyDetails.locations,
+          pharmacyEmailLabel: "Pharmacy Email (Optional)",
+          pharmacyEmail: pharmacyDetails.pharmacyEmail,
+        },
+        step1Operations: {
+          totalBranchesLabel: "Total Branches",
+          totalBranches: operationsInfo.totalBranches,
+          branchSetupLabel: "Branch Setup",
+          branchLocations: cleanedBranchLocations,
+          totalStaffLabel: "Total Staff",
+          totalStaff: operationsInfo.totalStaff,
+          breakdownLabel: "Breakdown",
+          pharmacists: operationsInfo.pharmacistCount,
+          managers: operationsInfo.managerCount,
+          cashiers: operationsInfo.cashierCount,
+        },
+        step2Subscription: {
+          selectedLabel: "Selected",
+          selectedTier: subscriptionInfo.selectedTier,
+          recommendedLabel: "Recommended",
+          recommendedTier: subscriptionInfo.recommendedTier,
+        },
+        step3Owner: {
+          nameLabel: "Full Name",
+          fullName: ownerInfo.fullName,
+          emailLabel: "Email Address",
+          email: ownerInfo.email,
+          phoneLabel: "Phone Number",
+          phone: ownerInfo.phone,
+        },
+        step4Review: {
+          termsAcceptedLabel: "Terms Accepted",
+          termsAccepted,
+        },
+      },
+    };
+  },
 
   // Validation
   validateEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),

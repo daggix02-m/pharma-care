@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatDateTime } from "@/lib/utils";
 import type { Doc } from "@convex/_generated/dataModel";
 
 type UserType = Doc<"users">;
@@ -26,6 +27,12 @@ export function OwnerDetailsSection({
   owner,
   pharmacy,
 }: OwnerDetailsSectionProps) {
+  const primaryLocation =
+    pharmacy.signupLocation || pharmacy.plannedBranchLocations?.[0] || "N/A";
+  const plannedBreakdown = pharmacy.plannedStaffBreakdown
+    ? `${pharmacy.plannedStaffBreakdown.pharmacists} pharmacists, ${pharmacy.plannedStaffBreakdown.managers} managers, ${pharmacy.plannedStaffBreakdown.cashiers} cashiers`
+    : "N/A";
+
   return (
     <Tabs defaultValue="personal" className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 bg-muted/30 p-1 rounded-lg h-auto">
@@ -67,10 +74,10 @@ export function OwnerDetailsSection({
             data={[
               { label: "Full Name", value: owner.full_name },
               { label: "Email", value: owner.email },
-              { label: "Phone", value: "N/A" },
+              { label: "Phone", value: owner.phone || "N/A" },
               {
                 label: "Date Created",
-                value: new Date(owner._creationTime).toLocaleDateString(),
+                value: formatDateTime(owner._creationTime),
               },
               {
                 label: "Last Login",
@@ -82,6 +89,10 @@ export function OwnerDetailsSection({
             title="Contact & Location"
             icon={MapPin}
             data={[
+              {
+                label: "Primary Location",
+                value: primaryLocation,
+              },
               { label: "Street", value: pharmacy.address?.street || "N/A" },
               { label: "City", value: pharmacy.address?.city || "N/A" },
               { label: "State", value: pharmacy.address?.state || "N/A" },
@@ -158,20 +169,48 @@ export function OwnerDetailsSection({
       <TabsContent value="pharmacy" className="mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <DetailSection
-            title="Pharmacy Profile"
+            title="Registration Snapshot"
             icon={Building2}
             data={[
-              { label: "Legal Name", value: pharmacy.name },
-              { label: "Trading Name", value: pharmacy.tradingName || "N/A" },
-              { label: "Type", value: pharmacy.pharmacyType || "Retail" },
               {
-                label: "Year Established",
-                value: pharmacy.yearEstablished?.toString() || "N/A",
+                label: "Legal Name",
+                value: pharmacy.legalName || pharmacy.name,
+              },
+              { label: "Trading Name", value: pharmacy.tradingName || "N/A" },
+              {
+                label: "Selected Plan",
+                value: pharmacy.subscriptionTier?.toUpperCase() || "BASIC",
               },
               {
-                label: "Estimated Monthly Prescriptions",
+                label: "Recommended Plan",
                 value:
-                  pharmacy.estimatedMonthlyPrescriptions?.toString() || "N/A",
+                  pharmacy.recommendedSubscriptionTier?.toUpperCase() || "N/A",
+              },
+              {
+                label: "Submitted",
+                value: formatDateTime(pharmacy._creationTime),
+              },
+              {
+                label: "Primary Location",
+                value: primaryLocation,
+              },
+              {
+                label: "Planned Branches",
+                value: pharmacy.plannedBranches?.toString() || "N/A",
+              },
+              {
+                label: "Branch Locations",
+                value: pharmacy.plannedBranchLocations?.length
+                  ? pharmacy.plannedBranchLocations.join(", ")
+                  : "N/A",
+              },
+              {
+                label: "Planned Staff Total",
+                value: pharmacy.plannedStaffTotal?.toString() || "N/A",
+              },
+              {
+                label: "Planned Staff Breakdown",
+                value: plannedBreakdown,
               },
             ]}
           />
@@ -235,11 +274,14 @@ export function OwnerDetailsSection({
             data={[
               {
                 label: "Billing Email",
-                value: pharmacy.billingContactEmail || "N/A",
+                value:
+                  pharmacy.billingContactEmail ||
+                  pharmacy.pharmacyEmail ||
+                  "N/A",
               },
               {
                 label: "Contact Phone",
-                value: pharmacy.primaryContactPhone || "N/A",
+                value: pharmacy.primaryContactPhone || owner.phone || "N/A",
               },
             ]}
           />
@@ -283,20 +325,26 @@ export function OwnerDetailsSection({
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-[hsl(var(--medical-teal))]" />
-              Subscription Details
+              Billing Snapshot
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-              <span className="text-sm">Plan</span>
+              <span className="text-sm">Selected Plan</span>
               <Badge variant="outline">
                 {pharmacy.subscriptionTier?.toUpperCase() || "BASIC"}
               </Badge>
             </div>
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+              <span className="text-sm">Recommended Plan</span>
+              <Badge variant="secondary">
+                {pharmacy.recommendedSubscriptionTier?.toUpperCase() || "N/A"}
+              </Badge>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
               <span className="text-sm">Monthly Cost</span>
               <span className="text-sm font-semibold">
-                ${pharmacy.monthlyCost || 0}/month
+                ETB {pharmacy.monthlyCost || 0}/month
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">

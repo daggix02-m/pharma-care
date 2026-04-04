@@ -11,14 +11,16 @@
 ### 1. Authentication & User Management
 
 **Implemented Features:**
+
 - Multi-role authentication (Admin, Manager, Pharmacist, Cashier)
-- Clerk integration for secure user authentication
+- Convex-powered secure user authentication
 - Password reset and email verification flows
 - SSO callback handling
 - Account suspension handling
 - Pending approval workflow for new registrations
 
 **User Roles:**
+
 - **Admin**: Platform-wide management, user management, system statistics
 - **Manager**: Branch management, staff oversight, inventory control, reporting
 - **Pharmacist**: Prescription handling, inventory management, stock receiving
@@ -28,6 +30,7 @@
 ### 2. Dashboard Features
 
 #### Admin Dashboard
+
 - **Overview**: System-wide metrics (pharmacies, branches, managers, revenue)
 - **Approvals**: Pending manager and branch approvals
 - **Pharmacies**: Full pharmacy management with detailed views
@@ -37,18 +40,21 @@
 - **Landing Page Management**: Content editor, testimonials manager, section visibility
 
 #### Manager Dashboard
+
 - Branch management and oversight
 - Staff management
 - Inventory control
 - Reporting and analytics
 
 #### Pharmacist Dashboard
+
 - Prescription handling
 - Inventory management
 - Stock receiving
 - Sale creation
 
 #### Cashier Dashboard
+
 - **Overview**: Dashboard summary
 - **Stock Check**: Inventory lookup
 - **Receipts**: Receipt management
@@ -62,6 +68,7 @@
 - **Shift Summary**: End-of-shift reports
 
 #### Owner Dashboard
+
 - Pharmacy ownership overview
 - Appeal history for flagged accounts
 - Testimonial submission for landing page
@@ -69,6 +76,7 @@
 ### 3. Landing Page
 
 **Sections:**
+
 - Hero section with dynamic content
 - About page
 - Features section
@@ -80,17 +88,20 @@
 ### 4. Data Management
 
 **State Management:**
+
 - Zustand for client-side state (theme, signup flow)
 - React Query for server state
 - Convex for real-time database operations
 
 **Key Stores:**
+
 - `useThemeStore`: Dark/light mode management
 - `useSignupStore`: Multi-step signup flow state
 
 ### 5. Backend Integration (Convex)
 
 **Admin Queries:**
+
 - `getPharmacies`: List all pharmacies
 - `getBranches`: List all branches
 - `getAllManagers`: List all managers
@@ -102,11 +113,13 @@
 - `getPendingAppeals`: User appeals
 
 **Admin Mutations:**
+
 - `approveBranch`: Approve pending branch
 - `rejectBranch`: Reject pending branch
 - `deletePharmacy`: Remove pharmacy
 
 **Feedback System:**
+
 - `getMessages`: Contact form inbox
 - `getTrashedMessages`: Deleted messages
 - `getUnreadCount`: Unread message count
@@ -118,6 +131,7 @@
 ### 6. UI Components
 
 **Base Components (Radix UI-based):**
+
 - Button, Card, Input, Select, Dialog
 - Tabs, Badge, Avatar, Tooltip
 - Dropdown Menu, Sheet, Separator
@@ -126,6 +140,7 @@
 - Label, Textarea, Progress
 
 **Shared Components:**
+
 - KPICard: Metric display
 - Breadcrumb: Navigation
 - ExcelImport: Data import
@@ -141,16 +156,19 @@
 - ElegantShape: Decorative elements
 
 **Theme Components:**
+
 - ThemeProvider: Context provider
 - ThemeToggle: Dark/light switch
 
 ### 7. Services
 
 **AI Service:**
+
 - Chatbot integration
 - Escalation handling
 
 **Chapa Service:**
+
 - Payment processing integration
 
 ### 8. Utilities
@@ -162,6 +180,7 @@
 ### 9. Layouts
 
 **DashboardLayout:**
+
 - Responsive sidebar navigation
 - Header with user info
 - Breadcrumb navigation
@@ -241,6 +260,7 @@ src/pages/
 ## Technical Stack
 
 ### Frontend
+
 - **React 18**: Component-based UI library
 - **Vite 6**: Fast build tool and dev server
 - **React Router 7**: Client-side routing
@@ -255,16 +275,17 @@ src/pages/
 - **file-saver**: File download utility
 
 ### State Management
+
 - **Zustand**: Lightweight state management
 - **React Query**: Server state management
 - **Convex**: Backend database and real-time functions
 
 ### Authentication
-- **Clerk**: User authentication and management
-- **@clerk/clerk-react**: React integration
-- **@clerk/themes**: Custom theming
+
+- **Convex Auth**: User authentication and management
 
 ### Development Tools
+
 - **TypeScript**: Type safety
 - **ESLint**: Code linting
 - **Prettier**: Code formatting
@@ -272,6 +293,7 @@ src/pages/
 - **@testing-library/react**: Component testing
 
 ### Build & Deploy
+
 - **Vercel**: Deployment platform
 - **Convex**: Backend-as-a-Service
 - **Render**: API backend (if applicable)
@@ -294,7 +316,6 @@ VITE_ENABLE_MOCK_DATA=false
 
 # Backend Services
 VITE_CONVEX_URL=https://enduring-owl-795.convex.cloud
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZXYk
 ```
 
 **Note**: `ADMIN_EMAIL` is a Convex environment variable set in the Convex dashboard, not in `.env` files.
@@ -340,12 +361,14 @@ frontend-new/
 ## Key Features Not Yet Implemented
 
 ### 1. Cashier Module
+
 - Full POS integration
 - Receipt printing
 - Cash drawer management
 - End-of-day reconciliation
 
 ### 2. Inventory Management
+
 - Real-time stock tracking
 - Low stock alerts
 - Automatic reorder points
@@ -353,12 +376,14 @@ frontend-new/
 - Inventory adjustments
 
 ### 3. Prescription Management
+
 - Prescription upload (image/PDF)
 - Digital prescription validation
 - Patient prescription history
 - Insurance integration
 
 ### 4. Reporting & Analytics
+
 - Sales reports with filters
 - Inventory reports
 - Staff performance metrics
@@ -366,18 +391,21 @@ frontend-new/
 - Export to PDF/Excel
 
 ### 5. Notifications
+
 - Real-time notifications
 - Push notifications
 - Email notifications
 - SMS alerts
 
 ### 6. Mobile App
+
 - React Native mobile application
 - Offline capability
 - Barcode scanning
 - Push notifications
 
 ### 7. Advanced Features
+
 - Multi-currency support
 - Tax calculation
 - Discount management
@@ -387,12 +415,14 @@ frontend-new/
 - Expiry date tracking
 
 ### 8. Testing
+
 - Unit test coverage
 - Integration tests
 - E2E tests with Playwright
 - Performance testing
 
 ### 9. Documentation
+
 - API documentation
 - Component storybook
 - User manual
@@ -458,7 +488,7 @@ Add all `VITE_` prefixed variables in Vercel dashboard under Settings → Enviro
 ## Security Considerations
 
 - All client-side env vars must start with `VITE_`
-- Clerk handles authentication securely
+- Authentication is enforced through Convex and role-based checks
 - Role-based access control on all protected routes
 - Pharmacy suspension status checked on login
 - Password change requirement enforcement
@@ -485,16 +515,18 @@ Add all `VITE_` prefixed variables in Vercel dashboard under Settings → Enviro
 ### Common Issues
 
 **Build Fails:**
+
 - Check all environment variables are set
 - Verify Convex URL is correct
 - Ensure `ADMIN_EMAIL` is set in Convex dashboard
 
 **Authentication Issues:**
-- Verify Clerk publishable key
-- Check allowed origins in Clerk dashboard
+
+- Verify Convex auth environment configuration
 - Ensure user role is properly assigned
 
 **Convex Connection:**
+
 - Verify `VITE_CONVEX_URL` matches your Convex project
 - Check Convex dashboard for function errors
 - Ensure Convex integration is connected in Vercel
@@ -510,6 +542,5 @@ Private project - All rights reserved
 ## Support
 
 - **Convex Docs**: https://docs.convex.dev
-- **Clerk Docs**: https://clerk.com/docs
 - **Vercel Docs**: https://vercel.com/docs
 - **React Docs**: https://react.dev

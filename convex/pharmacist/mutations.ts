@@ -1,17 +1,19 @@
-import { mutation } from '../_generated/server';
-import { v } from 'convex/values';
+import { mutation } from "../_generated/server";
+import { v } from "convex/values";
 
 const verifyPharmacist = async (ctx: any) => {
   const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error('Unauthorized');
+  if (!identity) throw new Error("Unauthorized");
 
   const user = await ctx.db
-    .query('users')
-    .withIndex('by_tokenIdentifier', (q: any) => q.eq('tokenIdentifier', identity.tokenIdentifier))
+    .query("users")
+    .withIndex("by_tokenIdentifier", (q: any) =>
+      q.eq("tokenIdentifier", identity.tokenIdentifier),
+    )
     .unique();
 
-  if (!user || user.role !== 'pharmacist' || !user.branchId) {
-    throw new Error('Unauthorized: Pharmacist only');
+  if (!user || user.role !== "pharmacist" || !user.branchId) {
+    throw new Error("Unauthorized: Pharmacist only");
   }
   return user;
 };
@@ -31,7 +33,7 @@ export const addMedicine = mutation({
   handler: async (ctx: any, args: any) => {
     const user = await verifyPharmacist(ctx);
 
-    const medicineId = await ctx.db.insert('medicines', {
+    const medicineId = await ctx.db.insert("medicines", {
       name: args.name,
       category: args.category,
       stock: args.stock,
@@ -50,7 +52,7 @@ export const addMedicine = mutation({
 
 export const updateMedicineStock = mutation({
   args: {
-    id: v.id('medicines'),
+    id: v.id("medicines"),
     stock: v.optional(v.number()),
     minStock: v.optional(v.number()),
   },
@@ -59,7 +61,7 @@ export const updateMedicineStock = mutation({
 
     const medicine = await ctx.db.get(args.id);
     if (!medicine || medicine.branchId !== user.branchId) {
-      throw new Error('Medicine not found or unauthorized');
+      throw new Error("Medicine not found or unauthorized");
     }
 
     const patch: any = {};
@@ -73,7 +75,7 @@ export const updateMedicineStock = mutation({
 
 export const createStockRequest = mutation({
   args: {
-    medicineId: v.id('medicines'),
+    medicineId: v.id("medicines"),
     quantity: v.number(),
     urgency: v.string(),
     notes: v.optional(v.string()),
@@ -81,13 +83,13 @@ export const createStockRequest = mutation({
   handler: async (ctx: any, args: any) => {
     const user = await verifyPharmacist(ctx);
 
-    const requestId = await ctx.db.insert('stock_requests', {
+    const requestId = await ctx.db.insert("stock_requests", {
       branchId: user.branchId!,
       pharmacistId: user._id,
       medicineId: args.medicineId,
       quantity: args.quantity,
       urgency: args.urgency,
-      status: 'pending',
+      status: "pending",
       notes: args.notes,
     });
 
@@ -99,10 +101,10 @@ export const createSale = mutation({
   args: {
     items: v.array(
       v.object({
-        medicineId: v.id('medicines'),
+        medicineId: v.id("medicines"),
         quantity: v.number(),
         price: v.number(),
-      })
+      }),
     ),
     totalAmount: v.number(),
     customerName: v.optional(v.string()),
@@ -114,43 +116,15 @@ export const createSale = mutation({
     chapaReference: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    const user = await verifyPharmacist(ctx);
-
-    // Deduct inventory
-    for (const item of args.items) {
-      const medicine = await ctx.db.get(item.medicineId);
-      if (!medicine || medicine.branchId !== user.branchId) {
-        throw new Error(`Medicine ${item.medicineId} not found or unauthorized`);
-      }
-      if (medicine.stock < item.quantity) {
-        throw new Error(`Insufficient stock for ${medicine.name}`);
-      }
-      await ctx.db.patch(medicine._id, { stock: medicine.stock - item.quantity });
-    }
-
-    const saleId = await ctx.db.insert('sales', {
-      branchId: user.branchId!,
-      cashierId: user._id,
-      totalAmount: args.totalAmount,
-      status: 'completed',
-      customerName: args.customerName,
-      customerPhone: args.customerPhone,
-      paymentMethod: args.paymentMethod,
-      prescriptionId: args.prescriptionId,
-      chapaTransactionId: args.chapaTransactionId,
-      chapaPaymentMethod: args.chapaPaymentMethod,
-      chapaStatus: args.chapaTransactionId ? 'success' : undefined,
-      chapaReference: args.chapaReference,
-      items: args.items,
-    });
-
-    return { success: true, saleId };
+    void ctx;
+    void args;
+    throw new Error("Sales are cashier-only. Please use the cashier POS flow.");
   },
 });
 
 export const markMedicineForReturn = mutation({
   args: {
-    id: v.id('medicines'),
+    id: v.id("medicines"),
     reason: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
@@ -158,10 +132,10 @@ export const markMedicineForReturn = mutation({
 
     const medicine = await ctx.db.get(args.id);
     if (!medicine || medicine.branchId !== user.branchId) {
-      throw new Error('Medicine not found or unauthorized');
+      throw new Error("Medicine not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, { status: 'returned' });
+    await ctx.db.patch(args.id, { status: "returned" });
     return { success: true };
   },
 });
@@ -179,7 +153,7 @@ export const importMedicines = mutation({
         barcode: v.optional(v.string()),
         expiryDate: v.optional(v.number()),
         prescriptionRequired: v.optional(v.boolean()),
-      })
+      }),
     ),
   },
   handler: async (ctx: any, args: any) => {
@@ -187,25 +161,29 @@ export const importMedicines = mutation({
 
     const importedMedicines = [];
     for (const medicineData of args.medicines) {
-      const medicineId = await ctx.db.insert('medicines', {
+      const medicineId = await ctx.db.insert("medicines", {
         ...medicineData,
         branchId: user.branchId!,
       });
       importedMedicines.push(medicineId);
     }
 
-    return { success: true, count: importedMedicines.length, medicineIds: importedMedicines };
+    return {
+      success: true,
+      count: importedMedicines.length,
+      medicineIds: importedMedicines,
+    };
   },
 });
 
 export const removeMedicine = mutation({
-  args: { id: v.id('medicines') },
+  args: { id: v.id("medicines") },
   handler: async (ctx: any, args: any) => {
     const user = await verifyPharmacist(ctx);
 
     const medicine = await ctx.db.get(args.id);
     if (!medicine || medicine.branchId !== user.branchId) {
-      throw new Error('Medicine not found or unauthorized');
+      throw new Error("Medicine not found or unauthorized");
     }
 
     await ctx.db.delete(args.id);

@@ -12,7 +12,9 @@ import {
   CreditCard,
   Eye,
   Filter,
+  ExternalLink,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface TransactionItem {
@@ -39,6 +41,7 @@ interface Transaction {
 }
 
 export function Transactions() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
@@ -167,6 +170,23 @@ export function Transactions() {
               </select>
             </div>
           </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            <Button variant="outline" onClick={() => navigate("/cashier/pos")}>
+              Open POS
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/cashier/receipts")}
+            >
+              Receipts
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/cashier/payments/pending")}
+            >
+              Pending Payments
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -223,6 +243,13 @@ export function Transactions() {
                       onClick={() => handleViewDetails(transaction._id)}
                     >
                       <Eye className="h-4 w-4 mr-1" /> View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate("/cashier/receipts")}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-1" /> Receipt
                     </Button>
                   </div>
                 </div>

@@ -6,7 +6,7 @@ A comprehensive pharmacy management system frontend built with React, Vite, and 
 
 - **Multi-role Authentication**: Admin, Manager, Pharmacist, and Cashier dashboards
 - **Real-time Data**: Convex-powered database for live updates
-- **Secure Authentication**: Clerk integration for user management
+- **Secure Authentication**: Convex-powered email/password authentication
 - **Responsive Design**: Mobile-friendly UI with Tailwind CSS
 - **Modern Tech Stack**: React 18, Vite 6, Radix UI components
 
@@ -67,7 +67,6 @@ ADMIN_EMAIL=admin@pharmacare.com
 
 # Backend Services
 VITE_CONVEX_URL=https://enduring-owl-795.convex.cloud
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZXYk
 ```
 
 **Note:** `ADMIN_EMAIL` is a Convex environment variable and must be added in the Convex dashboard, not in your local `.env` file.
@@ -86,7 +85,6 @@ VITE_ENABLE_MOCK_DATA=false
 
 # Backend Services
 VITE_CONVEX_URL=https://enduring-owl-795.convex.cloud
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZXYk
 ```
 
 ## Deployment
@@ -98,7 +96,6 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
 - GitHub repository with the project
 - Vercel account ([vercel.com](https://vercel.com))
 - Convex project deployed
-- Clerk application configured
 
 #### Environment Variables for Vercel
 
@@ -119,12 +116,12 @@ VITE_ALLOWED_FILE_TYPES=.xlsx,.xls,.csv
 VITE_DEFAULT_PAGE_SIZE=20
 VITE_MAX_PAGE_SIZE=50
 VITE_CONVEX_URL=https://enduring-owl-795.convex.cloud
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZXYk
 ```
 
 #### Deployment Steps
 
 1. **Push to GitHub**
+
    ```bash
    git add .
    git commit -m "Prepare for Vercel deployment"
@@ -168,7 +165,7 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
    - Wait for build to complete
    - Get your Vercel URL
 
-7. **Add Custom Domain** (Optional)
+8. **Add Custom Domain** (Optional)
    - Go to Settings → Domains
    - Add your domain
    - Configure DNS records
@@ -176,7 +173,7 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
 #### Post-Deployment Verification
 
 - [ ] Website loads at the Vercel URL
-- [ ] Clerk authentication works (login/signup)
+- [ ] Authentication works (login/signup)
 - [ ] Convex database queries return data
 - [ ] Convex mutations execute successfully
 - [ ] API calls to Render backend work
@@ -219,6 +216,7 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
 ## Tech Stack
 
 ### Frontend
+
 - **React 18**: Component-based UI library
 - **Vite 6**: Fast build tool and dev server
 - **React Router 7**: Client-side routing
@@ -226,20 +224,24 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3F1YXJlLXBvbGVjYXQtNy5jbGVyay5hY2NvdW50cy5kZ
 - **Radix UI**: Unstyled, accessible components
 
 ### State Management & Data
+
 - **Zustand**: Lightweight state management
 - **React Query**: Server state management
 - **Convex**: Backend database and server functions
 
 ### UI & Styling
+
 - **Lucide React**: Icon library
 - **Recharts**: Charting and visualization
 - **GSAP**: Animations
 - **Sonner**: Toast notifications
 
 ### Authentication
-- **Clerk**: User authentication and management
+
+- **Convex Auth**: User authentication and session management
 
 ### Development Tools
+
 - **ESLint**: Code linting
 - **Prettier**: Code formatting
 - **Vitest**: Testing framework
@@ -256,7 +258,7 @@ The application automatically assigns admin role to users with the email specifi
 
 2. **Create Admin User**
    - **Option A**: Sign up through the app with the admin email
-   - **Option B**: Create user in Clerk Dashboard with the admin email
+   - **Option B**: Seed the admin user through Convex functions
 
 3. **Automatic Role Assignment**
    - System automatically grants admin role to the admin email
@@ -294,14 +296,14 @@ The application implements a robust role-based access control system:
 ### Build Fails
 
 Check Vercel Build Logs for errors. Common issues:
+
 - Missing dependencies: Ensure `package.json` is correct
 - Environment variables missing: Verify all variables are added
 - Convex connection issues: Check `VITE_CONVEX_URL`
 
 ### Authentication Issues
 
-- Verify `VITE_CLERK_PUBLISHABLE_KEY` is correct
-- Check Clerk dashboard for application settings
+- Verify authentication environment values and Convex settings are correct
 - Ensure allowed origins include your Vercel domain
 
 ### Convex Issues
@@ -318,16 +320,14 @@ Check Vercel Build Logs for errors. Common issues:
 
 ## Production Considerations
 
-### Clerk Keys
+### Authentication Setup
 
-You're currently using a test key (`pk_test_`). For production:
+For production:
 
-1. Go to Clerk Dashboard
-2. Navigate to your application
-3. Find the Publishable Key section
-4. Copy the production key (starts with `pk_live_`)
-5. Update `VITE_CLERK_PUBLISHABLE_KEY` in Vercel
-6. Redeploy
+1. Ensure `VITE_CONVEX_URL` points to your production deployment
+2. Configure `ADMIN_EMAIL` in Convex dashboard
+3. Set the required email settings for verification and reset flows
+4. Redeploy
 
 ### Convex Production
 
@@ -342,13 +342,12 @@ Ensure your Render API (`https://pharmacare-api.onrender.com/api`) is also in pr
 - **Vercel Analytics**: Monitor performance and visitor data
 - **Vercel Logs**: Check real-time logs for errors
 - **Convex Dashboard**: Monitor database operations and function executions
-- **Clerk Dashboard**: Monitor authentication events
+- **Auth Logs**: Monitor authentication events through Convex and application logs
 
 ## Support
 
 - Vercel Documentation: [vercel.com/docs](https://vercel.com/docs)
 - Convex Documentation: [docs.convex.dev](https://docs.convex.dev)
-- Clerk Documentation: [clerk.com/docs](https://clerk.com/docs)
 
 ## License
 

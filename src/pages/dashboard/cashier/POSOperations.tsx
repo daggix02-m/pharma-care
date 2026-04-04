@@ -19,7 +19,18 @@ import {
   CheckCircle,
   User,
   CreditCard,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CartItem {
   medicineId: Id<"medicines">;
@@ -52,6 +63,7 @@ export function POSOperations() {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [isChapaModalOpen, setIsChapaModalOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [confirmCheckoutOpen, setConfirmCheckoutOpen] = useState(false);
 
   const posCheckout = useMutation(api.cashier.mutations.posCheckout);
 
@@ -181,7 +193,7 @@ export function POSOperations() {
       return;
     }
 
-    await completeCheckout();
+    setConfirmCheckoutOpen(true);
   };
 
   const handleChapaPaymentSuccess = async (result: any) => {
@@ -465,6 +477,38 @@ export function POSOperations() {
         amount={total}
         onSuccess={handleChapaPaymentSuccess}
       />
+
+      <AlertDialog
+        open={confirmCheckoutOpen}
+        onOpenChange={setConfirmCheckoutOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              Confirm Checkout
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirm checkout for ETB {total.toFixed(2)} using{" "}
+              {paymentMethod.replace("_", " ")}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={checkoutLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void completeCheckout();
+              }}
+              disabled={checkoutLoading}
+            >
+              {checkoutLoading ? "Processing..." : "Confirm and Charge"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

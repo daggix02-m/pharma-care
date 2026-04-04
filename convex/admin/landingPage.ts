@@ -103,7 +103,7 @@ const DEFAULT_LANDING_PAGE_CONTENT = {
           "Bank-level security with comprehensive audit trails, ensuring your pharmacy meets regulatory requirements.",
         features: [
           "Comprehensive audit trails (24-60 month retention)",
-          "Bank-level encryption (Clerk authentication)",
+          "Bank-level encryption and secure authentication",
           "Controlled substance tracking",
           "License management per branch",
           "Diagnostic session logging",

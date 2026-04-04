@@ -2,6 +2,145 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 import { checkAdmin } from "../lib/auth";
+import { api } from "../_generated/api";
+
+const PENDING_PHARMACY_STATUSES = new Set(["pending", "pending_approval"]);
+const APPROVED_PHARMACY_STATUSES = new Set(["active", "approved"]);
+
+const normalizeStatus = (status: unknown): string =>
+  typeof status === "string" ? status.trim().toLowerCase() : "";
+
+const normalizeString = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((entry) => normalizeString(entry)).filter(Boolean);
+};
+
+const toNumberOr = (value: unknown, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const buildSignupSubmission = (pharmacy: any, owner: any) => {
+  const snapshot = pharmacy?.signupSnapshot || {};
+  const step1Pharmacy = snapshot?.step1Pharmacy || {};
+  const step1Operations = snapshot?.step1Operations || {};
+  const step2Subscription = snapshot?.step2Subscription || {};
+  const step3Owner = snapshot?.step3Owner || {};
+  const step4Review = snapshot?.step4Review || {};
+
+  const snapshotPrimaryLocation = normalizeString(
+    step1Pharmacy.primaryLocation,
+  );
+  const persistedPrimaryLocation = normalizeString(pharmacy?.signupLocation);
+
+  const snapshotBranchLocations = normalizeStringArray(
+    step1Operations.branchLocations,
+  );
+  const persistedBranchLocations = normalizeStringArray(
+    pharmacy?.plannedBranchLocations,
+  );
+
+  const branchLocations = snapshotBranchLocations.length
+    ? snapshotBranchLocations
+    : persistedBranchLocations;
+
+  const plannedBranches = toNumberOr(
+    step1Operations.totalBranches ?? pharmacy?.plannedBranches,
+    0,
+  );
+
+  const primaryLocation =
+    snapshotPrimaryLocation ||
+    persistedPrimaryLocation ||
+    branchLocations[0] ||
+    "Not provided";
+
+  return {
+    pharmacyName:
+      normalizeString(step1Pharmacy.pharmacyName) ||
+      normalizeString(pharmacy?.name) ||
+      "Not provided",
+    pharmacyEmail:
+      normalizeString(step1Pharmacy.pharmacyEmail) ||
+      normalizeString(pharmacy?.pharmacyEmail) ||
+      "Not provided",
+    licenseCode:
+      normalizeString(step1Pharmacy.licenseCode) ||
+      normalizeString(pharmacy?.licenseCode) ||
+      "Not provided",
+    primaryLocation,
+    branchLocations,
+    plannedBranches,
+    plannedStaffTotal: toNumberOr(
+      step1Operations.totalStaff ?? pharmacy?.plannedStaffTotal,
+      0,
+    ),
+    staffBreakdown: {
+      pharmacists: toNumberOr(
+        step1Operations.pharmacists ??
+          pharmacy?.plannedStaffBreakdown?.pharmacists,
+        0,
+      ),
+      managers: toNumberOr(
+        step1Operations.managers ?? pharmacy?.plannedStaffBreakdown?.managers,
+        0,
+      ),
+      cashiers: toNumberOr(
+        step1Operations.cashiers ?? pharmacy?.plannedStaffBreakdown?.cashiers,
+        0,
+      ),
+    },
+    selectedTier:
+      normalizeString(step2Subscription.selectedTier) ||
+      normalizeString(pharmacy?.subscriptionTier) ||
+      "",
+    recommendedTier:
+      normalizeString(step2Subscription.recommendedTier) ||
+      normalizeString(pharmacy?.recommendedSubscriptionTier) ||
+      "",
+    ownerName:
+      normalizeString(step3Owner.fullName) ||
+      normalizeString(owner?.full_name) ||
+      "Not provided",
+    ownerEmail:
+      normalizeString(step3Owner.email) ||
+      normalizeString(owner?.email) ||
+      "Not provided",
+    ownerPhone:
+      normalizeString(step3Owner.phone) ||
+      normalizeString(owner?.phone) ||
+      "Not provided",
+    termsAccepted:
+      typeof step4Review.termsAccepted === "boolean"
+        ? step4Review.termsAccepted
+        : undefined,
+    status: normalizeStatus(pharmacy?.status) || "unknown",
+    submittedAt: pharmacy?._creationTime,
+  };
+};
+
+const isPendingApproval = (args: {
+  pharmacyStatus?: unknown;
+  ownerStatus?: unknown;
+  paymentStatus?: unknown;
+}): boolean => {
+  const pharmacyStatus = normalizeStatus(args.pharmacyStatus);
+  const ownerStatus = normalizeStatus(args.ownerStatus);
+  const paymentStatus = normalizeStatus(args.paymentStatus);
+
+  return (
+    PENDING_PHARMACY_STATUSES.has(pharmacyStatus) ||
+    pharmacyStatus.includes("pending") ||
+    ownerStatus === "pending" ||
+    paymentStatus === "pending_approval"
+  );
+};
 
 export const getDashboardStats = query({
   args: {
@@ -32,7 +171,30 @@ export const getPharmacies = query({
   handler: async (ctx: any, args: any) => {
     const admin = await checkAdmin(ctx, args.sessionToken);
     if (!admin) return [];
-    return await ctx.db.query("pharmacies").take(1000);
+
+    const pharmacies = await ctx.db.query("pharmacies").take(1000);
+
+    return Promise.all(
+      pharmacies.map(async (pharmacy: any) => {
+        const owner = pharmacy.ownerId
+          ? await ctx.db.get(pharmacy.ownerId)
+          : null;
+
+        return {
+          ...pharmacy,
+          ownerName: owner?.full_name || "Unknown",
+          ownerEmail: owner?.email || "",
+          ownerPhone: owner?.phone || "",
+          selectedTier: pharmacy.subscriptionTier,
+          recommendedTier: pharmacy.recommendedSubscriptionTier,
+          submittedAt: pharmacy._creationTime,
+          plannedBranches: pharmacy.plannedBranches,
+          plannedBranchLocations: pharmacy.plannedBranchLocations,
+          plannedStaffTotal: pharmacy.plannedStaffTotal,
+          plannedStaffBreakdown: pharmacy.plannedStaffBreakdown,
+        };
+      }),
+    );
   },
 });
 
@@ -120,20 +282,49 @@ export const getPendingPharmacyApplications = query({
 
     const pharmacies = await ctx.db
       .query("pharmacies")
-      .filter((q: any) => q.eq(q.field("status"), "pending"))
       .order("desc")
-      .take(200);
+      .take(2000);
+
+    const getPreviousRejection = async (ownerEmail?: string) => {
+      const normalizedEmail = String(ownerEmail || "")
+        .trim()
+        .toLowerCase();
+      if (!normalizedEmail) return null;
+
+      const rows = await ctx.db
+        .query("rejected_owner_applications")
+        .withIndex("by_owner_email_and_rejected_at", (q: any) =>
+          q.eq("ownerEmail", normalizedEmail),
+        )
+        .order("desc")
+        .take(1);
+
+      const latest = rows[0];
+      if (!latest || latest.retentionUntil < Date.now()) {
+        return null;
+      }
+
+      return {
+        rejectionReason: latest.rejectionReason,
+        rejectedAt: latest.rejectedAt,
+        pharmacyName: latest.pharmacyName,
+      };
+    };
 
     const rows = await Promise.all(
       pharmacies.map(async (pharmacy: any) => {
         const owner = pharmacy.ownerId
           ? await ctx.db.get(pharmacy.ownerId)
           : null;
+        const previousRejection = await getPreviousRejection(owner?.email);
+        const pharmacyStatus = normalizeStatus(pharmacy.status);
+        const ownerStatus = normalizeStatus(owner?.status);
         return {
           pharmacyId: pharmacy._id,
           pharmacyName: pharmacy.name,
           pharmacyEmail: pharmacy.pharmacyEmail,
           licenseCode: pharmacy.licenseCode,
+          primaryLocation: pharmacy.signupLocation || "",
           signupLocation: pharmacy.signupLocation,
           submittedAt: pharmacy._creationTime,
           status: pharmacy.status,
@@ -144,20 +335,126 @@ export const getPendingPharmacyApplications = query({
           plannedBranchLocations: pharmacy.plannedBranchLocations,
           plannedStaffTotal: pharmacy.plannedStaffTotal,
           plannedStaffBreakdown: pharmacy.plannedStaffBreakdown,
+          signupSnapshot: pharmacy.signupSnapshot,
           ownerId: owner?._id,
           ownerName: owner?.full_name || "Unknown",
           ownerEmail: owner?.email || "",
           ownerPhone: owner?.phone || "",
+          ownerStatus,
+          previousRejection,
+          isPendingApproval: isPendingApproval({
+            pharmacyStatus,
+            ownerStatus,
+            paymentStatus: pharmacy.paymentStatus,
+          }),
         };
       }),
     );
 
-    const search = (args.search || "").trim().toLowerCase();
-    if (!search) {
-      return rows;
+    const pendingOwners = await ctx.db
+      .query("users")
+      .filter((q: any) =>
+        q.and(
+          q.eq(q.field("role"), "owner"),
+          q.eq(q.field("status"), "pending"),
+        ),
+      )
+      .take(2000);
+
+    const pharmacyIdSet = new Set(
+      rows
+        .map((row: any) => row.pharmacyId)
+        .filter((pharmacyId: any) => Boolean(pharmacyId)),
+    );
+
+    const ownerRowsFromLinkedPharmacy: any[] = [];
+    const ownerRowsWithoutPharmacy = pendingOwners
+      .filter((owner: any) => {
+        if (!owner.pharmacyId) return true;
+        return !pharmacyIdSet.has(owner.pharmacyId);
+      })
+      .map((owner: any) => ({
+        owner,
+      }));
+
+    for (const item of ownerRowsWithoutPharmacy) {
+      const owner = item.owner;
+      const previousRejection = await getPreviousRejection(owner?.email);
+      if (owner.pharmacyId) {
+        const pharmacy = await ctx.db.get(owner.pharmacyId);
+        if (pharmacy) {
+          ownerRowsFromLinkedPharmacy.push({
+            pharmacyId: pharmacy._id,
+            pharmacyName: pharmacy.name,
+            pharmacyEmail: pharmacy.pharmacyEmail,
+            licenseCode: pharmacy.licenseCode,
+            primaryLocation: pharmacy.signupLocation || "",
+            signupLocation: pharmacy.signupLocation,
+            submittedAt: pharmacy._creationTime,
+            status: pharmacy.status,
+            selectedTier: pharmacy.subscriptionTier,
+            recommendedTier: pharmacy.recommendedSubscriptionTier,
+            paymentStatus: pharmacy.paymentStatus,
+            plannedBranches: pharmacy.plannedBranches,
+            plannedBranchLocations: pharmacy.plannedBranchLocations,
+            plannedStaffTotal: pharmacy.plannedStaffTotal,
+            plannedStaffBreakdown: pharmacy.plannedStaffBreakdown,
+            signupSnapshot: pharmacy.signupSnapshot,
+            ownerId: owner._id,
+            ownerName: owner?.full_name || "Unknown",
+            ownerEmail: owner?.email || "",
+            ownerPhone: owner?.phone || "",
+            ownerStatus: normalizeStatus(owner?.status),
+            previousRejection,
+            isPendingApproval: isPendingApproval({
+              pharmacyStatus: pharmacy.status,
+              ownerStatus: owner.status,
+              paymentStatus: pharmacy.paymentStatus,
+            }),
+          });
+          continue;
+        }
+      }
+
+      ownerRowsFromLinkedPharmacy.push({
+        pharmacyId: null,
+        pharmacyName: owner.full_name
+          ? `${owner.full_name}'s Pharmacy Request`
+          : "Pending Owner Request",
+        pharmacyEmail: "",
+        licenseCode: "",
+        primaryLocation: "",
+        signupLocation: "",
+        submittedAt: owner._creationTime,
+        status: "pending",
+        selectedTier: "",
+        recommendedTier: "",
+        paymentStatus: "pending_approval",
+        plannedBranches: undefined,
+        plannedBranchLocations: [],
+        plannedStaffTotal: undefined,
+        plannedStaffBreakdown: undefined,
+        signupSnapshot: undefined,
+        ownerId: owner._id,
+        ownerName: owner?.full_name || "Unknown",
+        ownerEmail: owner?.email || "",
+        ownerPhone: owner?.phone || "",
+        ownerStatus: normalizeStatus(owner?.status),
+        previousRejection,
+        isPendingApproval: true,
+      });
     }
 
-    return rows.filter((row: any) => {
+    const pendingRows = [...rows, ...ownerRowsFromLinkedPharmacy].filter(
+      (row: any) => row.isPendingApproval,
+    );
+
+    const search = (args.search || "").trim().toLowerCase();
+    if (!search) {
+      return pendingRows;
+    }
+
+    return pendingRows.filter((row: any) => {
       return (
         row.pharmacyName?.toLowerCase().includes(search) ||
         row.pharmacyEmail?.toLowerCase().includes(search) ||
@@ -742,6 +1039,7 @@ export const getPharmacyDetail = query({
     return {
       pharmacy,
       owner,
+      signupSubmission: buildSignupSubmission(pharmacy, owner),
       managers,
       staff,
       branches,
@@ -954,14 +1252,14 @@ export const getPendingApprovalsCount = query({
     const admin = await checkAdmin(ctx, args.sessionToken);
     if (!admin) return { pendingApprovals: 0 };
 
-    const pendingApplications = await ctx.db
-      .query("pharmacies")
-      .filter((q: any) => q.eq(q.field("status"), "pending"))
-      .take(1000);
+    const pendingRows: any[] = await ctx.runQuery(
+      api.admin.queries.getPendingPharmacyApplications,
+      {
+        sessionToken: args.sessionToken,
+      },
+    );
 
-    return {
-      pendingApprovals: pendingApplications.length,
-    };
+    return { pendingApprovals: pendingRows.length };
   },
 });
 
@@ -1036,10 +1334,12 @@ export const getAdminOverview = query({
     return {
       stats: {
         totalPharmacies: pharmacies.length,
-        activePharmacies: pharmacies.filter((p: any) => p.status === "active")
-          .length,
-        pendingPharmacies: pharmacies.filter((p: any) => p.status === "pending")
-          .length,
+        activePharmacies: pharmacies.filter((p: any) =>
+          APPROVED_PHARMACY_STATUSES.has(normalizeStatus(p.status)),
+        ).length,
+        pendingPharmacies: pharmacies.filter((p: any) =>
+          PENDING_PHARMACY_STATUSES.has(normalizeStatus(p.status)),
+        ).length,
         totalBranches: branches.length,
         activeBranches: branches.filter((b: any) => b.status === "active")
           .length,

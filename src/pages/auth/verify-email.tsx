@@ -37,6 +37,11 @@ export function VerifyEmailPage() {
       return;
     }
 
+    if (verificationCode.length !== 6) {
+      setError("Please enter the 6-digit verification code.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -62,7 +67,12 @@ export function VerifyEmailPage() {
     setError("");
 
     try {
-      await resendMutation({ email });
+      const resendResult = await resendMutation({ email });
+      if (!resendResult?.success || !resendResult?.emailSent) {
+        throw new Error(
+          resendResult?.message || "Verification code could not be sent.",
+        );
+      }
       toast.success("Verification code sent. Please check your email.");
     } catch (err: any) {
       setError(err?.message || "An error occurred. Please try again.");
@@ -157,7 +167,7 @@ export function VerifyEmailPage() {
           <Button
             type="submit"
             className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold tracking-wide shadow-sm"
-            disabled={isLoading}
+            disabled={isLoading || verificationCode.length !== 6}
           >
             {isLoading ? (
               <span className="flex items-center gap-2">

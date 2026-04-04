@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Clock, Check, CreditCard, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 interface PendingPayment {
   _id: Id<"sales">;
@@ -23,6 +24,7 @@ interface PendingPayment {
 }
 
 export function PendingPayments() {
+  const navigate = useNavigate();
   const [actionLoading, setActionLoading] = useState<Id<"sales"> | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<PendingPayment | null>(
     null,
@@ -104,6 +106,23 @@ export function PendingPayments() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 grid gap-2 md:grid-cols-3">
+            <Button variant="outline" onClick={() => navigate("/cashier/pos")}>
+              Open POS
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/cashier/sales")}
+            >
+              Transactions
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/cashier/receipts")}
+            >
+              Receipts
+            </Button>
+          </div>
           {payments.length === 0 ? (
             <div className="text-center py-12">
               <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 interface Sale {
   _id: Id<"sales">;
@@ -42,6 +43,7 @@ interface SelectedItem {
 }
 
 export function Returns() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [selectedItems, setSelectedItems] = useState<
@@ -182,6 +184,23 @@ export function Returns() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            <Button
+              variant="outline"
+              onClick={() => navigate("/cashier/sales")}
+            >
+              Find Sale
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/cashier/receipts")}
+            >
+              Open Receipts
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/cashier/pos")}>
+              Back to POS
+            </Button>
           </div>
         </CardContent>
       </Card>

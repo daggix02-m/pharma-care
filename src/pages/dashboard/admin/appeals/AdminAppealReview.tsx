@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShieldAlert,
@@ -15,11 +16,14 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Search,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -60,10 +64,15 @@ interface AdminActionAppeal {
 }
 
 export function AdminAppealReview() {
+  const navigate = useNavigate();
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [reviewingCard, setReviewingCard] = useState<string | null>(null);
   const [reviewReason, setReviewReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [appealTypeFilter, setAppealTypeFilter] = useState<
+    "all" | "manager" | "admin"
+  >("all");
   const { sessionToken } = useAuth();
 
   const pendingAppeals = useQuery(
@@ -574,6 +583,44 @@ export function AdminAppealReview() {
     );
   }
 
+  const managerAppeals = (pendingAppeals.managerFlagAppeals || []).filter(
+    (appeal: ManagerFlagAppeal) => {
+      if (appealTypeFilter === "admin") return false;
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return [
+        appeal.managerName,
+        appeal.managerEmail,
+        appeal.pharmacyName,
+        appeal.ownerName,
+        appeal.flagReason,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    },
+  );
+
+  const adminAppeals = (pendingAppeals.adminActionAppeals || []).filter(
+    (appeal: AdminActionAppeal) => {
+      if (appealTypeFilter === "manager") return false;
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return [
+        appeal.targetUserName,
+        appeal.targetUserEmail,
+        appeal.pharmacyName,
+        appeal.ownerName,
+        appeal.reason,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    },
+  );
+
+  const totalVisible = managerAppeals.length + adminAppeals.length;
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -585,50 +632,117 @@ export function AdminAppealReview() {
         </p>
       </div>
 
-      {pendingAppeals.totalPending === 0 ? (
+      <Card className="border border-border/60">
+        <CardContent className="p-4 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <Badge variant="outline" className="justify-center py-2">
+              Total Pending: {pendingAppeals.totalPending}
+            </Badge>
+            <Badge variant="outline" className="justify-center py-2">
+              Manager: {pendingAppeals.managerFlagAppeals.length}
+            </Badge>
+            <Badge variant="outline" className="justify-center py-2">
+              Admin Action: {pendingAppeals.adminActionAppeals.length}
+            </Badge>
+            <Badge variant="secondary" className="justify-center py-2">
+              Visible: {totalVisible}
+            </Badge>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by manager, owner, pharmacy, or reason..."
+                className="pl-9"
+              />
+            </div>
+            <div className="flex gap-2">
+              {(
+                [
+                  { value: "all", label: "All" },
+                  { value: "manager", label: "Manager" },
+                  { value: "admin", label: "Admin Action" },
+                ] as const
+              ).map((option) => (
+                <Button
+                  key={option.value}
+                  size="sm"
+                  variant={
+                    appealTypeFilter === option.value ? "default" : "outline"
+                  }
+                  onClick={() => setAppealTypeFilter(option.value)}
+                  className="h-9 text-[12px]"
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {totalVisible === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ShieldCheck className="h-16 w-16 text-emerald-600/20 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Pending Appeals</h3>
+            <h3 className="text-lg font-semibold mb-2">No Appeals Matched</h3>
             <p className="text-muted-foreground text-center max-w-md">
-              All appeals have been reviewed. Great job staying on top of owner
-              requests!
+              Adjust your filters or search query to find the appeal you need.
             </p>
           </CardContent>
         </Card>
       ) : (
         <>
-          {pendingAppeals.managerFlagAppeals.length > 0 && (
+          {managerAppeals.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-amber-600" />
-                <h3 className="text-lg font-semibold">
-                  Manager Flag Appeals (
-                  {pendingAppeals.managerFlagAppeals.length})
-                </h3>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-amber-600" />
+                  <h3 className="text-lg font-semibold">
+                    Manager Flag Appeals ({managerAppeals.length})
+                  </h3>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate("/admin?tab=pharmacies")}
+                >
+                  Open Pharmacies
+                  <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                </Button>
               </div>
               <div className="space-y-3">
-                {pendingAppeals.managerFlagAppeals.map(
-                  (appeal: ManagerFlagAppeal) =>
-                    renderManagerFlagCard(appeal as ManagerFlagAppeal),
+                {managerAppeals.map((appeal: ManagerFlagAppeal) =>
+                  renderManagerFlagCard(appeal as ManagerFlagAppeal),
                 )}
               </div>
             </div>
           )}
 
-          {pendingAppeals.adminActionAppeals.length > 0 && (
+          {adminAppeals.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <UserX className="h-5 w-5 text-red-600" />
-                <h3 className="text-lg font-semibold">
-                  Admin Action Appeals (
-                  {pendingAppeals.adminActionAppeals.length})
-                </h3>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <UserX className="h-5 w-5 text-red-600" />
+                  <h3 className="text-lg font-semibold">
+                    Admin Action Appeals ({adminAppeals.length})
+                  </h3>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate("/admin?tab=audit-logs")}
+                >
+                  View Audit Trail
+                  <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                </Button>
               </div>
               <div className="space-y-3">
-                {pendingAppeals.adminActionAppeals.map(
-                  (appeal: AdminActionAppeal) =>
-                    renderAdminActionCard(appeal as AdminActionAppeal),
+                {adminAppeals.map((appeal: AdminActionAppeal) =>
+                  renderAdminActionCard(appeal as AdminActionAppeal),
                 )}
               </div>
             </div>

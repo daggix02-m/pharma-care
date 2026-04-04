@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
   Megaphone,
   Users,
   Shield,
+  Building2,
   CheckCircle2,
   X,
   Send,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AdminBroadcastDialogProps {
   open: boolean;
@@ -44,6 +46,18 @@ type MessageType =
   | "compliance_alert"
   | "subscription_reminder"
   | "security_notice";
+
+interface SubscriptionPlan {
+  _id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+}
+
+interface PharmacyOption {
+  _id: string;
+  name: string;
+}
 
 const TARGET_OPTIONS: {
   value: TargetAudience;
@@ -65,13 +79,13 @@ const TARGET_OPTIONS: {
   },
   {
     value: "specific_plan",
-    icon: Shield,
+    icon: CheckCircle2,
     label: "Specific Subscription Plan",
     description: "Target users on a specific plan",
   },
   {
     value: "specific_pharmacy",
-    icon: Shield,
+    icon: Building2,
     label: "Specific Pharmacy",
     description: "Target a specific pharmacy",
   },
@@ -119,9 +133,15 @@ export function AdminBroadcastDialog({
   open,
   onOpenChange,
 }: AdminBroadcastDialogProps) {
+  const { sessionToken } = useAuth();
   const [targetAudience, setTargetAudience] =
     React.useState<TargetAudience>("all_owners");
-  const [specificValue, setSpecificValue] = React.useState("");
+  const [selectedPlanCodes, setSelectedPlanCodes] = React.useState<string[]>(
+    [],
+  );
+  const [selectedPharmacyIds, setSelectedPharmacyIds] = React.useState<
+    string[]
+  >([]);
   const [messageType, setMessageType] =
     React.useState<MessageType>("announcement");
   const [title, setTitle] = React.useState("");
@@ -130,7 +150,19 @@ export function AdminBroadcastDialog({
   const [isAnimating, setIsAnimating] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
 
-  const sendAdminBroadcast = useMutation((api.admin as any).sendAdminBroadcast);
+  const sendAdminBroadcast = useMutation(
+    api.admin.mutations.sendAdminBroadcast,
+  );
+  const plans =
+    (useQuery(
+      api.admin.queries.getAllSubscriptionPlans,
+      sessionToken ? { sessionToken } : "skip",
+    ) as SubscriptionPlan[] | undefined) || [];
+  const pharmacies =
+    (useQuery(
+      api.admin.queries.getPharmacies,
+      sessionToken ? { sessionToken } : "skip",
+    ) as PharmacyOption[] | undefined) || [];
 
   React.useEffect(() => {
     if (open) {
@@ -140,9 +172,50 @@ export function AdminBroadcastDialog({
       setMessageType("announcement");
       setTitle("");
       setMessage("");
-      setSpecificValue("");
+      setSelectedPlanCodes([]);
+      setSelectedPharmacyIds([]);
     }
   }, [open]);
+
+  const togglePlanSelection = (code: string) => {
+    setSelectedPlanCodes((prev) =>
+      prev.includes(code)
+        ? prev.filter((value) => value !== code)
+        : [...prev, code],
+    );
+  };
+
+  const togglePharmacySelection = (pharmacyId: string) => {
+    setSelectedPharmacyIds((prev) =>
+      prev.includes(pharmacyId)
+        ? prev.filter((value) => value !== pharmacyId)
+        : [...prev, pharmacyId],
+    );
+  };
+
+  const canProceedStepOne = () => {
+    if (targetAudience === "specific_plan") {
+      return selectedPlanCodes.length > 0;
+    }
+
+    if (targetAudience === "specific_pharmacy") {
+      return selectedPharmacyIds.length > 0;
+    }
+
+    return true;
+  };
+
+  const canProceed = () => {
+    if (step === 1) {
+      return canProceedStepOne();
+    }
+
+    if (step === 2) {
+      return true;
+    }
+
+    return title.trim().length > 0 && message.trim().length > 0;
+  };
 
   const handleSend = async () => {
     if (!title.trim() || !message.trim()) {
@@ -150,21 +223,37 @@ export function AdminBroadcastDialog({
       return;
     }
 
+    if (!canProceedStepOne()) {
+      toast.error("Please select at least one target before sending");
+      return;
+    }
+
+    const targetIds =
+      targetAudience === "specific_plan"
+        ? selectedPlanCodes
+        : targetAudience === "specific_pharmacy"
+          ? selectedPharmacyIds
+          : undefined;
+
     setIsSending(true);
 
     try {
-      await sendAdminBroadcast({
+      const result = await sendAdminBroadcast({
         title: title.trim(),
         message: message.trim(),
-        targetAudience,
+        targetType: targetAudience,
+        targetIds,
+        messageType,
         priority:
           messageType === "compliance_alert" ||
           messageType === "security_notice"
             ? "high"
-            : "normal",
+            : "medium",
       });
 
-      toast.success("Broadcast sent successfully!");
+      toast.success(
+        `Broadcast sent to ${result.recipientCount} users across ${result.pharmacyCount} pharmacies`,
+      );
       handleClose();
     } catch (error) {
       toast.error("Failed to send broadcast");
@@ -181,17 +270,14 @@ export function AdminBroadcastDialog({
 
   const handleTargetAudienceChange = (value: string) => {
     setTargetAudience(value as TargetAudience);
+    setSelectedPlanCodes([]);
+    setSelectedPharmacyIds([]);
   };
 
-  const canProceed = () => {
-    if (step === 1) {
-      return (
-        targetAudience !== "specific_plan" &&
-        targetAudience !== "specific_pharmacy"
-      );
-    }
-    return specificValue.trim().length > 0;
-  };
+  const activePlans = plans.filter((plan) => plan.isActive);
+  const selectedTargetLabel =
+    TARGET_OPTIONS.find((option) => option.value === targetAudience)?.label ||
+    "Unknown audience";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -315,29 +401,76 @@ export function AdminBroadcastDialog({
 
                       {targetAudience === "specific_plan" && (
                         <div className="space-y-2">
-                          <Label htmlFor="plan-input">
-                            Subscription Plan Code
-                          </Label>
-                          <Input
-                            id="plan-input"
-                            placeholder="e.g., basic, premium, enterprise"
-                            value={specificValue}
-                            onChange={(e) => setSpecificValue(e.target.value)}
-                            className="h-12"
-                          />
+                          <Label>Select one or more plans</Label>
+                          <div className="rounded-xl border border-slate-200 bg-white/90 p-3">
+                            {activePlans.length === 0 ? (
+                              <p className="text-sm text-slate-500">
+                                No active subscription plans found.
+                              </p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {activePlans.map((plan) => {
+                                  const isSelected = selectedPlanCodes.includes(
+                                    plan.code,
+                                  );
+                                  return (
+                                    <button
+                                      key={plan._id}
+                                      type="button"
+                                      onClick={() =>
+                                        togglePlanSelection(plan.code)
+                                      }
+                                      className={cn(
+                                        "rounded-full border px-3 py-1.5 text-sm transition-all",
+                                        isSelected
+                                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                          : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300",
+                                      )}
+                                    >
+                                      {plan.name} ({plan.code})
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
 
                       {targetAudience === "specific_pharmacy" && (
                         <div className="space-y-2">
-                          <Label htmlFor="pharmacy-input">Pharmacy ID</Label>
-                          <Input
-                            id="pharmacy-input"
-                            placeholder="Enter pharmacy ID..."
-                            value={specificValue}
-                            onChange={(e) => setSpecificValue(e.target.value)}
-                            className="h-12"
-                          />
+                          <Label>Select one or more pharmacies</Label>
+                          <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white/90 p-3">
+                            {pharmacies.length === 0 ? (
+                              <p className="text-sm text-slate-500">
+                                No pharmacies found.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {pharmacies.map((pharmacy) => {
+                                  const isSelected =
+                                    selectedPharmacyIds.includes(pharmacy._id);
+                                  return (
+                                    <button
+                                      key={pharmacy._id}
+                                      type="button"
+                                      onClick={() =>
+                                        togglePharmacySelection(pharmacy._id)
+                                      }
+                                      className={cn(
+                                        "w-full rounded-lg border px-3 py-2 text-left text-sm transition-all",
+                                        isSelected
+                                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                          : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300",
+                                      )}
+                                    >
+                                      {pharmacy.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -461,14 +594,17 @@ export function AdminBroadcastDialog({
                               }
                             </Badge>
                             <span className="text-xs text-slate-500">
-                              to:{" "}
-                              {
-                                TARGET_OPTIONS.find(
-                                  (t) => t.value === targetAudience,
-                                )?.label
-                              }
+                              to: {selectedTargetLabel}
                             </span>
                           </div>
+                          {(targetAudience === "specific_plan" ||
+                            targetAudience === "specific_pharmacy") && (
+                            <p className="text-xs text-slate-500">
+                              {targetAudience === "specific_plan"
+                                ? `${selectedPlanCodes.length} plan(s) selected`
+                                : `${selectedPharmacyIds.length} pharmacy(s) selected`}
+                            </p>
+                          )}
                           <h4 className="font-semibold text-slate-900">
                             {title || "<Untitled>"}
                           </h4>
@@ -506,11 +642,7 @@ export function AdminBroadcastDialog({
                         }
                       }
                 }
-                disabled={
-                  (step === 3 && (!title.trim() || !message.trim())) ||
-                  !canProceed() ||
-                  isSending
-                }
+                disabled={!canProceed() || isSending}
                 className={cn(
                   "w-full sm:flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium transition-all duration-300",
                   !canProceed() && step < 3 && "opacity-50",

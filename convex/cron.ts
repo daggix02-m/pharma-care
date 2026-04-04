@@ -74,3 +74,35 @@ export const cancelStaleTransferRequests = internalAction({
     };
   },
 });
+
+export const cleanupExpiredRejectedApplications = internalMutation({
+  args: {},
+  handler: async (ctx: any) => {
+    const now = Date.now();
+    let deletedCount = 0;
+
+    while (true) {
+      const expired = await ctx.db
+        .query("rejected_owner_applications")
+        .withIndex("by_retention_until", (q: any) =>
+          q.lt("retentionUntil", now),
+        )
+        .take(100);
+
+      if (expired.length === 0) {
+        break;
+      }
+
+      for (const row of expired) {
+        await ctx.db.delete(row._id);
+        deletedCount += 1;
+      }
+    }
+
+    return {
+      success: true,
+      deletedCount,
+      timestamp: now,
+    };
+  },
+});

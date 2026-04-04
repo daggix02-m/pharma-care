@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { hasPermission, Permission } from "../lib/permissions";
 import { requireAdmin } from "../lib/auth";
 import { generateRandomString } from "../lib/utils";
+import { DEFAULT_SIGNUP_PLANS } from "../subscription/defaultPlans";
 
 export const submitPharmacyApplication = mutation({
   args: {
@@ -123,7 +124,7 @@ export const approvePharmacyApplication = mutation({
     const currency = selectedPlan?.currency || "ETB";
 
     await ctx.db.patch(args.pharmacyId, {
-      status: "active",
+      status: "approved",
       paymentStatus: amount > 0 ? "pending_payment" : "paid",
       monthlyCost: amount,
       pendingPaymentLinkToken: amount > 0 ? paymentToken : undefined,
@@ -360,6 +361,10 @@ export const rejectPharmacyApplication = mutation({
   },
   handler: async (ctx: any, args: any) => {
     const admin = await requireAdmin(ctx, args.sessionToken);
+    const reason = args.reason.trim();
+    if (!reason) {
+      throw new Error("Rejection reason is required");
+    }
 
     const pharmacy = await ctx.db.get(args.pharmacyId);
     if (!pharmacy) throw new Error("Pharmacy not found");
@@ -367,19 +372,432 @@ export const rejectPharmacyApplication = mutation({
     const owner = await ctx.db.get(pharmacy.ownerId);
     if (!owner) throw new Error("Owner not found");
 
-    await ctx.db.patch(args.pharmacyId, { status: "rejected" });
-    await ctx.db.patch(owner._id, { status: "rejected" });
+    const now = Date.now();
+    const retentionUntil = now + 365 * 24 * 60 * 60 * 1000;
+
+    await ctx.db.insert("rejected_owner_applications", {
+      ownerEmail: String(owner.email || "")
+        .trim()
+        .toLowerCase(),
+      ownerName: owner.full_name,
+      ownerPhone: owner.phone,
+      pharmacyName: pharmacy.name,
+      pharmacyEmail: pharmacy.pharmacyEmail,
+      licenseCode: pharmacy.licenseCode,
+      signupLocation: pharmacy.signupLocation,
+      rejectionReason: reason,
+      rejectedAt: now,
+      retentionUntil,
+      rejectedByAdminId: admin._id,
+      sourceOwnerId: String(owner._id),
+      sourcePharmacyId: String(pharmacy._id),
+    });
+
+    const branches = await ctx.db
+      .query("branches")
+      .withIndex("by_pharmacy", (q: any) => q.eq("pharmacyId", pharmacy._id))
+      .take(2000);
+    for (const branch of branches) {
+      await ctx.db.delete(branch._id);
+    }
+
+    const paymentLinks = await ctx.db
+      .query("subscription_payment_links")
+      .withIndex("by_owner", (q: any) => q.eq("ownerUserId", owner._id))
+      .take(2000);
+    for (const link of paymentLinks) {
+      await ctx.db.delete(link._id);
+    }
+
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q: any) => q.eq("userId", owner._id))
+      .take(2000);
+    for (const notification of notifications) {
+      await ctx.db.delete(notification._id);
+    }
+
+    const paymentMethods = await ctx.db
+      .query("payment_methods")
+      .withIndex("by_user", (q: any) => q.eq("userId", owner._id))
+      .take(2000);
+    for (const method of paymentMethods) {
+      await ctx.db.delete(method._id);
+    }
+
+    const authAccounts = await ctx.db
+      .query("authAccounts")
+      .withIndex("by_user_id", (q: any) => q.eq("userId", owner._id))
+      .take(2000);
+    for (const account of authAccounts) {
+      await ctx.db.delete(account._id);
+    }
+
+    const authSessions = await ctx.db
+      .query("authSessions")
+      .withIndex("by_user_id", (q: any) => q.eq("userId", owner._id))
+      .take(2000);
+    for (const session of authSessions) {
+      await ctx.db.delete(session._id);
+    }
+
+    const allOwnerMessages = await ctx.db.query("owner_messages").take(5000);
+    const ownerMessages = allOwnerMessages.filter(
+      (message: any) =>
+        String(message.senderId) === String(owner._id) ||
+        String(message.targetUserId || "") === String(owner._id) ||
+        (Array.isArray(message.deliveryStatus) &&
+          message.deliveryStatus.some(
+            (delivery: any) => String(delivery.userId) === String(owner._id),
+          )),
+    );
+    for (const message of ownerMessages) {
+      await ctx.db.delete(message._id);
+    }
+
+    const verificationTokens = await ctx.db
+      .query("authVerificationTokens")
+      .withIndex("by_identifier", (q: any) =>
+        q.eq(
+          "identifier",
+          String(owner.email || "")
+            .trim()
+            .toLowerCase(),
+        ),
+      )
+      .take(2000);
+    for (const token of verificationTokens) {
+      await ctx.db.delete(token._id);
+    }
+
+    await ctx.db.delete(pharmacy._id);
+    await ctx.db.delete(owner._id);
 
     await ctx.db.insert("audit_logs", {
       userId: admin._id,
       action: "reject_pharmacy_application",
       entityId: args.pharmacyId,
       entityType: "pharmacy",
-      details: `Rejected pharmacy application for ${pharmacy.name}: ${args.reason}`,
-      timestamp: Date.now(),
+      details: `Rejected and deleted pharmacy application for ${pharmacy.name}: ${reason}`,
+      timestamp: now,
     });
 
     return { success: true, pharmacyId: args.pharmacyId, ownerId: owner._id };
+  },
+});
+
+export const cleanupLegacyRejectedOwnerStates = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    dryRun: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+    const dryRun = args.dryRun ?? true;
+    const limit = Math.max(1, Math.min(args.limit ?? 200, 1000));
+    const now = Date.now();
+    const retentionUntil = now + 365 * 24 * 60 * 60 * 1000;
+
+    const normalizeStatus = (status: unknown): string =>
+      typeof status === "string" ? status.trim().toLowerCase() : "";
+
+    const recentAuditLogs = await ctx.db
+      .query("audit_logs")
+      .order("desc")
+      .take(5000);
+
+    const rejectedOwners = await ctx.db
+      .query("users")
+      .withIndex("by_status", (q: any) => q.eq("status", "rejected"))
+      .take(limit);
+
+    const stats = {
+      dryRun,
+      scannedRejectedOwners: 0,
+      cleanedOwners: 0,
+      skippedOwners: 0,
+      historyRecordsCreated: 0,
+      deletedBranches: 0,
+      deletedPharmacies: 0,
+      deletedUsers: 0,
+      deletedAuthSessions: 0,
+      deletedAuthAccounts: 0,
+      deletedNotifications: 0,
+      deletedPaymentMethods: 0,
+      deletedOwnerMessages: 0,
+      deletedPaymentLinks: 0,
+      deletedVerificationTokens: 0,
+      deletedOrphanRejectedPharmacies: 0,
+      previewOwners: [] as Array<{
+        ownerId: string;
+        ownerEmail: string;
+        ownerName?: string;
+        ownerPhone?: string;
+        ownerStatus: string;
+        pharmacyId?: string;
+        pharmacyName?: string;
+        pharmacyEmail?: string;
+        pharmacyStatus?: string;
+        licenseCode?: string;
+        signupLocation?: string;
+        plannedBranchLocations?: string[];
+        rejectionReason: string;
+        rejectedAt: number;
+        historyAlreadyExists: boolean;
+        historyWillBeCreated: boolean;
+        retentionUntil: number;
+      }>,
+    };
+
+    for (const owner of rejectedOwners) {
+      if (owner.role !== "owner") {
+        continue;
+      }
+
+      stats.scannedRejectedOwners += 1;
+
+      const pharmacy = owner.pharmacyId
+        ? await ctx.db.get(owner.pharmacyId)
+        : null;
+      const pharmacyIsRejected =
+        !pharmacy || normalizeStatus(pharmacy.status) === "rejected";
+
+      if (!pharmacyIsRejected) {
+        stats.skippedOwners += 1;
+        continue;
+      }
+
+      const ownerEmail = String(owner.email || "")
+        .trim()
+        .toLowerCase();
+      const matchingAudit = recentAuditLogs.find(
+        (log: any) =>
+          log.action === "reject_pharmacy_application" &&
+          (log.entityId === String(pharmacy?._id) ||
+            String(log.details || "")
+              .toLowerCase()
+              .includes(ownerEmail)),
+      );
+      const parsedReason = (() => {
+        const details = String(matchingAudit?.details || "");
+        const parts = details.split(":");
+        if (parts.length < 2) return "Application rejected by admin review";
+        return (
+          parts.slice(1).join(":").trim() ||
+          "Application rejected by admin review"
+        );
+      })();
+
+      let historyAlreadyExists = false;
+      let historyWillBeCreated = false;
+
+      if (ownerEmail) {
+        const existingHistoryForEmail = await ctx.db
+          .query("rejected_owner_applications")
+          .withIndex("by_owner_email", (q: any) =>
+            q.eq("ownerEmail", ownerEmail),
+          )
+          .take(50);
+        const duplicate = existingHistoryForEmail.some(
+          (row: any) =>
+            row.sourceOwnerId === String(owner._id) &&
+            row.sourcePharmacyId === String(pharmacy?._id || ""),
+        );
+        historyAlreadyExists = duplicate;
+        historyWillBeCreated = !duplicate;
+
+        if (!duplicate) {
+          stats.historyRecordsCreated += 1;
+          if (!dryRun) {
+            await ctx.db.insert("rejected_owner_applications", {
+              ownerEmail,
+              ownerName: owner.full_name,
+              ownerPhone: owner.phone,
+              pharmacyName: pharmacy?.name,
+              pharmacyEmail: pharmacy?.pharmacyEmail,
+              licenseCode: pharmacy?.licenseCode,
+              signupLocation: pharmacy?.signupLocation,
+              rejectionReason: parsedReason,
+              rejectedAt: matchingAudit?.timestamp || now,
+              retentionUntil,
+              rejectedByAdminId: admin._id,
+              sourceOwnerId: String(owner._id),
+              sourcePharmacyId: String(pharmacy?._id || ""),
+            });
+          }
+        }
+      }
+
+      if (stats.previewOwners.length < 300) {
+        stats.previewOwners.push({
+          ownerId: String(owner._id),
+          ownerEmail,
+          ownerName: owner.full_name,
+          ownerPhone: owner.phone,
+          ownerStatus: normalizeStatus(owner.status),
+          pharmacyId: pharmacy?._id ? String(pharmacy._id) : undefined,
+          pharmacyName: pharmacy?.name,
+          pharmacyEmail: pharmacy?.pharmacyEmail,
+          pharmacyStatus: normalizeStatus(pharmacy?.status),
+          licenseCode: pharmacy?.licenseCode,
+          signupLocation: pharmacy?.signupLocation,
+          plannedBranchLocations: pharmacy?.plannedBranchLocations,
+          rejectionReason: parsedReason,
+          rejectedAt: matchingAudit?.timestamp || now,
+          historyAlreadyExists,
+          historyWillBeCreated,
+          retentionUntil,
+        });
+      }
+
+      if (pharmacy) {
+        const branches = await ctx.db
+          .query("branches")
+          .withIndex("by_pharmacy", (q: any) =>
+            q.eq("pharmacyId", pharmacy._id),
+          )
+          .take(2000);
+        stats.deletedBranches += branches.length;
+        if (!dryRun) {
+          for (const branch of branches) {
+            await ctx.db.delete(branch._id);
+          }
+        }
+      }
+
+      const paymentLinks = await ctx.db
+        .query("subscription_payment_links")
+        .withIndex("by_owner", (q: any) => q.eq("ownerUserId", owner._id))
+        .take(2000);
+      stats.deletedPaymentLinks += paymentLinks.length;
+      if (!dryRun) {
+        for (const link of paymentLinks) {
+          await ctx.db.delete(link._id);
+        }
+      }
+
+      const notifications = await ctx.db
+        .query("notifications")
+        .withIndex("by_user", (q: any) => q.eq("userId", owner._id))
+        .take(2000);
+      stats.deletedNotifications += notifications.length;
+      if (!dryRun) {
+        for (const notification of notifications) {
+          await ctx.db.delete(notification._id);
+        }
+      }
+
+      const paymentMethods = await ctx.db
+        .query("payment_methods")
+        .withIndex("by_user", (q: any) => q.eq("userId", owner._id))
+        .take(2000);
+      stats.deletedPaymentMethods += paymentMethods.length;
+      if (!dryRun) {
+        for (const method of paymentMethods) {
+          await ctx.db.delete(method._id);
+        }
+      }
+
+      const authAccounts = await ctx.db
+        .query("authAccounts")
+        .withIndex("by_user_id", (q: any) => q.eq("userId", owner._id))
+        .take(2000);
+      stats.deletedAuthAccounts += authAccounts.length;
+      if (!dryRun) {
+        for (const account of authAccounts) {
+          await ctx.db.delete(account._id);
+        }
+      }
+
+      const authSessions = await ctx.db
+        .query("authSessions")
+        .withIndex("by_user_id", (q: any) => q.eq("userId", owner._id))
+        .take(2000);
+      stats.deletedAuthSessions += authSessions.length;
+      if (!dryRun) {
+        for (const session of authSessions) {
+          await ctx.db.delete(session._id);
+        }
+      }
+
+      const allOwnerMessages = await ctx.db.query("owner_messages").take(5000);
+      const ownerMessages = allOwnerMessages.filter(
+        (message: any) =>
+          String(message.senderId) === String(owner._id) ||
+          String(message.targetUserId || "") === String(owner._id) ||
+          (Array.isArray(message.deliveryStatus) &&
+            message.deliveryStatus.some(
+              (delivery: any) => String(delivery.userId) === String(owner._id),
+            )),
+      );
+      stats.deletedOwnerMessages += ownerMessages.length;
+      if (!dryRun) {
+        for (const message of ownerMessages) {
+          await ctx.db.delete(message._id);
+        }
+      }
+
+      if (ownerEmail) {
+        const verificationTokens = await ctx.db
+          .query("authVerificationTokens")
+          .withIndex("by_identifier", (q: any) =>
+            q.eq("identifier", ownerEmail),
+          )
+          .take(2000);
+        stats.deletedVerificationTokens += verificationTokens.length;
+        if (!dryRun) {
+          for (const token of verificationTokens) {
+            await ctx.db.delete(token._id);
+          }
+        }
+      }
+
+      if (pharmacy) {
+        stats.deletedPharmacies += 1;
+        if (!dryRun) {
+          await ctx.db.delete(pharmacy._id);
+        }
+      }
+
+      stats.deletedUsers += 1;
+      if (!dryRun) {
+        await ctx.db.delete(owner._id);
+      }
+
+      stats.cleanedOwners += 1;
+    }
+
+    const rejectedPharmacies = await ctx.db
+      .query("pharmacies")
+      .filter((q: any) => q.eq(q.field("status"), "rejected"))
+      .take(limit);
+
+    for (const pharmacy of rejectedPharmacies) {
+      const owner = pharmacy.ownerId
+        ? await ctx.db.get(pharmacy.ownerId)
+        : null;
+      if (owner) {
+        continue;
+      }
+      stats.deletedOrphanRejectedPharmacies += 1;
+      if (!dryRun) {
+        await ctx.db.delete(pharmacy._id);
+      }
+    }
+
+    if (!dryRun) {
+      await ctx.db.insert("audit_logs", {
+        userId: admin._id,
+        action: "cleanup_legacy_rejected_owner_states",
+        entityId: String(admin._id),
+        entityType: "maintenance",
+        details: `Cleaned ${stats.cleanedOwners} rejected owner states and ${stats.deletedOrphanRejectedPharmacies} orphan rejected pharmacies`,
+        timestamp: now,
+      });
+    }
+
+    return stats;
   },
 });
 
@@ -1095,6 +1513,74 @@ export const normalizeSubscriptionCurrenciesToETB = mutation({
   },
 });
 
+export const syncPlansFromSignupDefaults = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const admin = await requireAdmin(ctx, args.sessionToken);
+
+    const existingPlans = await ctx.db.query("subscription_plans").take(1000);
+    const planByCode = new Map<string, any>(
+      existingPlans.map((plan: any) => [
+        String(plan.code || "").toLowerCase(),
+        plan,
+      ]),
+    );
+
+    let created = 0;
+    let updated = 0;
+
+    for (const seed of DEFAULT_SIGNUP_PLANS) {
+      const normalizedCode = seed.code.trim().toLowerCase();
+      const existing = planByCode.get(normalizedCode);
+
+      if (!existing) {
+        await ctx.db.insert("subscription_plans", {
+          name: seed.name,
+          code: normalizedCode,
+          price: seed.price,
+          currency: "ETB",
+          features: seed.features,
+          maxBranches: seed.maxBranches,
+          maxUsers: seed.maxUsers,
+          description: seed.description,
+          isActive: seed.isActive,
+        });
+        created += 1;
+        continue;
+      }
+
+      await ctx.db.patch(existing._id, {
+        name: seed.name,
+        price: seed.price,
+        currency: "ETB",
+        features: seed.features,
+        maxBranches: seed.maxBranches,
+        maxUsers: seed.maxUsers,
+        description: seed.description,
+      });
+      updated += 1;
+    }
+
+    await ctx.db.insert("audit_logs", {
+      userId: admin._id,
+      action: "sync_subscription_plans_from_signup",
+      entityId: "subscription_plans",
+      entityType: "subscription_plan",
+      details: `Synced plans from signup defaults. Created: ${created}, Updated: ${updated}.`,
+      timestamp: Date.now(),
+    });
+
+    return {
+      success: true,
+      created,
+      updated,
+      totalSynced: created + updated,
+    };
+  },
+});
+
 export const updatePharmacySubscription = mutation({
   args: {
     pharmacyId: v.id("pharmacies"),
@@ -1603,11 +2089,25 @@ export const liftLock = mutation({
 
 export const sendAdminBroadcast = mutation({
   args: {
+    targetType: v.union(
+      v.literal("all_users"),
+      v.literal("all_owners"),
+      v.literal("specific_plan"),
+      v.literal("specific_pharmacy"),
+    ),
+    targetIds: v.optional(v.array(v.string())),
+    messageType: v.union(
+      v.literal("announcement"),
+      v.literal("newsletter"),
+      v.literal("compliance_alert"),
+      v.literal("subscription_reminder"),
+      v.literal("security_notice"),
+    ),
     title: v.string(),
     message: v.string(),
-    targetAudience: v.string(),
-    priority: v.string(),
-    expiresAt: v.optional(v.number()),
+    priority: v.optional(
+      v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    ),
   },
   handler: async (ctx: any, args: any) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -1624,29 +2124,200 @@ export const sendAdminBroadcast = mutation({
       throw new Error("Unauthorized: Admin only");
     }
 
-    const expiresAt = args.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const fallbackPriority =
+      args.messageType === "compliance_alert" ||
+      args.messageType === "security_notice"
+        ? "high"
+        : "medium";
+    const priority = args.priority || fallbackPriority;
 
-    await ctx.db.insert("admin_broadcasts", {
-      adminId: admin._id,
+    const allPharmacies = await ctx.db.query("pharmacies").take(4000);
+    const ownerToPharmacyId = new Map<string, any>();
+    for (const pharmacy of allPharmacies) {
+      ownerToPharmacyId.set(String(pharmacy.ownerId), pharmacy._id);
+    }
+
+    const resolveUserPharmacyId = (user: any) => {
+      return user.pharmacyId || ownerToPharmacyId.get(String(user._id)) || null;
+    };
+
+    let recipients: any[] = [];
+    let targetIds: string[] | undefined;
+    let targetedPharmacyIds: Set<string> = new Set();
+
+    if (args.targetType === "all_users") {
+      const allUsers = await ctx.db.query("users").take(5000);
+      recipients = allUsers.filter(
+        (user: any) => user.status === "active" && user.role !== "admin",
+      );
+      targetedPharmacyIds = new Set(
+        recipients
+          .map((user: any) => resolveUserPharmacyId(user))
+          .filter(Boolean)
+          .map((id: any) => String(id)),
+      );
+    }
+
+    if (args.targetType === "all_owners") {
+      const owners = await ctx.db
+        .query("users")
+        .withIndex("by_role", (q: any) => q.eq("role", "owner"))
+        .take(2000);
+      recipients = owners.filter((owner: any) => owner.status === "active");
+      targetedPharmacyIds = new Set(
+        recipients
+          .map((owner: any) => resolveUserPharmacyId(owner))
+          .filter(Boolean)
+          .map((id: any) => String(id)),
+      );
+    }
+
+    if (args.targetType === "specific_plan") {
+      const normalizedPlanCodes = (args.targetIds || [])
+        .map((value: string) => value.trim().toLowerCase())
+        .filter(Boolean);
+      if (normalizedPlanCodes.length === 0) {
+        throw new Error("Please select at least one subscription plan");
+      }
+
+      const planCodeSet = new Set(normalizedPlanCodes);
+      const matchedPharmacies = allPharmacies.filter((pharmacy: any) =>
+        planCodeSet.has(String(pharmacy.subscriptionTier || "").toLowerCase()),
+      );
+      const matchedPharmacyIds = new Set<string>(
+        matchedPharmacies.map((pharmacy: any) => String(pharmacy._id)),
+      );
+      const matchedOwnerIds = new Set(
+        matchedPharmacies.map((pharmacy: any) => String(pharmacy.ownerId)),
+      );
+
+      const allUsers = await ctx.db.query("users").take(5000);
+      recipients = allUsers.filter((user: any) => {
+        if (user.status !== "active" || user.role === "admin") {
+          return false;
+        }
+        const userPharmacyId = resolveUserPharmacyId(user);
+        return (
+          (userPharmacyId && matchedPharmacyIds.has(String(userPharmacyId))) ||
+          matchedOwnerIds.has(String(user._id))
+        );
+      });
+
+      targetIds = normalizedPlanCodes;
+      targetedPharmacyIds = new Set<string>(
+        Array.from(matchedPharmacyIds).map((id) => String(id)),
+      );
+    }
+
+    if (args.targetType === "specific_pharmacy") {
+      const normalizedPharmacyIds = (args.targetIds || [])
+        .map((value: string) => value.trim())
+        .filter(Boolean);
+      if (normalizedPharmacyIds.length === 0) {
+        throw new Error("Please select at least one pharmacy");
+      }
+
+      const requestedIds = new Set(normalizedPharmacyIds);
+      const matchedPharmacies = allPharmacies.filter((pharmacy: any) =>
+        requestedIds.has(String(pharmacy._id)),
+      );
+      const matchedPharmacyIds = new Set<string>(
+        matchedPharmacies.map((pharmacy: any) => String(pharmacy._id)),
+      );
+      const matchedOwnerIds = new Set(
+        matchedPharmacies.map((pharmacy: any) => String(pharmacy.ownerId)),
+      );
+
+      const allUsers = await ctx.db.query("users").take(5000);
+      recipients = allUsers.filter((user: any) => {
+        if (user.status !== "active" || user.role === "admin") {
+          return false;
+        }
+        const userPharmacyId = resolveUserPharmacyId(user);
+        return (
+          (userPharmacyId && matchedPharmacyIds.has(String(userPharmacyId))) ||
+          matchedOwnerIds.has(String(user._id))
+        );
+      });
+
+      targetIds = normalizedPharmacyIds;
+      targetedPharmacyIds = new Set<string>(
+        Array.from(matchedPharmacyIds).map((id) => String(id)),
+      );
+    }
+
+    const uniqueRecipientsById = new Map<string, any>();
+    for (const recipient of recipients) {
+      uniqueRecipientsById.set(String(recipient._id), recipient);
+    }
+    const uniqueRecipients = Array.from(uniqueRecipientsById.values());
+
+    if (uniqueRecipients.length === 0) {
+      throw new Error("No recipients matched the selected target audience");
+    }
+
+    for (const recipient of uniqueRecipients) {
+      const pharmacyId = resolveUserPharmacyId(recipient);
+      await ctx.db.insert("notifications", {
+        userId: recipient._id,
+        pharmacyId: pharmacyId || undefined,
+        title: args.title,
+        message: args.message,
+        type: "info",
+        priority,
+        read: false,
+        readAt: undefined,
+        link: "/dashboard",
+        createdAt: now,
+      });
+    }
+
+    if (targetedPharmacyIds.size === 0) {
+      targetedPharmacyIds = new Set(
+        uniqueRecipients
+          .map((recipient: any) => resolveUserPharmacyId(recipient))
+          .filter(Boolean)
+          .map((id: any) => String(id)),
+      );
+    }
+
+    const deliveryStatus = Array.from(targetedPharmacyIds).map(
+      (pharmacyId: string) => ({
+        pharmacyId,
+        delivered: true,
+        deliveredAt: now,
+        read: false,
+        readAt: undefined,
+      }),
+    );
+
+    const broadcastId = await ctx.db.insert("admin_broadcasts", {
+      senderId: admin._id,
+      targetType: args.targetType,
+      targetIds,
+      messageType: args.messageType,
       title: args.title,
       message: args.message,
-      targetAudience: args.targetAudience,
-      priority: args.priority,
-      sentAt: Date.now(),
-      expiresAt,
-      isActive: true,
+      deliveryStatus,
+      createdAt: now,
     });
 
     await ctx.db.insert("audit_logs", {
       userId: admin._id,
       action: "send_broadcast",
-      entityId: null,
+      entityId: String(broadcastId),
       entityType: "broadcast",
-      details: `Sent broadcast to ${args.targetAudience}: ${args.title}`,
-      timestamp: Date.now(),
+      details: `Sent ${args.messageType} broadcast to ${args.targetType} (${uniqueRecipients.length} recipients): ${args.title}`,
+      timestamp: now,
     });
 
-    return { success: true };
+    return {
+      success: true,
+      broadcastId,
+      recipientCount: uniqueRecipients.length,
+      pharmacyCount: targetedPharmacyIds.size,
+    };
   },
 });
 
@@ -2164,5 +2835,458 @@ export const reviewAdminActionAppeal = mutation({
     });
 
     return { success: true };
+  },
+});
+
+export const hardDeleteNonAdminUsers = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    dryRun: v.optional(v.boolean()),
+    fallbackAdminId: v.optional(v.id("users")),
+  },
+  handler: async (ctx: any, args: any) => {
+    const requestingAdmin = await requireAdmin(ctx, args.sessionToken);
+    const dryRun = args.dryRun ?? true;
+
+    const allUsers = await ctx.db.query("users").take(5000);
+    const admins = allUsers.filter((user: any) => user.role === "admin");
+    const nonAdmins = allUsers.filter((user: any) => user.role !== "admin");
+
+    if (admins.length === 0) {
+      throw new Error("No admin user exists; aborting cleanup.");
+    }
+
+    const fallbackAdmin = args.fallbackAdminId
+      ? await ctx.db.get(args.fallbackAdminId)
+      : admins[0];
+
+    if (!fallbackAdmin || fallbackAdmin.role !== "admin") {
+      throw new Error("Fallback admin must be a valid admin user.");
+    }
+
+    const deleteUserIds = new Set(
+      nonAdmins.map((user: any) => String(user._id)),
+    );
+    const shouldDeleteUserId = (id: any) => id && deleteUserIds.has(String(id));
+
+    const impacts: Record<string, number> = {};
+    const count = (key: string, amount = 1) => {
+      impacts[key] = (impacts[key] || 0) + amount;
+    };
+
+    const patchIfNeeded = async (
+      doc: any,
+      patch: Record<string, any>,
+      impactKey: string,
+    ) => {
+      if (Object.keys(patch).length === 0) return;
+      count(impactKey);
+      if (!dryRun) {
+        await ctx.db.patch(doc._id, patch);
+      }
+    };
+
+    const deleteDoc = async (doc: any, impactKey: string) => {
+      count(impactKey);
+      if (!dryRun) {
+        await ctx.db.delete(doc._id);
+      }
+    };
+
+    const pharmacies = await ctx.db.query("pharmacies").take(5000);
+    for (const pharmacy of pharmacies) {
+      if (shouldDeleteUserId(pharmacy.ownerId)) {
+        await patchIfNeeded(
+          pharmacy,
+          { ownerId: fallbackAdmin._id },
+          "pharmacies_reassigned_owner",
+        );
+      }
+    }
+
+    const branches = await ctx.db.query("branches").take(5000);
+    for (const branch of branches) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(branch.managerId)) {
+        patch.managerId = fallbackAdmin._id;
+      }
+      if (Array.isArray(branch.assignedManagers)) {
+        const cleaned = branch.assignedManagers.filter(
+          (userId: any) => !shouldDeleteUserId(userId),
+        );
+        if (cleaned.length === 0) {
+          cleaned.push(fallbackAdmin._id);
+        }
+        if (
+          JSON.stringify(cleaned) !== JSON.stringify(branch.assignedManagers)
+        ) {
+          patch.assignedManagers = cleaned;
+        }
+      }
+      await patchIfNeeded(branch, patch, "branches_reassigned_manager");
+    }
+
+    const sales = await ctx.db.query("sales").take(5000);
+    for (const sale of sales) {
+      if (shouldDeleteUserId(sale.cashierId)) {
+        await patchIfNeeded(
+          sale,
+          { cashierId: fallbackAdmin._id },
+          "sales_reassigned_cashier",
+        );
+      }
+    }
+
+    const stockRequests = await ctx.db.query("stock_requests").take(5000);
+    for (const request of stockRequests) {
+      if (shouldDeleteUserId(request.pharmacistId)) {
+        await patchIfNeeded(
+          request,
+          { pharmacistId: fallbackAdmin._id },
+          "stock_requests_reassigned_pharmacist",
+        );
+      }
+    }
+
+    const stockTransfers = await ctx.db
+      .query("stock_transfer_requests")
+      .take(5000);
+    for (const transfer of stockTransfers) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(transfer.requesterUserId)) {
+        patch.requesterUserId = fallbackAdmin._id;
+      }
+      if (shouldDeleteUserId(transfer.approvedByUserId)) {
+        patch.approvedByUserId = undefined;
+      }
+      if (shouldDeleteUserId(transfer.rejectedByUserId)) {
+        patch.rejectedByUserId = undefined;
+      }
+      await patchIfNeeded(
+        transfer,
+        patch,
+        "stock_transfers_reassigned_requester",
+      );
+    }
+
+    const subscriptionTemplates = await ctx.db
+      .query("subscription_plan_templates")
+      .take(5000);
+    for (const template of subscriptionTemplates) {
+      if (shouldDeleteUserId(template.createdBy)) {
+        await patchIfNeeded(
+          template,
+          { createdBy: fallbackAdmin._id },
+          "subscription_templates_reassigned_creator",
+        );
+      }
+    }
+
+    const paymentLinks = await ctx.db
+      .query("subscription_payment_links")
+      .take(5000);
+    for (const link of paymentLinks) {
+      if (shouldDeleteUserId(link.ownerUserId)) {
+        await patchIfNeeded(
+          link,
+          { ownerUserId: fallbackAdmin._id },
+          "payment_links_reassigned_owner",
+        );
+      }
+    }
+
+    const subscriptionHistory = await ctx.db
+      .query("subscription_history")
+      .take(5000);
+    for (const item of subscriptionHistory) {
+      if (shouldDeleteUserId(item.changedBy)) {
+        await patchIfNeeded(
+          item,
+          { changedBy: fallbackAdmin._id },
+          "subscription_history_reassigned_changedBy",
+        );
+      }
+    }
+
+    const adminActions = await ctx.db.query("admin_actions").take(5000);
+    for (const action of adminActions) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(action.targetUserId)) {
+        patch.targetUserId = fallbackAdmin._id;
+      }
+      if (shouldDeleteUserId(action.performedBy)) {
+        patch.performedBy = fallbackAdmin._id;
+      }
+      await patchIfNeeded(action, patch, "admin_actions_reassigned_users");
+    }
+
+    const managerFlags = await ctx.db.query("manager_flags").take(5000);
+    for (const flag of managerFlags) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(flag.managerId)) {
+        patch.managerId = fallbackAdmin._id;
+      }
+      if (shouldDeleteUserId(flag.flaggedBy)) {
+        patch.flaggedBy = fallbackAdmin._id;
+      }
+      await patchIfNeeded(flag, patch, "manager_flags_reassigned_users");
+    }
+
+    const broadcasts = await ctx.db.query("admin_broadcasts").take(5000);
+    for (const broadcast of broadcasts) {
+      if (shouldDeleteUserId(broadcast.senderId)) {
+        await patchIfNeeded(
+          broadcast,
+          { senderId: fallbackAdmin._id },
+          "broadcasts_reassigned_sender",
+        );
+      }
+    }
+
+    const diagnostics = await ctx.db.query("diagnostic_sessions").take(5000);
+    for (const session of diagnostics) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(session.adminId)) {
+        patch.adminId = fallbackAdmin._id;
+      }
+      if (shouldDeleteUserId(session.targetUserId)) {
+        patch.targetUserId = fallbackAdmin._id;
+      }
+      await patchIfNeeded(session, patch, "diagnostics_reassigned_users");
+    }
+
+    const auditLogs = await ctx.db.query("audit_logs").take(5000);
+    for (const log of auditLogs) {
+      if (shouldDeleteUserId(log.userId)) {
+        await patchIfNeeded(
+          log,
+          { userId: fallbackAdmin._id },
+          "audit_logs_reassigned_user",
+        );
+      }
+    }
+
+    const ownerMessages = await ctx.db.query("owner_messages").take(5000);
+    for (const message of ownerMessages) {
+      const senderDeleted = shouldDeleteUserId(message.senderId);
+      const targetDeleted = shouldDeleteUserId(message.targetUserId);
+      const hasDeliveryForDeletedUser = Array.isArray(message.deliveryStatus)
+        ? message.deliveryStatus.some((status: any) =>
+            shouldDeleteUserId(status.userId),
+          )
+        : false;
+
+      if (senderDeleted || targetDeleted || hasDeliveryForDeletedUser) {
+        await deleteDoc(message, "owner_messages_deleted");
+      }
+    }
+
+    const notifications = await ctx.db.query("notifications").take(5000);
+    for (const notification of notifications) {
+      if (shouldDeleteUserId(notification.userId)) {
+        await deleteDoc(notification, "notifications_deleted");
+      }
+    }
+
+    const aiConversations = await ctx.db.query("ai_conversations").take(5000);
+    for (const convo of aiConversations) {
+      if (shouldDeleteUserId(convo.userId)) {
+        await deleteDoc(convo, "ai_conversations_deleted");
+      }
+    }
+
+    const aiEscalations = await ctx.db.query("ai_escalations").take(5000);
+    for (const escalation of aiEscalations) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(escalation.submitterId)) {
+        patch.submitterId = fallbackAdmin._id;
+      }
+      if (shouldDeleteUserId(escalation.assignedTo)) {
+        patch.assignedTo = undefined;
+      }
+      await patchIfNeeded(escalation, patch, "ai_escalations_reassigned_users");
+    }
+
+    const paymentMethods = await ctx.db.query("payment_methods").take(5000);
+    for (const method of paymentMethods) {
+      if (shouldDeleteUserId(method.userId)) {
+        await deleteDoc(method, "payment_methods_deleted");
+      }
+    }
+
+    const auditExports = await ctx.db.query("audit_log_exports").take(5000);
+    for (const exportDoc of auditExports) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(exportDoc.requestedBy)) {
+        patch.requestedBy = fallbackAdmin._id;
+      }
+      if (
+        exportDoc.filters?.userId &&
+        shouldDeleteUserId(exportDoc.filters.userId)
+      ) {
+        patch.filters = {
+          ...exportDoc.filters,
+          userId: undefined,
+        };
+      }
+      await patchIfNeeded(exportDoc, patch, "audit_exports_reassigned_users");
+    }
+
+    const contactMessages = await ctx.db.query("contact_messages").take(5000);
+    for (const msg of contactMessages) {
+      if (shouldDeleteUserId(msg.repliedBy)) {
+        await patchIfNeeded(
+          msg,
+          { repliedBy: undefined },
+          "contact_messages_cleared_repliedBy",
+        );
+      }
+    }
+
+    const contactTrash = await ctx.db
+      .query("contact_messages_trash")
+      .take(5000);
+    for (const msg of contactTrash) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(msg.repliedBy)) {
+        patch.repliedBy = undefined;
+      }
+      if (shouldDeleteUserId(msg.deletedBy)) {
+        patch.deletedBy = fallbackAdmin._id;
+      }
+      await patchIfNeeded(
+        msg,
+        patch,
+        "contact_messages_trash_reassigned_users",
+      );
+    }
+
+    const testimonials = await ctx.db.query("testimonials").take(5000);
+    for (const testimonial of testimonials) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(testimonial.ownerId)) {
+        patch.ownerId = fallbackAdmin._id;
+      }
+      if (shouldDeleteUserId(testimonial.reviewedBy)) {
+        patch.reviewedBy = undefined;
+      }
+      await patchIfNeeded(testimonial, patch, "testimonials_reassigned_users");
+    }
+
+    const siteSettings = await ctx.db.query("site_settings").take(5000);
+    for (const settings of siteSettings) {
+      if (shouldDeleteUserId(settings.updatedBy)) {
+        await patchIfNeeded(
+          settings,
+          { updatedBy: undefined },
+          "site_settings_cleared_updatedBy",
+        );
+      }
+    }
+
+    const landingContent = await ctx.db
+      .query("landing_page_content")
+      .take(5000);
+    for (const content of landingContent) {
+      if (shouldDeleteUserId(content.updatedBy)) {
+        await patchIfNeeded(
+          content,
+          { updatedBy: undefined },
+          "landing_content_cleared_updatedBy",
+        );
+      }
+    }
+
+    const landingSections = await ctx.db
+      .query("landing_page_sections")
+      .take(5000);
+    for (const section of landingSections) {
+      if (shouldDeleteUserId(section.updatedBy)) {
+        await patchIfNeeded(
+          section,
+          { updatedBy: undefined },
+          "landing_sections_cleared_updatedBy",
+        );
+      }
+    }
+
+    const authAccounts = await ctx.db.query("authAccounts").take(5000);
+    for (const account of authAccounts) {
+      if (shouldDeleteUserId(account.userId)) {
+        await deleteDoc(account, "auth_accounts_deleted");
+      }
+    }
+
+    const authSessions = await ctx.db.query("authSessions").take(5000);
+    for (const session of authSessions) {
+      if (shouldDeleteUserId(session.userId)) {
+        await deleteDoc(session, "auth_sessions_deleted");
+      }
+    }
+
+    for (const adminUser of admins) {
+      const patch: Record<string, any> = {};
+      if (shouldDeleteUserId(adminUser.createdBy)) {
+        patch.createdBy = undefined;
+      }
+      if (shouldDeleteUserId(adminUser.lockLiftedBy)) {
+        patch.lockLiftedBy = undefined;
+      }
+      if (shouldDeleteUserId(adminUser.stockApprovalDelegatedBy)) {
+        patch.stockApprovalDelegatedBy = undefined;
+      }
+      await patchIfNeeded(adminUser, patch, "admin_users_cleared_user_refs");
+    }
+
+    for (const medicine of await ctx.db.query("medicines").take(5000)) {
+      if (!Array.isArray(medicine.priceChangeHistory)) continue;
+
+      let changed = false;
+      const nextHistory = medicine.priceChangeHistory.map((entry: any) => {
+        if (!shouldDeleteUserId(entry.changedBy)) return entry;
+        changed = true;
+        return {
+          ...entry,
+          changedBy: fallbackAdmin._id,
+        };
+      });
+
+      if (changed) {
+        await patchIfNeeded(
+          medicine,
+          { priceChangeHistory: nextHistory },
+          "medicines_reassigned_price_change_actor",
+        );
+      }
+    }
+
+    for (const user of nonAdmins) {
+      count("users_deleted");
+      if (!dryRun) {
+        await ctx.db.delete(user._id);
+      }
+    }
+
+    const summary = {
+      dryRun,
+      requestedBy: requestingAdmin._id,
+      fallbackAdminId: fallbackAdmin._id,
+      adminsKept: admins.length,
+      nonAdminsTargeted: nonAdmins.length,
+      impacts,
+    };
+
+    if (!dryRun) {
+      await ctx.db.insert("audit_logs", {
+        userId: requestingAdmin._id,
+        action: "hard_delete_non_admin_users",
+        entityId: String(fallbackAdmin._id),
+        entityType: "user_cleanup",
+        details: `Deleted ${nonAdmins.length} non-admin users; fallback admin ${String(fallbackAdmin._id)}`,
+        timestamp: Date.now(),
+      });
+    }
+
+    return summary;
   },
 });

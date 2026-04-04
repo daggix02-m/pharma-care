@@ -247,10 +247,24 @@ export function SubscriptionBillingSection({
               <div className="space-y-3">
                 <BillingItem label="Current Plan" value={currentPlan.name} />
                 <BillingItem
+                  label="Recommended Plan"
+                  value={
+                    pharmacy.recommendedSubscriptionTier?.toUpperCase() || "N/A"
+                  }
+                />
+                <BillingItem
                   label="Monthly Cost"
-                  value={`$${pharmacy.monthlyCost || 0}`}
+                  value={`ETB ${pharmacy.monthlyCost || 0}`}
                 />
                 <BillingItem label="Billing Cycle" value="Monthly" />
+                <BillingItem
+                  label="Planned Branches"
+                  value={pharmacy.plannedBranches?.toString() || "N/A"}
+                />
+                <BillingItem
+                  label="Planned Staff"
+                  value={pharmacy.plannedStaffTotal?.toString() || "N/A"}
+                />
                 <BillingItem
                   label="Next Billing Date"
                   value={
@@ -385,7 +399,7 @@ export function SubscriptionBillingSection({
                 <SelectContent>
                   {activePlans.map((plan) => (
                     <SelectItem key={plan._id} value={plan.code}>
-                      {plan.name} - {plan.currency} {plan.price}/month
+                      {plan.name} - ETB {plan.price}/month
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -496,7 +510,7 @@ function PlanCard({ plan, isCurrent }: PlanCardProps) {
         </div>
         <div className="mt-4">
           <span className={cn("text-3xl font-bold", isCurrent && "text-white")}>
-            ${plan.price}
+            ETB {plan.price}
           </span>
           <span
             className={cn(
@@ -560,7 +574,7 @@ function PaymentRow({ payment }: PaymentRowProps) {
       </div>
       <div className="flex items-center gap-4">
         <div className="text-right">
-          <p className="text-sm font-semibold">${payment.amount}</p>
+          <p className="text-sm font-semibold">ETB {payment.amount}</p>
           <p className="text-xs text-muted-foreground">{payment.method}</p>
         </div>
         <Badge

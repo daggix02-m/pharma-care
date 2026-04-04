@@ -114,7 +114,7 @@ Button.displayName = 'Button'
 ### Testing with Vitest
 - Test files: `*.test.tsx` or `*.test.ts` in component directories
 - Use `@testing-library/react` for component testing
-- Mock external dependencies (Convex, Clerk) in setup or individual tests
+- Mock external dependencies (Convex, auth/email providers) in setup or individual tests
 - Test user interactions with `@testing-library/user-event`
 - Global setup in `src/setupTests.ts` includes ResizeObserver and matchMedia mocks
 
@@ -127,7 +127,7 @@ Button.displayName = 'Button'
 ## Environment Variables
 - All client-side variables must start with `VITE_`
 - Backend keys in `.env.development` (not committed)
-- See README.md for required variables (Convex, Clerk, API URLs)
+- See README.md for required variables (Convex, API URLs)
 
 ## Important Notes
 - Run `npm run lint:fix` and `npm run format` before committing

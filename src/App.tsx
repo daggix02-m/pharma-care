@@ -221,19 +221,34 @@ const RoleProtectedRoute = React.memo(function RoleProtectedRoute({
     return <Navigate to="/auth/pharmacy-suspended" replace />;
   }
 
-  if (
-    userRole === "owner" &&
+  const ownerUserApproved = user?.status === "active";
+  const ownerPharmacyApproved =
+    user?.pharmacy?.status === "active" ||
+    user?.pharmacy?.status === "approved" ||
+    user?.pharmacy_status === "active" ||
+    user?.pharmacy_status === "approved";
+
+  const ownerPendingApproval =
+    userRole === "owner" && (!ownerUserApproved || !ownerPharmacyApproved);
+
+  const nonOwnerPendingApproval =
+    userRole !== "admin" &&
+    userRole !== "owner" &&
     (user?.status === "pending" ||
       user?.pharmacy?.status === "pending" ||
-      user?.pharmacy_status === "pending")
-  ) {
+      user?.pharmacy_status === "pending");
+
+  if (ownerPendingApproval || nonOwnerPendingApproval) {
     if (user?.email) {
       localStorage.setItem("pendingEmail", user.email);
     }
     if (user?.pharmacy?.name) {
       localStorage.setItem("pendingPharmacyName", user.pharmacy.name);
     }
-    localStorage.setItem("pendingRequestType", "head_manager");
+    localStorage.setItem(
+      "pendingRequestType",
+      userRole === "owner" ? "head_manager" : "branch_manager",
+    );
     return <Navigate to="/auth/pending-approval" replace />;
   }
 

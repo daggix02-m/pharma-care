@@ -1,7 +1,7 @@
 // @ts-ignore
-import { query } from '../_generated/server';
-import { v } from 'convex/values';
-import { requirePharmacist } from '../lib/auth';
+import { query } from "../_generated/server";
+import { v } from "convex/values";
+import { requirePharmacist } from "../lib/auth";
 
 export const getDashboardStats = query({
   args: {
@@ -22,8 +22,8 @@ export const getDashboardStats = query({
     }
 
     const medicines = await ctx.db
-      .query('medicines')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
+      .query("medicines")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .collect();
 
     const lowStockItems = medicines.filter((m: any) => m.stock <= 10).length;
@@ -33,12 +33,17 @@ export const getDashboardStats = query({
 
     const todayStart = new Date().setHours(0, 0, 0, 0);
     const sales = await ctx.db
-      .query('sales')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
+      .query("sales")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .collect();
 
-    const todaySalesItems = sales.filter((s: any) => s._creationTime >= todayStart);
-    const todaySales = todaySalesItems.reduce((acc: number, s: any) => acc + s.totalAmount, 0);
+    const todaySalesItems = sales.filter(
+      (s: any) => s._creationTime >= todayStart,
+    );
+    const todaySales = todaySalesItems.reduce(
+      (acc: number, s: any) => acc + s.totalAmount,
+      0,
+    );
 
     return {
       totalMedicines: medicines.length,
@@ -63,19 +68,24 @@ export const getMedicines = query({
     }
 
     return await ctx.db
-      .query('medicines')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
+      .query("medicines")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .collect();
   },
 });
 
 export const getMedicineById = query({
   args: {
-    id: v.id('medicines'),
+    id: v.id("medicines"),
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
-    return await ctx.db.get(args.id);
+    const user = await requirePharmacist(ctx, args.sessionToken);
+    const medicine = await ctx.db.get(args.id);
+    if (!medicine || medicine.branchId !== user.branchId) {
+      throw new Error("Medicine not found or unauthorized");
+    }
+    return medicine;
   },
 });
 
@@ -89,9 +99,9 @@ export const getSoldItemsHistory = query({
     if (!user.branchId) return [];
 
     const sales = await ctx.db
-      .query('sales')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
-      .order('desc')
+      .query("sales")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
+      .order("desc")
       .collect();
 
     const items = [];
@@ -100,7 +110,7 @@ export const getSoldItemsHistory = query({
         const medicine = await ctx.db.get(item.medicineId);
         items.push({
           ...item,
-          medicineName: medicine?.name || 'Unknown',
+          medicineName: medicine?.name || "Unknown",
           saleId: sale._id,
           timestamp: sale._creationTime,
         });
@@ -120,9 +130,9 @@ export const getStockRequests = query({
     if (!user.branchId) return [];
 
     const requests = await ctx.db
-      .query('stock_requests')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
-      .order('desc')
+      .query("stock_requests")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
+      .order("desc")
       .collect();
 
     const items = [];
@@ -130,7 +140,7 @@ export const getStockRequests = query({
       const medicine = await ctx.db.get(req.medicineId);
       items.push({
         ...req,
-        medicineName: medicine?.name || 'Unknown',
+        medicineName: medicine?.name || "Unknown",
       });
     }
     return items;
@@ -149,8 +159,8 @@ export const getExpiringMedicines = query({
     }
 
     const medicines = await ctx.db
-      .query('medicines')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
+      .query("medicines")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .collect();
 
     const thirtyDaysFromNow = Date.now() + 30 * 24 * 60 * 60 * 1000;
@@ -174,8 +184,8 @@ export const getLowStockMedicines = query({
     }
 
     const medicines = await ctx.db
-      .query('medicines')
-      .withIndex('by_branch', (q: any) => q.eq('branchId', user.branchId))
+      .query("medicines")
+      .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .collect();
 
     return medicines.filter((m: any) => m.stock <= 10);

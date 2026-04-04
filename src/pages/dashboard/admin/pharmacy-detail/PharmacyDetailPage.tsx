@@ -6,23 +6,17 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   Building2,
   Shield,
-  Activity,
   Mail,
-  FileText,
   AlertCircle,
   X,
-  ChevronDown,
-  ChevronRight,
-  User,
   MapPin,
   CreditCard,
-  Clock,
   Users,
 } from "lucide-react";
-import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -34,27 +28,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-
-import { PharmacyOverviewSection } from "./sections/PharmacyOverviewSection";
-import { OwnerDetailsSection } from "./sections/OwnerDetailsSection";
-import { ManagersSection } from "./sections/ManagersSection";
-import { StaffSection } from "./sections/StaffSection";
-import { BranchesSection } from "./sections/BranchesSection";
-import { SubscriptionBillingSection } from "./sections/SubscriptionBillingSection";
-import { AuditLogSection } from "./sections/AuditLogSection";
-import { HistoryPageSection } from "./sections/HistoryPageSection";
-import { DiagnosticSessionsSection } from "./sections/DiagnosticSessionsSection";
 
 export function PharmacyDetailPage() {
   const { pharmacyId } = useParams<{ pharmacyId: string }>();
   const { sessionToken } = useAuth();
   const navigate = useNavigate();
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(["overview", "owner"]),
-  );
+  const [activeTab, setActiveTab] = useState("overview");
   const [suspendDialog, setSuspendDialog] = useState(false);
   const [messageDialog, setMessageDialog] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
@@ -107,17 +88,59 @@ export function PharmacyDetailPage() {
   }
 
   const data = pharmacyData;
+  const signupSubmission = data.signupSubmission;
 
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(sectionId)) {
-        newSet.delete(sectionId);
-      } else {
-        newSet.add(sectionId);
-      }
-      return newSet;
-    });
+  const fallbackLocation =
+    data.pharmacy.signupLocation ||
+    data.pharmacy.plannedBranchLocations?.[0] ||
+    (data.pharmacy.address?.city && data.pharmacy.address?.country
+      ? `${data.pharmacy.address.city}, ${data.pharmacy.address.country}`
+      : data.pharmacy.address?.city || "Not provided");
+
+  const primaryLocation =
+    signupSubmission?.primaryLocation || fallbackLocation || "Not provided";
+  const branchLocations = Array.isArray(signupSubmission?.branchLocations)
+    ? signupSubmission.branchLocations
+    : Array.isArray(data.pharmacy.plannedBranchLocations)
+      ? data.pharmacy.plannedBranchLocations
+      : [];
+
+  const summary = {
+    primaryLocation,
+    branchLocations,
+    plannedBranches:
+      signupSubmission?.plannedBranches ?? data.pharmacy.plannedBranches ?? 0,
+    submittedAt:
+      signupSubmission?.submittedAt ?? data.pharmacy._creationTime ?? null,
+    status: signupSubmission?.status || data.pharmacy.status || "unknown",
+    selectedTier:
+      signupSubmission?.selectedTier || data.pharmacy.subscriptionTier || "",
+    recommendedTier:
+      signupSubmission?.recommendedTier ||
+      data.pharmacy.recommendedSubscriptionTier ||
+      "",
+    pharmacyName: signupSubmission?.pharmacyName || data.pharmacy.name,
+    pharmacyEmail:
+      signupSubmission?.pharmacyEmail ||
+      data.pharmacy.pharmacyEmail ||
+      "Not provided",
+    licenseCode: signupSubmission?.licenseCode || data.pharmacy.licenseCode,
+    ownerName:
+      signupSubmission?.ownerName || data.owner?.full_name || "Not provided",
+    ownerEmail:
+      signupSubmission?.ownerEmail || data.owner?.email || "Not provided",
+    ownerPhone:
+      signupSubmission?.ownerPhone || data.owner?.phone || "Not provided",
+    plannedStaffTotal:
+      signupSubmission?.plannedStaffTotal ??
+      data.pharmacy.plannedStaffTotal ??
+      0,
+    staffBreakdown: signupSubmission?.staffBreakdown || {
+      pharmacists: data.pharmacy.plannedStaffBreakdown?.pharmacists ?? 0,
+      managers: data.pharmacy.plannedStaffBreakdown?.managers ?? 0,
+      cashiers: data.pharmacy.plannedStaffBreakdown?.cashiers ?? 0,
+    },
+    termsAccepted: signupSubmission?.termsAccepted,
   };
 
   const handleSuspend = async () => {
@@ -160,6 +183,7 @@ export function PharmacyDetailPage() {
         messageType: "announcement",
         title: messageData.title,
         message: messageData.message,
+        priority: "medium",
       });
       toast.success("Message sent successfully");
       setMessageDialog(false);
@@ -181,12 +205,11 @@ export function PharmacyDetailPage() {
                 <Building2 className="h-8 w-8 text-[hsl(var(--medical-teal))]" />
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight break-words">
-                    {data.pharmacy.name}
+                    {summary.pharmacyName}
                   </h1>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    {data.pharmacy.address?.city},{" "}
-                    {data.pharmacy.address?.country}
+                    {summary.primaryLocation}
                   </div>
                 </div>
               </div>
@@ -199,20 +222,19 @@ export function PharmacyDetailPage() {
                   }
                   className="text-xs font-semibold px-3 py-1"
                 >
-                  {data.pharmacy.status}
+                  {summary.status}
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {data.pharmacy.subscriptionTier}
+                  {(summary.selectedTier || "not set").toLowerCase()}
                 </Badge>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5" />
-                  {data.branches.length} branches
+                  Planned branches: {summary.plannedBranches}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Activity className="h-3.5 w-3.5" />
-                  Last active:{" "}
-                  {data.pharmacy._creationTime
-                    ? new Date(data.pharmacy._creationTime).toLocaleDateString()
+                  Submitted:{" "}
+                  {summary.submittedAt
+                    ? new Date(summary.submittedAt).toLocaleDateString()
                     : "N/A"}
                 </div>
               </div>
@@ -235,9 +257,19 @@ export function PharmacyDetailPage() {
                 <X className="h-4 w-4" />
                 Suspend
               </Button>
-              <Button variant="ghost" className="gap-2">
-                <FileText className="h-4 w-4" />
-                Diagnostic View
+              <Button
+                variant="ghost"
+                className="gap-2"
+                onClick={() => {
+                  setActiveTab("overview");
+                  setTimeout(() => {
+                    document
+                      .getElementById("pharmacy-registration-details")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 0);
+                }}
+              >
+                View Submission
               </Button>
             </div>
           </div>
@@ -246,112 +278,181 @@ export function PharmacyDetailPage() {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="space-y-4 max-w-7xl">
-          <CollapsibleSection
-            id="overview"
-            title="Pharmacy Overview"
-            icon={Building2}
-            expanded={expandedSections.has("overview")}
-            onToggle={() => toggleSection("overview")}
-          >
-            <PharmacyOverviewSection
-              pharmacy={data.pharmacy}
-              branches={data.branches}
-            />
-          </CollapsibleSection>
+        <div className="max-w-7xl">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto bg-muted/40 p-1.5 rounded-xl">
+              <TabsTrigger value="overview" className="text-xs">
+                Pharmacy
+              </TabsTrigger>
+              <TabsTrigger value="owner" className="text-xs">
+                Owner
+              </TabsTrigger>
+              <TabsTrigger value="operations" className="text-xs">
+                Operations
+              </TabsTrigger>
+              <TabsTrigger value="subscription" className="text-xs">
+                Plan & Payment
+              </TabsTrigger>
+            </TabsList>
 
-          <CollapsibleSection
-            id="owner"
-            title="Owner Details"
-            icon={Shield}
-            expanded={expandedSections.has("owner")}
-            onToggle={() => toggleSection("owner")}
-          >
-            <OwnerDetailsSection owner={data.owner!} pharmacy={data.pharmacy} />
-          </CollapsibleSection>
+            <TabsContent value="overview" className="mt-4">
+              <Card
+                className="border-2 border-border/70"
+                id="pharmacy-registration-details"
+              >
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
+                    Pharmacy Registration Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <InfoRow label="Pharmacy Name" value={summary.pharmacyName} />
+                  <InfoRow
+                    label="Pharmacy Email"
+                    value={summary.pharmacyEmail || "Not provided"}
+                  />
+                  <InfoRow
+                    label="License Code"
+                    value={summary.licenseCode || "Not provided"}
+                  />
+                  <InfoRow
+                    label="Primary Location"
+                    value={summary.primaryLocation}
+                  />
+                  <InfoRow
+                    label="Branch Locations"
+                    value={
+                      summary.branchLocations.length
+                        ? summary.branchLocations.join(", ")
+                        : summary.plannedBranches > 0
+                          ? summary.primaryLocation
+                          : "Not provided"
+                    }
+                  />
+                  <InfoRow
+                    label="Submitted At"
+                    value={
+                      summary.submittedAt
+                        ? new Date(summary.submittedAt).toLocaleString()
+                        : "Not provided"
+                    }
+                  />
+                  <InfoRow label="Application Status" value={summary.status} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <CollapsibleSection
-            id="managers"
-            title="Managers"
-            icon={Users}
-            count={data.managers.length}
-            expanded={expandedSections.has("managers")}
-            onToggle={() => toggleSection("managers")}
-          >
-            <ManagersSection managers={data.managers} />
-          </CollapsibleSection>
+            <TabsContent value="owner" className="mt-4">
+              <Card className="border-2 border-border/70">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
+                    Owner Submission Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <InfoRow label="Owner Name" value={summary.ownerName} />
+                  <InfoRow label="Owner Email" value={summary.ownerEmail} />
+                  <InfoRow label="Owner Phone" value={summary.ownerPhone} />
+                  <InfoRow
+                    label="Owner Status"
+                    value={data.owner?.status || "N/A"}
+                  />
+                  <InfoRow
+                    label="Email Verified"
+                    value={data.owner?.emailVerified ? "Yes" : "No"}
+                  />
+                  <InfoRow
+                    label="Owner Role"
+                    value={data.owner?.role || "N/A"}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <CollapsibleSection
-            id="staff"
-            title="Staff"
-            icon={User}
-            count={data.staff.length}
-            expanded={expandedSections.has("staff")}
-            onToggle={() => toggleSection("staff")}
-          >
-            <StaffSection staff={data.staff} />
-          </CollapsibleSection>
+            <TabsContent value="operations" className="mt-4">
+              <Card className="border-2 border-border/70">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Users className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
+                    Planned Operations (Signup)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <InfoRow
+                    label="Planned Branches"
+                    value={String(summary.plannedBranches)}
+                  />
+                  <InfoRow
+                    label="Planned Total Staff"
+                    value={String(summary.plannedStaffTotal)}
+                  />
+                  <InfoRow
+                    label="Planned Pharmacists"
+                    value={String(summary.staffBreakdown.pharmacists)}
+                  />
+                  <InfoRow
+                    label="Planned Managers"
+                    value={String(summary.staffBreakdown.managers)}
+                  />
+                  <InfoRow
+                    label="Planned Cashiers"
+                    value={String(summary.staffBreakdown.cashiers)}
+                  />
+                  <InfoRow
+                    label="Branch Locations"
+                    value={
+                      summary.branchLocations.length
+                        ? summary.branchLocations.join(", ")
+                        : summary.plannedBranches > 0
+                          ? summary.primaryLocation
+                          : "Not provided"
+                    }
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <CollapsibleSection
-            id="branches"
-            title="Branches"
-            icon={Building2}
-            count={data.branches.length}
-            expanded={expandedSections.has("branches")}
-            onToggle={() => toggleSection("branches")}
-          >
-            <BranchesSection branches={data.branches} />
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            id="subscription"
-            title="Subscription & Billing"
-            icon={CreditCard}
-            expanded={expandedSections.has("subscription")}
-            onToggle={() => toggleSection("subscription")}
-          >
-            <SubscriptionBillingSection
-              pharmacy={data.pharmacy}
-              subscriptionHistory={data.subscriptionHistory || []}
-              subscriptionPlans={data.subscriptionPlans || []}
-            />
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            id="audit"
-            title="Audit Log"
-            icon={FileText}
-            expanded={expandedSections.has("audit")}
-            onToggle={() => toggleSection("audit")}
-          >
-            <AuditLogSection logs={data.auditLogs} />
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            id="history"
-            title="History Page"
-            icon={Clock}
-            expanded={expandedSections.has("history")}
-            onToggle={() => toggleSection("history")}
-          >
-            <HistoryPageSection
-              pharmacyId={pharmacyId ?? ""}
-              auditLogs={data.auditLogs || []}
-              subscriptionHistory={data.subscriptionHistory || []}
-            />
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            id="diagnostic"
-            title="Diagnostic Sessions"
-            icon={Activity}
-            expanded={expandedSections.has("diagnostic")}
-            onToggle={() => toggleSection("diagnostic")}
-          >
-            <DiagnosticSessionsSection
-              sessions={data.diagnosticSessions || []}
-            />
-          </CollapsibleSection>
+            <TabsContent value="subscription" className="mt-4">
+              <Card className="border-2 border-border/70">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
+                    Subscription Selection (Signup)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <InfoRow
+                    label="Selected Plan"
+                    value={summary.selectedTier.toUpperCase() || "NOT SET"}
+                  />
+                  <InfoRow
+                    label="Recommended Plan"
+                    value={summary.recommendedTier.toUpperCase() || "NOT SET"}
+                  />
+                  <InfoRow
+                    label="Payment Status"
+                    value={data.pharmacy.paymentStatus || "Not provided"}
+                  />
+                  <InfoRow
+                    label="Monthly Cost"
+                    value={`ETB ${data.pharmacy.monthlyCost ?? 0}`}
+                  />
+                  <InfoRow
+                    label="Terms Accepted"
+                    value={
+                      summary.termsAccepted === undefined
+                        ? "Not captured (legacy)"
+                        : summary.termsAccepted
+                          ? "Yes"
+                          : "No"
+                    }
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
@@ -471,74 +572,13 @@ export function PharmacyDetailPage() {
   );
 }
 
-interface CollapsibleSectionProps {
-  id: string;
-  title: string;
-  icon: React.ElementType;
-  count?: number;
-  expanded: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}
-
-function CollapsibleSection({
-  title,
-  icon: Icon,
-  count,
-  expanded,
-  onToggle,
-  children,
-}: CollapsibleSectionProps) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="overflow-hidden border-2 border-border hover:border-[hsl(var(--medical-teal))]/30 transition-all duration-300">
-      <CardHeader
-        className={cn(
-          "cursor-pointer hover:bg-muted/50 transition-colors duration-200",
-          expanded && "border-b bg-muted/30",
-        )}
-        onClick={onToggle}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "p-2 rounded-lg transition-all duration-300",
-                expanded
-                  ? "bg-[hsl(var(--medical-teal))] text-white"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              <Icon className="h-5 w-5" />
-            </div>
-            <CardTitle className="text-lg font-semibold">{title}</CardTitle>
-            {count !== undefined && (
-              <Badge variant="secondary" className="ml-2 font-semibold">
-                {count}
-              </Badge>
-            )}
-          </div>
-          <Badge
-            variant="outline"
-            className={cn(
-              "transition-all duration-300",
-              expanded
-                ? "bg-[hsl(var(--medical-teal))] text-white border-[hsl(var(--medical-teal))]"
-                : "text-muted-foreground",
-            )}
-          >
-            {expanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </Badge>
-        </div>
-      </CardHeader>
-      {expanded && (
-        <CardContent className="pt-6 animate-in slide-in-from-top-2 duration-300">
-          {children}
-        </CardContent>
-      )}
-    </Card>
+    <div className="rounded-lg border border-border/60 bg-background p-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-sm font-semibold mt-1">{value}</p>
+    </div>
   );
 }

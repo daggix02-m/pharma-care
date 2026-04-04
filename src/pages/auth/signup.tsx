@@ -57,6 +57,8 @@ function useStepAnimation() {
   return containerRef;
 }
 
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 const Step1PharmacyOperations = () => {
   const {
     pharmacyDetails,
@@ -453,6 +455,16 @@ const Step2Subscription = () => {
   );
 
   useEffect(() => {
+    if (!isPlansLoading && normalizedPlans.length === 0) {
+      if (!normalizeTierCode(subscriptionInfo.recommendedTier)) {
+        setSubscriptionInfo("recommendedTier", "basic");
+      }
+      if (!normalizeTierCode(subscriptionInfo.selectedTier)) {
+        setSubscriptionInfo("selectedTier", "basic");
+      }
+      return;
+    }
+
     if (!recommendedTier) return;
 
     if (
@@ -478,6 +490,15 @@ const Step2Subscription = () => {
   ]);
 
   const handleContinue = () => {
+    if (!isPlansLoading && normalizedPlans.length === 0) {
+      if (!normalizeTierCode(subscriptionInfo.selectedTier)) {
+        setSubscriptionInfo("selectedTier", "basic");
+      }
+      if (!validateCurrentStep(3)) return;
+      goToNextStep();
+      return;
+    }
+
     const selectedCode = normalizeTierCode(subscriptionInfo.selectedTier);
     const selectedIsAvailable = normalizedPlans.some(
       (plan: any) => plan.code === selectedCode,
@@ -543,8 +564,8 @@ const Step2Subscription = () => {
           </div>
         ) : plans.length === 0 ? (
           <div className="rounded-xl border border-input p-4 text-sm text-muted-foreground">
-            No active subscription plans are available right now. Please contact
-            support or try again later.
+            No active subscription plans are available right now. You can still
+            continue and we will assign a starter plan after admin approval.
           </div>
         ) : (
           plans.map((plan: any) => {
@@ -863,6 +884,7 @@ const Step4ReviewConfirm = () => {
     validateCurrentStep,
     goToNextStep,
     setCurrentStep,
+    buildSignupSubmissionData,
     errors,
   } = useSignupStore();
   const containerRef = useStepAnimation();
@@ -900,32 +922,10 @@ const Step4ReviewConfirm = () => {
   const handleContinue = () => {
     if (!validateCurrentStep(5)) return;
 
+    const pendingSignupData = buildSignupSubmissionData();
     sessionStorage.setItem(
       "pendingSignupData",
-      JSON.stringify({
-        email: ownerInfo.email,
-        password: ownerInfo.password,
-        full_name: ownerInfo.fullName,
-        phone: ownerInfo.phone,
-        pharmacyDetails: {
-          name: pharmacyDetails.pharmacyName,
-          licenseNumber: pharmacyDetails.licenseCode,
-          location: pharmacyDetails.locations,
-          pharmacyEmail: pharmacyDetails.pharmacyEmail || undefined,
-        },
-        operations: {
-          totalBranches: operationsInfo.totalBranches,
-          branchLocations: operationsInfo.branchLocations,
-          totalStaff: operationsInfo.totalStaff,
-          pharmacistCount: operationsInfo.pharmacistCount,
-          managerCount: operationsInfo.managerCount,
-          cashierCount: operationsInfo.cashierCount,
-        },
-        subscription: {
-          selectedTier: subscriptionInfo.selectedTier,
-          recommendedTier: subscriptionInfo.recommendedTier,
-        },
-      }),
+      JSON.stringify(pendingSignupData),
     );
 
     goToNextStep();
@@ -1155,6 +1155,7 @@ const Step5Verification = () => {
         pharmacyDetails: payload.pharmacyDetails,
         operations: payload.operations,
         subscription: payload.subscription,
+        signupSnapshot: payload.signupSnapshot,
       });
     } catch (error: any) {
       const message = String(error?.message || "");
@@ -1170,7 +1171,10 @@ const Step5Verification = () => {
       await sendVerificationCode(payload.email);
     }
 
-    sessionStorage.setItem("pendingVerificationEmail", payload.email);
+    sessionStorage.setItem(
+      "pendingVerificationEmail",
+      normalizeEmail(payload.email),
+    );
     sessionStorage.setItem("tempPassword", payload.password);
     setAccountSubmitted(true);
     setSubmissionError(null);
@@ -1244,7 +1248,7 @@ const Step5Verification = () => {
       sessionStorage.removeItem("pendingVerificationEmail");
       sessionStorage.removeItem("tempPassword");
 
-      localStorage.setItem("pendingEmail", email);
+      localStorage.setItem("pendingEmail", normalizeEmail(email));
       localStorage.setItem(
         "pendingPharmacyName",
         useSignupStore.getState().pharmacyDetails.pharmacyName,
