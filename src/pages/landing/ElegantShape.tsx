@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import gsap from 'gsap';
-import { cn } from '@/lib/utils';
+import { useEffect, useRef } from "react";
+import gsap from "gsap";
+import { cn } from "@/lib/utils";
 
 interface ElegantShapeProps {
   className?: string;
@@ -17,7 +17,7 @@ function ElegantShape({
   width = 400,
   height = 100,
   rotate = 0,
-  gradient = 'from-blue-500/[0.08]',
+  gradient = "from-blue-500/[0.08]",
 }: ElegantShapeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shapeRef = useRef<HTMLDivElement>(null);
@@ -39,8 +39,8 @@ function ElegantShape({
         rotate: rotate,
         duration: 2.4,
         delay,
-        ease: 'power2.out',
-      }
+        ease: "power2.out",
+      },
     );
 
     // Continuous floating animation
@@ -48,7 +48,7 @@ function ElegantShape({
       y: [0, 15, 0] as unknown as gsap.TweenValue,
       duration: 12,
       repeat: -1,
-      ease: 'sine.inOut',
+      ease: "sine.inOut",
       yoyo: true,
     });
 
@@ -59,24 +59,24 @@ function ElegantShape({
   }, [delay, rotate]);
 
   return (
-    <div ref={containerRef} className={cn('absolute', className)}>
+    <div ref={containerRef} className={cn("absolute", className)}>
       <div
         ref={shapeRef}
         style={{
           width,
           height,
         }}
-        className='relative'
+        className="relative"
       >
         <div
           className={cn(
-            'absolute inset-0 rounded-full',
-            'bg-gradient-to-r to-transparent',
+            "absolute inset-0 rounded-full",
+            "bg-gradient-to-r to-transparent",
             gradient,
-            'backdrop-blur-[2px] border-2 border-blue-200/[0.3]',
-            'shadow-[0_8px_32px_0_rgba(59,130,246,0.15)]',
-            'after:absolute after:inset-0 after:rounded-full',
-            'after:bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.2),transparent_70%)]'
+            "backdrop-blur-[2px] border-2 border-blue-200/[0.3]",
+            "shadow-[0_8px_32px_0_rgba(59,130,246,0.15)]",
+            "after:absolute after:inset-0 after:rounded-full",
+            "after:bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.2),transparent_70%)]",
           )}
         />
       </div>

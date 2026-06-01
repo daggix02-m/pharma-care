@@ -1,58 +1,22 @@
-import * as React from "react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { api } from "@convex/_generated/api";
 import { toast } from "sonner";
-import { Id } from "../../../../convex/_generated/dataModel";
-import { ChapaPaymentModal } from "@/components/ChapaPaymentModal";
+import { Id } from "@convex/_generated/dataModel";
+import { ChapaPaymentModal } from "@/components/shared/ChapaPaymentModal";
+import { Search, Plus, Loader2 } from "lucide-react";
 import {
-  Search,
-  Plus,
-  Trash2,
-  ShoppingCart,
-  Loader2,
-  DollarSign,
-  Percent,
-  CheckCircle,
-  User,
-  CreditCard,
-  AlertTriangle,
-} from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-interface CartItem {
-  medicineId: Id<"medicines">;
-  medicineName: string;
-  quantity: number;
-  unitPrice: number;
-  stock: number;
-}
-
-interface Medicine {
-  medicine_id: Id<"medicines">;
-  medicine_name: string;
-  unit_price: number;
-  stock: number;
-  category?: string;
-  manufacturer?: string;
-  dosage?: string;
-  _id: Id<"medicines">;
-  _creationTime: number;
-  name: string;
-  price: number;
-}
+  CartCard,
+  CustomerInfoCard,
+  PaymentCard,
+  SummaryCard,
+  CheckoutConfirmDialog,
+  type CartItem,
+  type Medicine,
+} from "./POSOperationsParts";
 
 export function POSOperations() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -200,16 +164,6 @@ export function POSOperations() {
     await completeCheckout(result);
   };
 
-  const getPaymentMethodIcon = (method: string) => {
-    const icons: Record<string, React.ElementType> = {
-      cash: DollarSign,
-      card: CreditCard,
-      mobile: CreditCard,
-      bank_transfer: CreditCard,
-    };
-    return icons[method] || DollarSign;
-  };
-
   return (
     <div className="space-y-6 p-4 md:p-8">
       <div className="space-y-2">
@@ -269,205 +223,40 @@ export function POSOperations() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                Cart
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  ({cart.length} items)
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {cart.length === 0 ? (
-                <div className="text-center py-12">
-                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Cart is empty</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {cart.map((item) => (
-                    <div
-                      key={item.medicineId}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium">{item.medicineName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          ETB {item.unitPrice?.toFixed(2)} each
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            updateQuantity(item.medicineId, item.quantity - 1)
-                          }
-                        >
-                          -
-                        </Button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            updateQuantity(item.medicineId, item.quantity + 1)
-                          }
-                        >
-                          +
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeFromCart(item.medicineId)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <CartCard
+            cart={cart}
+            onUpdateQuantity={updateQuantity}
+            onRemoveFromCart={removeFromCart}
+          />
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Customer Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Enter customer name"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <CustomerInfoCard
+            customerName={customerName}
+            onCustomerNameChange={setCustomerName}
+          />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Payment Method
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["cash", "card", "mobile", "bank_transfer", "chapa"].map(
-                    (method) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => setPaymentMethod(method)}
-                        className={`px-4 py-3 rounded-lg border-2 transition-colors ${
-                          paymentMethod === method
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-input bg-background hover:bg-muted"
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-2">
-                          {React.createElement(getPaymentMethodIcon(method), {
-                            className: "h-4 w-4",
-                          })}
-                          <span className="capitalize">
-                            {method.replace("_", " ")}
-                          </span>
-                        </div>
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
+          <PaymentCard
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            referenceNumber={referenceNumber}
+            onReferenceNumberChange={setReferenceNumber}
+            discountPercent={discountPercent}
+            onDiscountPercentChange={setDiscountPercent}
+            onApplyDiscount={applyDiscount}
+            subtotal={subtotal}
+            discountAmount={discountAmount}
+            total={total}
+          />
 
-              {paymentMethod !== "cash" && paymentMethod !== "chapa" && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Reference Number
-                  </label>
-                  <Input
-                    placeholder="Enter reference number"
-                    value={referenceNumber}
-                    onChange={(e) => setReferenceNumber(e.target.value)}
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Discount (%)
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Percent className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={discountPercent}
-                      onChange={(e) =>
-                        setDiscountPercent(parseFloat(e.target.value) || 0)
-                      }
-                      className="pl-10"
-                    />
-                  </div>
-                  <Button variant="outline" onClick={applyDiscount}>
-                    Apply
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium">ETB {subtotal.toFixed(2)}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>Discount</span>
-                  <span className="font-medium">
-                    -ETB {discountAmount.toFixed(2)}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between text-lg font-bold pt-3 border-t">
-                <span>Total</span>
-                <span className="text-primary">ETB {total.toFixed(2)}</span>
-              </div>
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={handleCheckout}
-                disabled={cart.length === 0 || checkoutLoading}
-              >
-                {checkoutLoading ? (
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-5 w-5 mr-2" />
-                )}
-                {checkoutLoading ? "Processing..." : "Complete Checkout"}
-              </Button>
-            </CardContent>
-          </Card>
+          <SummaryCard
+            subtotal={subtotal}
+            discountAmount={discountAmount}
+            total={total}
+            cartLength={cart.length}
+            checkoutLoading={checkoutLoading}
+            onCheckout={handleCheckout}
+          />
         </div>
       </div>
 
@@ -478,37 +267,14 @@ export function POSOperations() {
         onSuccess={handleChapaPaymentSuccess}
       />
 
-      <AlertDialog
+      <CheckoutConfirmDialog
         open={confirmCheckoutOpen}
         onOpenChange={setConfirmCheckoutOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600" />
-              Confirm Checkout
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Confirm checkout for ETB {total.toFixed(2)} using{" "}
-              {paymentMethod.replace("_", " ")}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={checkoutLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void completeCheckout();
-              }}
-              disabled={checkoutLoading}
-            >
-              {checkoutLoading ? "Processing..." : "Confirm and Charge"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        total={total}
+        paymentMethod={paymentMethod}
+        checkoutLoading={checkoutLoading}
+        onConfirm={() => completeCheckout()}
+      />
     </div>
   );
 }

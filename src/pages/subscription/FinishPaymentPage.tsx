@@ -6,7 +6,7 @@ import { AuthLayout } from "@/components/shared/AuthLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChapaPaymentModal } from "@/components/ChapaPaymentModal";
+import { ChapaPaymentModal } from "@/components/shared/ChapaPaymentModal";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react";
 

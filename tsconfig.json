@@ -21,6 +21,5 @@
     }
   },
   "include": ["src", "convex"],
-  "exclude": ["src/api.backup/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

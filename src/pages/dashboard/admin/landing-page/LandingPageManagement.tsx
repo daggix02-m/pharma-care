@@ -17,9 +17,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import ContentEditor from "./ContentEditor";
-import TestimonialsManager from "./TestimonialsManager";
-import SectionVisibility from "./SectionVisibility";
+import { ContentEditor } from "./ContentEditor";
+import { TestimonialsManager } from "./TestimonialsManager";
+import { SectionVisibility } from "./SectionVisibility";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface LandingPageSection {

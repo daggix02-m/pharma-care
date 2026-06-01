@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Cross2Icon } from '@radix-ui/react-icons';
-import { cn } from '@/lib/utils';
-import { gsap } from 'gsap';
+import * as React from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Cross2Icon } from "@radix-ui/react-icons";
+import { cn } from "@/lib/utils";
+import { gsap } from "gsap";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -20,7 +20,10 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn('fixed inset-0 z-[101] bg-black/80 transition-opacity duration-200', className)}
+    className={cn(
+      "fixed inset-0 z-[101] bg-black/80 transition-opacity duration-200",
+      className,
+    )}
     {...props}
   />
 ));
@@ -30,7 +33,8 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  const combinedRef = React.useRef<React.ElementRef<typeof DialogPrimitive.Content>>(null);
+  const combinedRef =
+    React.useRef<React.ElementRef<typeof DialogPrimitive.Content>>(null);
 
   React.useImperativeHandle(ref, () => combinedRef.current!);
 
@@ -39,14 +43,17 @@ const DialogContent = React.forwardRef<
 
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'data-state') {
+        if (
+          mutation.type === "attributes" &&
+          mutation.attributeName === "data-state"
+        ) {
           const target = mutation.target as HTMLElement;
-          const state = target.getAttribute('data-state');
-          if (state === 'open' && target === combinedRef.current) {
+          const state = target.getAttribute("data-state");
+          if (state === "open" && target === combinedRef.current) {
             gsap.fromTo(
               combinedRef.current,
               { opacity: 0, scale: 0.95 },
-              { opacity: 1, scale: 1, duration: 0.3, ease: 'power1.out' }
+              { opacity: 1, scale: 1, duration: 0.3, ease: "power1.out" },
             );
           }
         }
@@ -55,7 +62,7 @@ const DialogContent = React.forwardRef<
 
     observer.observe(combinedRef.current, {
       attributes: true,
-      attributeFilter: ['data-state'],
+      attributeFilter: ["data-state"],
     });
 
     return () => observer.disconnect();
@@ -67,20 +74,20 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={combinedRef}
         className={cn(
-          'fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100%-4rem)] w-full -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border bg-background p-6 shadow-lg sm:max-w-[400px] sm:rounded-xl',
-          className
+          "fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100%-4rem)] w-full -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border bg-background p-6 shadow-lg sm:max-w-[400px] sm:rounded-xl",
+          className,
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className='group absolute right-3 top-3 flex size-7 items-center justify-center rounded-lg outline-offset-2 transition-colors focus-visible:outline disabled:pointer-events-none'>
+        <DialogPrimitive.Close className="group absolute right-3 top-3 flex size-7 items-center justify-center rounded-lg outline-offset-2 transition-colors focus-visible:outline disabled:pointer-events-none">
           <Cross2Icon
             width={16}
             height={16}
             strokeWidth={2}
-            className='opacity-60 transition-opacity group-hover:opacity-100'
+            className="opacity-60 transition-opacity group-hover:opacity-100"
           />
-          <span className='sr-only'>Close</span>
+          <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -88,18 +95,33 @@ const DialogContent = React.forwardRef<
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex flex-col space-y-1.5 text-center sm:text-left', className)} {...props} />
-);
-DialogHeader.displayName = 'DialogHeader';
-
-const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+const DialogHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3', className)}
+    className={cn(
+      "flex flex-col space-y-1.5 text-center sm:text-left",
+      className,
+    )}
     {...props}
   />
 );
-DialogFooter.displayName = 'DialogFooter';
+DialogHeader.displayName = "DialogHeader";
+
+const DialogFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3",
+      className,
+    )}
+    {...props}
+  />
+);
+DialogFooter.displayName = "DialogFooter";
 
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
@@ -107,7 +129,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-lg font-semibold tracking-tight', className)}
+    className={cn("text-lg font-semibold tracking-tight", className)}
     {...props}
   />
 ));
@@ -119,7 +141,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('text-sm text-muted-foreground', className)}
+    className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
 ));

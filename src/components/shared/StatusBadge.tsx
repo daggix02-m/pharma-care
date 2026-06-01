@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/badge';
-import { STATUS_COLORS } from '@/constants';
+import { Badge } from "@/components/ui/badge";
+import { STATUS_COLORS } from "@/constants";
 
 interface StatusBadgeProps {
   status: string;
@@ -11,10 +11,10 @@ export const StatusBadge = ({ status }: StatusBadgeProps) => {
 
   const displayStatus = normalizedStatus
     ? normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
-    : 'Unknown';
+    : "Unknown";
 
   if (!STATUS_COLORS[normalizedStatus]) {
-    return <Badge variant='outline'>{displayStatus}</Badge>;
+    return <Badge variant="outline">{displayStatus}</Badge>;
   }
 
   return (

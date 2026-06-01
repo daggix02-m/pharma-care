@@ -1,8 +1,8 @@
 export const ROLES = {
-  ADMIN: { id: 1, name: 'admin' },
-  MANAGER: { id: 2, name: 'manager' },
-  PHARMACIST: { id: 3, name: 'pharmacist' },
-  CASHIER: { id: 4, name: 'cashier' },
+  ADMIN: { id: 1, name: "admin" },
+  MANAGER: { id: 2, name: "manager" },
+  PHARMACIST: { id: 3, name: "pharmacist" },
+  CASHIER: { id: 4, name: "cashier" },
 };
 
 export const getRoleById = (roleId: number) => {

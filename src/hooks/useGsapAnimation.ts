@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import gsap from 'gsap';
+import { useEffect, useRef } from "react";
+import gsap from "gsap";
 import {
   animateEntrance,
   animateStagger,
@@ -9,14 +9,16 @@ import {
   animateFocus,
   animateBlur,
   getAnimationContext,
-} from '@/utils/animations';
+} from "@/lib/animations";
 
 /**
  * Hook for entrance animations with automatic cleanup
  * @param options - Optional GSAP tween vars
  * @returns Ref to attach to target element
  */
-export function useEntranceAnimation<T extends HTMLElement>(options: gsap.TweenVars = {}) {
+export function useEntranceAnimation<T extends HTMLElement>(
+  options: gsap.TweenVars = {},
+) {
   const ref = useRef<T>(null);
 
   useEffect(() => {
@@ -35,7 +37,10 @@ export function useEntranceAnimation<T extends HTMLElement>(options: gsap.TweenV
  * @param delay - Stagger delay (default: 0.05s)
  * @returns Container ref
  */
-export function useStaggerAnimation<T extends HTMLElement>(selector: string, delay: number = 0.05) {
+export function useStaggerAnimation<T extends HTMLElement>(
+  selector: string,
+  delay: number = 0.05,
+) {
   const containerRef = useRef<T>(null);
 
   useEffect(() => {
@@ -88,8 +93,8 @@ export function usePageTransition() {
         opacity: 1,
         y: 0,
         duration: 0.3,
-        ease: 'power1.out',
-      }
+        ease: "power1.out",
+      },
     );
     return () => ctx.revert();
   }, []);
@@ -144,7 +149,7 @@ export function useChartAnimation() {
   useEffect(() => {
     if (!ref.current) return;
     const ctx = getAnimationContext(ref.current);
-    const paths = ref.current.querySelectorAll('path');
+    const paths = ref.current.querySelectorAll("path");
     paths.forEach((path, index) => {
       const svgPath = path as SVGPathElement;
       gsap.fromTo(
@@ -153,7 +158,12 @@ export function useChartAnimation() {
           strokeDasharray: `${svgPath.getTotalLength()} ${svgPath.getTotalLength()}`,
           strokeDashoffset: svgPath.getTotalLength(),
         },
-        { strokeDashoffset: 0, duration: 1.5, ease: 'power1.out', delay: index * 0.1 }
+        {
+          strokeDashoffset: 0,
+          duration: 1.5,
+          ease: "power1.out",
+          delay: index * 0.1,
+        },
       );
     });
     return () => ctx.revert();
@@ -172,12 +182,12 @@ export function useSuccessFeedback() {
     return gsap.to(element, {
       scale: 1.02,
       duration: 0.2,
-      ease: 'power1.out',
+      ease: "power1.out",
       onComplete: () => {
         gsap.to(element, {
           scale: 1,
           duration: 0.2,
-          ease: 'power1.out',
+          ease: "power1.out",
         });
       },
     });

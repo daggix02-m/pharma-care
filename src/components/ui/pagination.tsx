@@ -1,7 +1,18 @@
-import React from 'react';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { Button } from './button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
+import React from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
+import { Button } from "./button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./select";
 
 /**
  * Pagination Component
@@ -61,7 +72,7 @@ export function Pagination({
 
       // Add ellipsis before range if needed
       if (startPage > 2) {
-        pages.push('...');
+        pages.push("...");
       }
 
       // Add range
@@ -71,7 +82,7 @@ export function Pagination({
 
       // Add ellipsis after range if needed
       if (endPage < totalPages - 1) {
-        pages.push('...');
+        pages.push("...");
       }
 
       // Always show last page
@@ -99,13 +110,16 @@ export function Pagination({
   }
 
   return (
-    <div className='flex flex-col sm:flex-row items-center justify-between gap-4 px-2'>
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
       {/* Items per page selector */}
       {showPageSizeSelector && (
-        <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Rows per page:</span>
-          <Select value={String(itemsPerPage)} onValueChange={handleItemsPerPageChange}>
-            <SelectTrigger className='h-8 w-[70px]'>
+          <Select
+            value={String(itemsPerPage)}
+            onValueChange={handleItemsPerPageChange}
+          >
+            <SelectTrigger className="h-8 w-[70px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -121,42 +135,42 @@ export function Pagination({
 
       {/* Page info */}
       {showTotalItems && (
-        <div className='text-sm text-muted-foreground'>
+        <div className="text-sm text-muted-foreground">
           Showing {startIndex} to {endIndex} of {totalItems} items
         </div>
       )}
 
       {/* Page navigation */}
-      <div className='flex items-center gap-1'>
+      <div className="flex items-center gap-1">
         <Button
-          variant='outline'
-          size='icon'
-          className='h-8 w-8'
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
           onClick={() => handlePageChange(1)}
           disabled={currentPage === 1}
         >
-          <ChevronsLeft className='size-4' />
+          <ChevronsLeft className="size-4" />
         </Button>
         <Button
-          variant='outline'
-          size='icon'
-          className='h-8 w-8'
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage === 1}
         >
-          <ChevronLeft className='size-4' />
+          <ChevronLeft className="size-4" />
         </Button>
 
-        <div className='flex items-center gap-1'>
+        <div className="flex items-center gap-1">
           {getPageNumbers().map((page, index) => (
             <React.Fragment key={index}>
-              {page === '...' ? (
-                <span className='px-2 text-muted-foreground'>...</span>
+              {page === "..." ? (
+                <span className="px-2 text-muted-foreground">...</span>
               ) : (
                 <Button
-                  variant={currentPage === page ? 'default' : 'outline'}
-                  size='icon'
-                  className='h-8 w-8'
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="icon"
+                  className="h-8 w-8"
                   onClick={() => handlePageChange(page as number)}
                 >
                   {page}
@@ -167,22 +181,22 @@ export function Pagination({
         </div>
 
         <Button
-          variant='outline'
-          size='icon'
-          className='h-8 w-8'
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
           onClick={() => handlePageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
         >
-          <ChevronRight className='size-4' />
+          <ChevronRight className="size-4" />
         </Button>
         <Button
-          variant='outline'
-          size='icon'
-          className='h-8 w-8'
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
           onClick={() => handlePageChange(totalPages)}
           disabled={currentPage === totalPages}
         >
-          <ChevronsRight className='size-4' />
+          <ChevronsRight className="size-4" />
         </Button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation } from "react-router-dom";
 
 interface BreadcrumbOverrides {
   [key: string]: string;
@@ -9,33 +9,37 @@ interface BreadcrumbOverrides {
  * Extend this as your app grows
  */
 const routeNameMap: Record<string, string> = {
-  dashboard: 'Dashboard',
-  admin: 'Admin',
-  overview: 'Overview',
-  users: 'Users',
-  managers: 'Managers',
-  pharmacies: 'Pharmacies',
-  settings: 'Settings',
+  dashboard: "Dashboard",
+  admin: "Admin",
+  overview: "Overview",
+  users: "Users",
+  managers: "Managers",
+  pharmacies: "Pharmacies",
+  settings: "Settings",
 };
 
 /**
  * Routes where breadcrumbs should NOT be shown
  */
-const hiddenRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password'];
+const hiddenRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 
 /**
  * Detect dynamic route segments (IDs, UUIDs)
  */
 const isDynamicSegment = (segment: string) =>
   /^\d+$/.test(segment) || // numeric IDs
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(segment); // UUIDs
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+    segment,
+  ); // UUIDs
 
 /**
  * Format unknown route segments nicely
  * e.g. "sale-creation" → "Sale Creation"
  */
 const formatSegment = (segment: string) =>
-  segment.replace(/-/g, ' ').replace(/\b\w/g, (char: string) => char.toUpperCase());
+  segment
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (char: string) => char.toUpperCase());
 
 /**
  * useBreadcrumbs hook
@@ -50,10 +54,10 @@ export const useBreadcrumbs = (overrides: BreadcrumbOverrides = {}) => {
     return [];
   }
 
-  const segments = pathname.split('/').filter(Boolean);
+  const segments = pathname.split("/").filter(Boolean);
 
   return segments.map((segment, index) => {
-    const href = '/' + segments.slice(0, index + 1).join('/');
+    const href = "/" + segments.slice(0, index + 1).join("/");
 
     let name: string | undefined;
 
@@ -62,11 +66,11 @@ export const useBreadcrumbs = (overrides: BreadcrumbOverrides = {}) => {
     } else if (routeNameMap[segment]) {
       name = routeNameMap[segment];
     } else if (isDynamicSegment(segment)) {
-      name = 'Details';
+      name = "Details";
     } else {
       name = formatSegment(segment);
     }
 
-    return { name: name || '', href };
+    return { name: name || "", href };
   });
 };

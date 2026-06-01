@@ -1,1 +1,0 @@
-export { DiagnosticViewModal } from './DiagnosticViewModal';

@@ -252,7 +252,7 @@ function AboutPage() {
                 ).map((stat: any, index: number) => (
                   <div
                     key={index}
-                    className="flex flex-col items-center text-center p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-border shadow-sm"
+                    className="flex flex-col items-center text-center p-6 bg-card/50 backdrop-blur-sm rounded-2xl border border-border shadow-sm"
                   >
                     <span className="text-4xl md:text-5xl font-bold text-primary font-display">
                       {stat.value}
@@ -317,7 +317,7 @@ function AboutPage() {
           <div className="container px-4 md:px-6">
             <div ref={missionRef} className="grid gap-12 lg:grid-cols-2">
               {/* Mission */}
-              <div className="bg-white/50 backdrop-blur-sm rounded-2xl border border-border p-8 shadow-sm">
+              <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border p-8 shadow-sm">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 bg-primary/10 rounded-xl">
                     <Target className="h-8 w-8 text-primary" />
@@ -333,7 +333,7 @@ function AboutPage() {
               </div>
 
               {/* Vision */}
-              <div className="bg-white/50 backdrop-blur-sm rounded-2xl border border-border p-8 shadow-sm">
+              <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border p-8 shadow-sm">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 bg-primary/10 rounded-xl">
                     <EyeIcon className="h-8 w-8 text-primary" />
@@ -380,7 +380,7 @@ function AboutPage() {
                 return (
                   <div
                     key={index}
-                    className="group bg-white/50 backdrop-blur-sm rounded-2xl border border-border p-6 hover:bg-white/80 transition-all duration-300 hover:shadow-md"
+                    className="group bg-card/50 backdrop-blur-sm rounded-2xl border border-border p-6 hover:bg-card/80 transition-all duration-300 hover:shadow-md"
                   >
                     <div className="flex items-start gap-4">
                       <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">

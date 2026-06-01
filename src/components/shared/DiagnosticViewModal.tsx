@@ -3,7 +3,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,17 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Activity,
-  FileText,
-  AlertTriangle,
-  Play,
-  Square,
-  X,
-  ChevronRight,
-  Loader2,
-} from "lucide-react";
+import { Activity, AlertTriangle, Play, Square, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { StartSessionForm, SessionSummaryItem } from "./DiagnosticViewParts";
 
 interface DiagnosticViewModalProps {
   open: boolean;
@@ -118,38 +109,7 @@ export function DiagnosticViewModal({
     return `${minutes}m ${seconds}s`;
   };
 
-  const StartSessionForm = () => (
-    <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          Reason for Diagnostic Session
-        </label>
-        <Textarea
-          value={startReason}
-          onChange={(e) => setStartReason(e.target.value)}
-          placeholder="Explain why you're starting this diagnostic session..."
-          rows={4}
-          className="resize-none"
-        />
-      </div>
-
-      <div className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-        <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-        <div className="flex-1">
-          <p className="text-sm font-medium text-orange-900">
-            Important Notice
-          </p>
-          <p className="text-xs text-orange-700 mt-1">
-            This is a read-only diagnostic view. All actions will be logged and
-            blocked. The user will be notified that an admin is viewing their
-            session.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-
-  const SessionViewContent = () => {
+  const renderSessionView = () => {
     if (!session || session.length === 0) {
       return (
         <div className="text-center py-12">
@@ -176,7 +136,6 @@ export function DiagnosticViewModal({
 
     return (
       <div className="space-y-4 py-4">
-        {/* Session Summary */}
         <Card className="border-2 border-[hsl(var(--medical-teal))]/20">
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center justify-between">
@@ -243,11 +202,10 @@ export function DiagnosticViewModal({
           </CardContent>
         </Card>
 
-        {/* Pages Viewed */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <FileText className="h-4 w-4 text-[hsl(var(--medical-teal))]" />
+              <Activity className="h-4 w-4 text-[hsl(var(--medical-teal))]" />
               Pages Viewed
             </CardTitle>
           </CardHeader>
@@ -259,7 +217,7 @@ export function DiagnosticViewModal({
                     key={idx}
                     className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg"
                   >
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-[hsl(var(--medical-teal))]">→</span>
                     <div className="flex-1">
                       <p className="text-sm font-medium">{pageView.page}</p>
                       <p className="text-xs text-muted-foreground">
@@ -277,7 +235,6 @@ export function DiagnosticViewModal({
           </CardContent>
         </Card>
 
-        {/* Blocked Actions */}
         {sessionData.blockedActions &&
           sessionData.blockedActions.length > 0 && (
             <Card className="border-2 border-red-200">
@@ -298,7 +255,9 @@ export function DiagnosticViewModal({
                         key={idx}
                         className="flex items-center gap-3 p-3 bg-red-50/50 rounded-lg border border-red-200"
                       >
-                        <X className="h-4 w-4 text-red-600" />
+                        <span className="text-red-600 font-bold text-xs">
+                          ✕
+                        </span>
                         <div className="flex-1">
                           <p className="text-sm font-medium text-red-600">
                             {action.action}
@@ -342,7 +301,14 @@ export function DiagnosticViewModal({
           </DialogDescription>
         </DialogHeader>
 
-        {mode === "start" ? <StartSessionForm /> : <SessionViewContent />}
+        {mode === "start" ? (
+          <StartSessionForm
+            startReason={startReason}
+            setStartReason={setStartReason}
+          />
+        ) : (
+          renderSessionView()
+        )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {mode === "start" ? (
@@ -383,20 +349,5 @@ export function DiagnosticViewModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SessionSummaryItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-semibold">{value}</p>
-    </div>
   );
 }

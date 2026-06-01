@@ -72,6 +72,28 @@ export const DashboardLayout = React.memo(function DashboardLayout({
 
       {/* Bottom border accent */}
       <div className="fixed bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent opacity-50 pointer-events-none" />
+
+      {/* FRM branding watermark */}
+      <a
+        href="https://frm.et"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-3 right-4 z-40 flex items-center gap-2 opacity-40 hover:opacity-80 transition-opacity pointer-events-auto"
+      >
+        <span className="text-xs font-display font-semibold text-muted-foreground">
+          Built by
+        </span>
+        <img
+          src="/frm-logo.png"
+          alt="FRM"
+          className="h-10 w-auto object-contain block dark:hidden"
+        />
+        <img
+          src="/frm-logo-light.png"
+          alt="FRM"
+          className="h-10 w-auto object-contain hidden dark:block"
+        />
+      </a>
     </div>
   );
 });

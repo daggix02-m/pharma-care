@@ -1,146 +1,97 @@
 # PharmaCare Agent Guidelines
 
-This document provides guidelines for agentic coding assistants working on this project.
+## Commands
 
-## Essential Commands
+All commands run from the repo root.
 
-**All commands run from the `program/` directory** (not the repository root)
-
-### Development & Build
 ```bash
-cd program && npm run dev          # Start development server
-npm run build                      # Create production build
-npm run preview                     # Preview production build locally
+npm run dev              # Start Vite dev server
+npm run build            # Production build
+npm run lint             # ESLint check
+npm run lint:fix         # ESLint auto-fix
+npm run format           # Prettier format all files
+npm run typecheck        # tsc --noEmit
+npm test                 # Vitest (all tests)
+npm run test:ui          # Vitest with UI
+npm run test:coverage    # Vitest with coverage
+npx vitest run <path>    # Run a single test file
 ```
 
-### Code Quality
-```bash
-npm run lint                        # Check code for linting errors
-npm run lint:fix                    # Auto-fix linting errors
-npm run format                      # Format code with Prettier
-npm run typecheck                   # TypeScript type checking
+Run quality checks in this order before committing: `lint:fix → format → typecheck`
+
+## Architecture
+
+**Path aliases** (vite.config.js + tsconfig.json):
+- `@/` → `src/`
+- `@convex/` → `convex/`
+
+**Frontend entry**: `src/main.tsx` → `src/App.tsx` (React Router with lazy-loaded dashboard pages)
+
+**Backend (Convex)**: `convex/` — file-based routing, organized by role:
+- `convex/admin/`, `convex/manager/`, `convex/owner/`, `convex/pharmacist/`, `convex/cashier/` — role-scoped queries/mutations
+- `convex/public/`, `convex/auth/`, `convex/users/`, `convex/notifications/`, `convex/subscription/`, `convex/lib/` — shared modules
+- `convex/schema.ts` — database schema (20+ tables)
+- `convex/_generated/` — auto-generated, never edit
+
+**Roles**: admin, owner, manager, pharmacist, cashier. Each has dashboard pages under `src/pages/dashboard/<role>/`.
+
+**Auth**: Custom `AuthContext` in `src/contexts/AuthContext.tsx` using `@convex-dev/auth`. Uses `ConvexProvider` (not `ConvexProviderWithAuth`).
+
+**State**: Zustand stores in `src/store/` (`useSignupStore.ts`, `useThemeStore.ts`)
+
+## Key Conventions
+
+- **Components**: Named exports, `React.forwardRef` + `displayName` for UI primitives. Follow patterns in `src/components/ui/`.
+- **No barrel files**: Import components directly by path (e.g., `@/components/shared/ErrorBoundary`), not from barrel index files. Barrel files prevent tree-shaking.
+- **Styling**: Tailwind + `cn()` utility + `class-variance-authority` (cva). Custom colors via HSL CSS variables in `src/index.css`. Fonts: Outfit (display), DM Sans (body).
+- **TypeScript**: Strict mode, `noUnusedLocals` + `noUnusedParameters`. Use `interface` for object shapes, `type` for unions. No `any` — use `unknown` or generics.
+- **Formatting**: Prettier — single quotes, semi-colons, 2-space tabs, 100 char print width, ES5 trailing commas.
+- **Linting**: ESLint config `react-app` + `react-app/jest` + `eslint-config-prettier` + `eslint-plugin-react-refresh`. Extends are inline in `package.json` (no `.eslintrc` file).
+- **Tests**: Vitest + jsdom environment. Setup in `src/setupTests.ts` (ResizeObserver + matchMedia mocks). Use `@testing-library/react` + `@testing-library/user-event`.
+- **Keep components under 300 lines** — split if larger.
+
+## Directory Layout
+
+```
+src/components/       # UI components — import directly, no barrel files
+  admin/             # Admin-specific (FlagAccountDialog, LockAccountDialog)
+  ai/                # AI assistant (AIChatInterface, AIFloatingButton)
+  dashboard/         # Shared dashboard components (LiveSalesDashboard, TopBar, etc.)
+  manager/           # Manager-specific (StaffActivityTimeline, StockTransferModal)
+  shared/            # Cross-cutting (ErrorBoundary, AuthLayout, StatusBadge, etc.)
+  theme/             # ThemeProvider, ThemeToggle
+  ui/                # Base UI primitives (Radix-based)
+
+src/lib/             # Utilities — cn(), formatDateTime(), animations
+src/services/        # External service clients (chapa, ai)
+src/store/           # Zustand stores
+convex/              # Backend functions, organized by role
 ```
 
-### Testing
-```bash
-npm test                            # Run all Vitest tests
-npm run test:ui                     # Run tests with UI interface
-npm run test:coverage               # Generate coverage report
-npm run test -- <path/to/file.test.tsx>  # Run single test file
-npx vitest run <pattern>            # Run tests matching pattern
-```
+## Convex
 
-## Project Structure
+Read `convex/_generated/ai/guidelines.md` before working on Convex code.
 
-- Working directory: `program/` (root is just a deploy wrapper)
-- Source code: `program/src/`
-- Path alias: `@/` maps to `src/`
-- Components: `components/ui/` (base), `components/dashboard/`, `components/shared/`
-- Backend: `convex/` (Convex functions and schema)
-- State: `store/` (Zustand stores)
+Key rules from the guidelines:
+- Always include argument validators on all functions
+- Never use `.filter()` in queries — use `.withIndex()` instead
+- Use `.take(n)` or paginate instead of `.collect()` for bounded results
+- Never use `.collect().length` — maintain a denormalized counter instead
+- Use `ctx.db.patch()` for partial updates, `ctx.db.replace()` for full replacements
+- Actions needing Node.js built-ins: add `"use node";` at file top, in a separate file from queries/mutations
+- `fetch()` is available in the default Convex runtime — no need for `"use node"` just for `fetch()`
+- Auth identity: prefer `identity.tokenIdentifier` over `identity.subject`
 
-## Code Style Guidelines
+## Environment
 
-### Imports & Organization
-- Named imports: `import { useState } from 'react'`
-- React imports: `import * as React from 'react'` for forwardRef patterns
-- Group imports: React → Third-party → Internal → Types
-- Use `@/` alias for internal imports: `import { Button } from '@/components/ui/button'`
-- Keep imports at file top, separated by blank line groups
+- Client-side env vars must start with `VITE_` (or `NEXT_PUBLIC_`, both supported via `envPrefix` in vite.config.js)
+- `ADMIN_EMAIL` is a Convex environment variable — set it in the Convex Dashboard, not in `.env`
+- Convex URL resolution chain: `VITE_CONVEX_URL` → `NEXT_PUBLIC_CONVEX_URL` → `CONVEX_URL` → `VITE_CONVEX_SITE_URL` → `NEXT_PUBLIC_CONVEX_SITE_URL` → build-time env → `CONVEX_DEPLOYMENT`
+- `.convex.site` URLs are auto-normalized to `.convex.cloud` at both build-time and runtime
 
-### Formatting (Prettier)
-- Semi-colons: required
-- Tab width: 2 spaces
-- Print width: 100 characters
-- Single quotes: `'string'` (including JSX)
-- Trailing commas: ES5 style
-- JSX single quotes: enabled
+## Deployment (Vercel)
 
-### TypeScript
-- Strict mode enabled - all types must be defined
-- Use interfaces for object shapes: `interface Props { name: string }`
-- Use type for unions/intersections: `type Status = 'active' | 'inactive'`
-- Explicit return types for exported functions
-- No `any` types - use `unknown` or generics when needed
-- Path aliases: `@/*` → `src/*`
-
-### Component Conventions
-- Functional components with hooks only
-- Props as interfaces extending HTML element props when appropriate
-```tsx
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'default' | 'outline'
-}
-```
-- Use forwardRef for components receiving refs
-```tsx
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ ...props }, ref) => {...})
-Button.displayName = 'Button'
-```
-- Export components as named exports: `export function MyComponent()`
-- Use cn() utility for conditional classes: `cn('base-class', isActive && 'active-class')`
-- Use class-variance-authority (cva) for component variants
-
-### Naming Conventions
-- Components: PascalCase (e.g., `UserProfile`, `Button`)
-- Hooks: camelCase with 'use' prefix (e.g., `useMobile`, `useAuth`)
-- Functions/variables: camelCase (e.g., `handleSubmit`, `isLoading`)
-- Constants: UPPER_SNAKE_CASE (e.g., `API_BASE_URL`, `MAX_RETRIES`)
-- Files: kebab-case for services/pages, PascalCase for components (e.g., `user.service.ts`, `UserProfile.tsx`)
-
-### Error Handling
-- Use try-catch for async operations with user-friendly error messages
-- Show toast notifications for errors: `toast.error('Action failed')`
-- Include loading states: `const [loading, setLoading] = useState(false)`
-- Validate inputs before API calls
-- Return error objects for validation: `{ valid: false, error: 'Message' }`
-- Use ErrorBoundary for component-level error catching
-
-### State Management (Zustand)
-- Create stores in `store/` directory with `use` prefix: `useSignupStore.ts`
-- Initialize with clear state shape
-- Provide setter functions for nested state updates
-- Include reset functions to clear state
-- Use TypeScript for state typing
-
-### Styling with Tailwind
-- Use utility classes via `cn()` function
-- Component variants with cva for consistent styling
-- Custom colors via HSL variables in index.css
-- Responsive design with `md:`, `lg:` prefixes
-- Use semantic spacing (`p-4`, `gap-2` vs arbitrary values)
-- Dark mode support via `dark:` prefix
-
-### Testing with Vitest
-- Test files: `*.test.tsx` or `*.test.ts` in component directories
-- Use `@testing-library/react` for component testing
-- Mock external dependencies (Convex, auth/email providers) in setup or individual tests
-- Test user interactions with `@testing-library/user-event`
-- Global setup in `src/setupTests.ts` includes ResizeObserver and matchMedia mocks
-
-## Backend (Convex)
-- Functions organized by role: `convex/admin/`, `convex/manager/`, etc.
-- Separation: `queries.ts` (read), `mutations.ts` (write)
-- Types auto-generated in `convex/_generated/` - don't edit
-- Schema defined in `convex/schema.ts`
-
-## Environment Variables
-- All client-side variables must start with `VITE_`
-- Backend keys in `.env.development` (not committed)
-- See README.md for required variables (Convex, API URLs)
-
-## Important Notes
-- Run `npm run lint:fix` and `npm run format` before committing
-- Run `npm run typecheck` to catch type errors
-- Components should be mobile-responsive by default
-- Use Radix UI primitives for accessible components
-- Follow existing component patterns in `components/ui/` when creating new ones
-- Keep component files under 300 lines - split if larger
-
-<!-- convex-ai-start -->
-This project uses [Convex](https://convex.dev) as its backend.
-
-When working on Convex code, **always read `convex/_generated/ai/guidelines.md` first** for important guidelines on how to correctly use Convex APIs and patterns. The file contains rules that override what you may have learned about Convex from training data.
-
-Convex agent skills for common tasks can be installed by running `npx convex ai-files install`.
-<!-- convex-ai-end -->
+- Framework: Vite. Build command: `npm run build`. Output: `dist/`
+- SPA routing: `vercel.json` rewrites all routes to `/index.html`
+- Security headers configured in `vercel.json` (X-Content-Type-Options, X-Frame-Options DENY, etc.)
+- Bundle chunking: vendor (react/router), ui (radix/lucide), charts (recharts), utils (clsx/date-fns/gsap)

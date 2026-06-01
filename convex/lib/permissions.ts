@@ -1,19 +1,19 @@
-import { Doc } from '../_generated/dataModel';
+import { Doc } from "../_generated/dataModel";
 
 export enum Permission {
-  VIEW_SYSTEM_STATS = 'VIEW_SYSTEM_STATS',
-  MANAGE_PHARMACIES = 'MANAGE_PHARMACIES',
-  SUSPEND_PHARMACIES = 'SUSPEND_PHARMACIES',
-  SEND_ADMIN_BROADCASTS = 'SEND_ADMIN_BROADCASTS',
-  VIEW_DIAGNOSTIC_SESSIONS = 'VIEW_DIAGNOSTIC_SESSIONS',
-  START_DIAGNOSTIC_SESSIONS = 'START_DIAGNOSTIC_SESSIONS',
-  FLAG_MANAGERS = 'FLAG_MANAGERS',
-  TEMPORARY_LOCK_MANAGERS = 'TEMPORARY_LOCK_MANAGERS',
-  VIEW_APPEALS = 'VIEW_APPEALS',
-  APPROVE_APPEALS = 'APPROVE_APPEALS',
-  SEND_OWNER_MESSAGES = 'SEND_OWNER_MESSAGES',
-  MANAGE_STAFF = 'MANAGE_STAFF',
-  MANAGE_INVENTORY = 'MANAGE_INVENTORY',
+  VIEW_SYSTEM_STATS = "VIEW_SYSTEM_STATS",
+  MANAGE_PHARMACIES = "MANAGE_PHARMACIES",
+  SUSPEND_PHARMACIES = "SUSPEND_PHARMACIES",
+  SEND_ADMIN_BROADCASTS = "SEND_ADMIN_BROADCASTS",
+  VIEW_DIAGNOSTIC_SESSIONS = "VIEW_DIAGNOSTIC_SESSIONS",
+  START_DIAGNOSTIC_SESSIONS = "START_DIAGNOSTIC_SESSIONS",
+  FLAG_MANAGERS = "FLAG_MANAGERS",
+  TEMPORARY_LOCK_MANAGERS = "TEMPORARY_LOCK_MANAGERS",
+  VIEW_APPEALS = "VIEW_APPEALS",
+  APPROVE_APPEALS = "APPROVE_APPEALS",
+  SEND_OWNER_MESSAGES = "SEND_OWNER_MESSAGES",
+  MANAGE_STAFF = "MANAGE_STAFF",
+  MANAGE_INVENTORY = "MANAGE_INVENTORY",
 }
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
@@ -29,16 +29,20 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_APPEALS,
     Permission.APPROVE_APPEALS,
   ],
-  owner: [Permission.SEND_OWNER_MESSAGES, Permission.MANAGE_STAFF, Permission.MANAGE_INVENTORY],
+  owner: [
+    Permission.SEND_OWNER_MESSAGES,
+    Permission.MANAGE_STAFF,
+    Permission.MANAGE_INVENTORY,
+  ],
   manager: [Permission.MANAGE_STAFF, Permission.MANAGE_INVENTORY],
   pharmacist: [],
   cashier: [],
 };
 
 export function hasPermission(
-  user: Doc<'users'> | null,
+  user: Doc<"users"> | null,
   permission: Permission,
-  context?: { branchId?: string }
+  context?: { branchId?: string },
 ): boolean {
   if (!user) {
     return false;
@@ -52,7 +56,11 @@ export function hasPermission(
   const permissions = ROLE_PERMISSIONS[role] || [];
 
   if (permissions.includes(permission)) {
-    if (role === 'manager' && context?.branchId && user.accessScope === 'branch_specific') {
+    if (
+      role === "manager" &&
+      context?.branchId &&
+      user.accessScope === "branch_specific"
+    ) {
       return user.assignedBranches?.includes(context.branchId as any) || false;
     }
     return true;

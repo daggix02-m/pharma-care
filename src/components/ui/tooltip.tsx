@@ -1,7 +1,7 @@
-import React, { forwardRef } from 'react';
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { cn } from '@/lib/utils';
-import { gsap } from 'gsap';
+import React, { forwardRef } from "react";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import { cn } from "@/lib/utils";
+import { gsap } from "gsap";
 
 const TooltipProvider = TooltipPrimitive.Provider;
 const Tooltip = TooltipPrimitive.Root;
@@ -11,7 +11,8 @@ const TooltipContent = forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
 >(({ className, sideOffset = 4, ...props }, ref) => {
-  const combinedRef = React.useRef<React.ElementRef<typeof TooltipPrimitive.Content>>(null);
+  const combinedRef =
+    React.useRef<React.ElementRef<typeof TooltipPrimitive.Content>>(null);
 
   React.useImperativeHandle(ref, () => combinedRef.current!);
 
@@ -20,14 +21,17 @@ const TooltipContent = forwardRef<
 
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'data-state') {
+        if (
+          mutation.type === "attributes" &&
+          mutation.attributeName === "data-state"
+        ) {
           const target = mutation.target as HTMLElement;
-          const state = target.getAttribute('data-state');
-          if (state === 'open' && target === combinedRef.current) {
+          const state = target.getAttribute("data-state");
+          if (state === "open" && target === combinedRef.current) {
             gsap.fromTo(
               combinedRef.current,
               { opacity: 0, scale: 0.95 },
-              { opacity: 1, scale: 1, duration: 0.15, ease: 'power1.out' }
+              { opacity: 1, scale: 1, duration: 0.15, ease: "power1.out" },
             );
           }
         }
@@ -36,7 +40,7 @@ const TooltipContent = forwardRef<
 
     observer.observe(combinedRef.current, {
       attributes: true,
-      attributeFilter: ['data-state'],
+      attributeFilter: ["data-state"],
     });
 
     return () => observer.disconnect();
@@ -47,8 +51,8 @@ const TooltipContent = forwardRef<
       ref={combinedRef}
       sideOffset={sideOffset}
       className={cn(
-        'z-[200] overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground',
-        className
+        "z-[200] overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground",
+        className,
       )}
       {...props}
     />

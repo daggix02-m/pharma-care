@@ -1,66 +1,103 @@
-import * as React from 'react';
-import { cn } from '@/lib/utils';
-import { useEntranceAnimation } from '@/hooks/useGsapAnimation';
+import * as React from "react";
+import { cn } from "@/lib/utils";
+import { useEntranceAnimation } from "@/hooks/useGsapAnimation";
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-const Card = React.forwardRef<HTMLDivElement, CardProps>(({ className, ...props }, ref) => {
-  useEntranceAnimation({ ref, duration: 0.4 });
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, ...props }, ref) => {
+    useEntranceAnimation({ ref, duration: 0.4 });
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "rounded-lg border bg-card text-card-foreground shadow-sm",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);
+Card.displayName = "Card";
+
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => {
+  useEntranceAnimation({ ref, duration: 0.5 });
   return (
     <div
       ref={ref}
-      className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)}
+      className={cn("flex flex-col space-y-1.5 p-6", className)}
       {...props}
     />
   );
 });
-Card.displayName = 'Card';
+CardHeader.displayName = "CardHeader";
 
-const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => {
-    useEntranceAnimation({ ref, duration: 0.5 });
-    return <div ref={ref} className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />;
-  }
-);
-CardHeader.displayName = 'CardHeader';
-
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => {
-    useEntranceAnimation({ ref, duration: 0.6 });
-    return (
-      <h3
-        ref={ref}
-        className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
-        {...props}
-      />
-    );
-  }
-);
-CardTitle.displayName = 'CardTitle';
+const CardTitle = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => {
+  useEntranceAnimation({ ref, duration: 0.6 });
+  return (
+    <h3
+      ref={ref}
+      className={cn(
+        "text-2xl font-semibold leading-none tracking-tight",
+        className,
+      )}
+      {...props}
+    />
+  );
+});
+CardTitle.displayName = "CardTitle";
 
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => {
   useEntranceAnimation({ ref, duration: 0.7 });
-  return <p ref={ref} className={cn('text-sm text-muted-foreground', className)} {...props} />;
+  return (
+    <p
+      ref={ref}
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
 });
-CardDescription.displayName = 'CardDescription';
+CardDescription.displayName = "CardDescription";
 
-const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => {
-    useEntranceAnimation({ ref, duration: 0.8 });
-    return <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />;
-  }
-);
-CardContent.displayName = 'CardContent';
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => {
+  useEntranceAnimation({ ref, duration: 0.8 });
+  return <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />;
+});
+CardContent.displayName = "CardContent";
 
-const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => {
-    useEntranceAnimation({ ref, duration: 0.9 });
-    return <div ref={ref} className={cn('flex items-center p-6 pt-0', className)} {...props} />;
-  }
-);
-CardFooter.displayName = 'CardFooter';
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => {
+  useEntranceAnimation({ ref, duration: 0.9 });
+  return (
+    <div
+      ref={ref}
+      className={cn("flex items-center p-6 pt-0", className)}
+      {...props}
+    />
+  );
+});
+CardFooter.displayName = "CardFooter";
 
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent };
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+};

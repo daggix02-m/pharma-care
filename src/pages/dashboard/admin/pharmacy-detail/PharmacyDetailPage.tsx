@@ -1,35 +1,90 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
-import type { Id } from "../../../../../convex/_generated/dataModel";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  Building2,
-  Shield,
-  Mail,
-  AlertCircle,
-  X,
-  MapPin,
-  CreditCard,
-  Users,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2, Mail, X, MapPin, Users } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { AlertCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import type { PharmacySummary, OwnerInfo, PharmacyDetailData } from "./types";
+import { OverviewTabContent } from "./OverviewTabContent";
+import { OwnerTabContent } from "./OwnerTabContent";
+import { OperationsTabContent } from "./OperationsTabContent";
+import { SubscriptionTabContent } from "./SubscriptionTabContent";
+import { SuspendPharmacyDialog } from "./SuspendPharmacyDialog";
+import { SendMessageDialog } from "./SendMessageDialog";
+
+function buildSummary(data: PharmacyDetailData): PharmacySummary {
+  const signupSubmission = data.signupSubmission;
+  const fallbackLocation =
+    data.pharmacy.signupLocation ||
+    data.pharmacy.plannedBranchLocations?.[0] ||
+    (data.pharmacy.address?.city && data.pharmacy.address?.country
+      ? `${data.pharmacy.address.city}, ${data.pharmacy.address.country}`
+      : data.pharmacy.address?.city || "Not provided");
+
+  const primaryLocation =
+    signupSubmission?.primaryLocation || fallbackLocation || "Not provided";
+
+  const branchLocations = Array.isArray(signupSubmission?.branchLocations)
+    ? signupSubmission.branchLocations
+    : Array.isArray(data.pharmacy.plannedBranchLocations)
+      ? data.pharmacy.plannedBranchLocations
+      : [];
+
+  return {
+    primaryLocation,
+    branchLocations,
+    plannedBranches:
+      signupSubmission?.plannedBranches ?? data.pharmacy.plannedBranches ?? 0,
+    submittedAt:
+      signupSubmission?.submittedAt ?? data.pharmacy._creationTime ?? null,
+    status: signupSubmission?.status || data.pharmacy.status || "unknown",
+    selectedTier:
+      signupSubmission?.selectedTier || data.pharmacy.subscriptionTier || "",
+    recommendedTier:
+      signupSubmission?.recommendedTier ||
+      data.pharmacy.recommendedSubscriptionTier ||
+      "",
+    pharmacyName: signupSubmission?.pharmacyName || data.pharmacy.name,
+    pharmacyEmail:
+      signupSubmission?.pharmacyEmail ||
+      data.pharmacy.pharmacyEmail ||
+      "Not provided",
+    licenseCode: signupSubmission?.licenseCode || data.pharmacy.licenseCode,
+    ownerName:
+      signupSubmission?.ownerName || data.owner?.full_name || "Not provided",
+    ownerEmail:
+      signupSubmission?.ownerEmail || data.owner?.email || "Not provided",
+    ownerPhone:
+      signupSubmission?.ownerPhone || data.owner?.phone || "Not provided",
+    plannedStaffTotal:
+      signupSubmission?.plannedStaffTotal ??
+      data.pharmacy.plannedStaffTotal ??
+      0,
+    staffBreakdown: signupSubmission?.staffBreakdown || {
+      pharmacists: data.pharmacy.plannedStaffBreakdown?.pharmacists ?? 0,
+      managers: data.pharmacy.plannedStaffBreakdown?.managers ?? 0,
+      cashiers: data.pharmacy.plannedStaffBreakdown?.cashiers ?? 0,
+    },
+    termsAccepted: signupSubmission?.termsAccepted,
+  };
+}
+
+function extractOwnerInfo(
+  data: PharmacyDetailData,
+): OwnerInfo | null | undefined {
+  if (!data.owner) return data.owner;
+  return {
+    status: data.owner.status,
+    emailVerified: data.owner.emailVerified,
+    role: data.owner.role,
+  };
+}
 
 export function PharmacyDetailPage() {
   const { pharmacyId } = useParams<{ pharmacyId: string }>();
@@ -38,8 +93,6 @@ export function PharmacyDetailPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [suspendDialog, setSuspendDialog] = useState(false);
   const [messageDialog, setMessageDialog] = useState(false);
-  const [suspendReason, setSuspendReason] = useState("");
-  const [messageData, setMessageData] = useState({ title: "", message: "" });
 
   const pharmacyData = useQuery(
     api.admin.queries.getPharmacyDetail,
@@ -47,9 +100,6 @@ export function PharmacyDetailPage() {
       ? { pharmacyId: pharmacyId as Id<"pharmacies">, sessionToken }
       : "skip",
   );
-
-  const suspendPharmacy = useMutation(api.admin.mutations.suspendPharmacy);
-  const sendBroadcast = useMutation(api.admin.mutations.sendAdminBroadcast);
 
   if (pharmacyData === undefined) {
     return (
@@ -88,115 +138,11 @@ export function PharmacyDetailPage() {
   }
 
   const data = pharmacyData;
-  const signupSubmission = data.signupSubmission;
-
-  const fallbackLocation =
-    data.pharmacy.signupLocation ||
-    data.pharmacy.plannedBranchLocations?.[0] ||
-    (data.pharmacy.address?.city && data.pharmacy.address?.country
-      ? `${data.pharmacy.address.city}, ${data.pharmacy.address.country}`
-      : data.pharmacy.address?.city || "Not provided");
-
-  const primaryLocation =
-    signupSubmission?.primaryLocation || fallbackLocation || "Not provided";
-  const branchLocations = Array.isArray(signupSubmission?.branchLocations)
-    ? signupSubmission.branchLocations
-    : Array.isArray(data.pharmacy.plannedBranchLocations)
-      ? data.pharmacy.plannedBranchLocations
-      : [];
-
-  const summary = {
-    primaryLocation,
-    branchLocations,
-    plannedBranches:
-      signupSubmission?.plannedBranches ?? data.pharmacy.plannedBranches ?? 0,
-    submittedAt:
-      signupSubmission?.submittedAt ?? data.pharmacy._creationTime ?? null,
-    status: signupSubmission?.status || data.pharmacy.status || "unknown",
-    selectedTier:
-      signupSubmission?.selectedTier || data.pharmacy.subscriptionTier || "",
-    recommendedTier:
-      signupSubmission?.recommendedTier ||
-      data.pharmacy.recommendedSubscriptionTier ||
-      "",
-    pharmacyName: signupSubmission?.pharmacyName || data.pharmacy.name,
-    pharmacyEmail:
-      signupSubmission?.pharmacyEmail ||
-      data.pharmacy.pharmacyEmail ||
-      "Not provided",
-    licenseCode: signupSubmission?.licenseCode || data.pharmacy.licenseCode,
-    ownerName:
-      signupSubmission?.ownerName || data.owner?.full_name || "Not provided",
-    ownerEmail:
-      signupSubmission?.ownerEmail || data.owner?.email || "Not provided",
-    ownerPhone:
-      signupSubmission?.ownerPhone || data.owner?.phone || "Not provided",
-    plannedStaffTotal:
-      signupSubmission?.plannedStaffTotal ??
-      data.pharmacy.plannedStaffTotal ??
-      0,
-    staffBreakdown: signupSubmission?.staffBreakdown || {
-      pharmacists: data.pharmacy.plannedStaffBreakdown?.pharmacists ?? 0,
-      managers: data.pharmacy.plannedStaffBreakdown?.managers ?? 0,
-      cashiers: data.pharmacy.plannedStaffBreakdown?.cashiers ?? 0,
-    },
-    termsAccepted: signupSubmission?.termsAccepted,
-  };
-
-  const handleSuspend = async () => {
-    if (!suspendReason.trim()) {
-      toast.error("Please provide a reason for suspension");
-      return;
-    }
-
-    if (!pharmacyId) {
-      toast.error("Pharmacy ID is required");
-      return;
-    }
-
-    try {
-      await suspendPharmacy({ pharmacyId, reason: suspendReason });
-      toast.success("Pharmacy suspended successfully");
-      setSuspendDialog(false);
-      setSuspendReason("");
-    } catch (error) {
-      toast.error("Failed to suspend pharmacy");
-      console.error(error);
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!messageData.title.trim() || !messageData.message.trim()) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-
-    if (!pharmacyId) {
-      toast.error("Pharmacy ID is required");
-      return;
-    }
-
-    try {
-      await sendBroadcast({
-        targetType: "specific_pharmacy",
-        targetIds: [pharmacyId],
-        messageType: "announcement",
-        title: messageData.title,
-        message: messageData.message,
-        priority: "medium",
-      });
-      toast.success("Message sent successfully");
-      setMessageDialog(false);
-      setMessageData({ title: "", message: "" });
-    } catch (error) {
-      toast.error("Failed to send message");
-      console.error(error);
-    }
-  };
+  const summary = buildSummary(data);
+  const ownerInfo = extractOwnerInfo(data);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-[hsl(var(--medical-teal))]/5">
-      {/* Header */}
       <div className="sticky top-16 z-40 bg-background/95 backdrop-blur-sm border-b shadow-sm">
         <div className="container mx-auto px-4 sm:px-6 py-5 sm:py-6">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 sm:gap-6">
@@ -276,7 +222,6 @@ export function PharmacyDetailPage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="max-w-7xl">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -296,289 +241,41 @@ export function PharmacyDetailPage() {
             </TabsList>
 
             <TabsContent value="overview" className="mt-4">
-              <Card
-                className="border-2 border-border/70"
-                id="pharmacy-registration-details"
-              >
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
-                    Pharmacy Registration Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  <InfoRow label="Pharmacy Name" value={summary.pharmacyName} />
-                  <InfoRow
-                    label="Pharmacy Email"
-                    value={summary.pharmacyEmail || "Not provided"}
-                  />
-                  <InfoRow
-                    label="License Code"
-                    value={summary.licenseCode || "Not provided"}
-                  />
-                  <InfoRow
-                    label="Primary Location"
-                    value={summary.primaryLocation}
-                  />
-                  <InfoRow
-                    label="Branch Locations"
-                    value={
-                      summary.branchLocations.length
-                        ? summary.branchLocations.join(", ")
-                        : summary.plannedBranches > 0
-                          ? summary.primaryLocation
-                          : "Not provided"
-                    }
-                  />
-                  <InfoRow
-                    label="Submitted At"
-                    value={
-                      summary.submittedAt
-                        ? new Date(summary.submittedAt).toLocaleString()
-                        : "Not provided"
-                    }
-                  />
-                  <InfoRow label="Application Status" value={summary.status} />
-                </CardContent>
-              </Card>
+              <OverviewTabContent summary={summary} />
             </TabsContent>
 
             <TabsContent value="owner" className="mt-4">
-              <Card className="border-2 border-border/70">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
-                    Owner Submission Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  <InfoRow label="Owner Name" value={summary.ownerName} />
-                  <InfoRow label="Owner Email" value={summary.ownerEmail} />
-                  <InfoRow label="Owner Phone" value={summary.ownerPhone} />
-                  <InfoRow
-                    label="Owner Status"
-                    value={data.owner?.status || "N/A"}
-                  />
-                  <InfoRow
-                    label="Email Verified"
-                    value={data.owner?.emailVerified ? "Yes" : "No"}
-                  />
-                  <InfoRow
-                    label="Owner Role"
-                    value={data.owner?.role || "N/A"}
-                  />
-                </CardContent>
-              </Card>
+              <OwnerTabContent summary={summary} owner={ownerInfo} />
             </TabsContent>
 
             <TabsContent value="operations" className="mt-4">
-              <Card className="border-2 border-border/70">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Users className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
-                    Planned Operations (Signup)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  <InfoRow
-                    label="Planned Branches"
-                    value={String(summary.plannedBranches)}
-                  />
-                  <InfoRow
-                    label="Planned Total Staff"
-                    value={String(summary.plannedStaffTotal)}
-                  />
-                  <InfoRow
-                    label="Planned Pharmacists"
-                    value={String(summary.staffBreakdown.pharmacists)}
-                  />
-                  <InfoRow
-                    label="Planned Managers"
-                    value={String(summary.staffBreakdown.managers)}
-                  />
-                  <InfoRow
-                    label="Planned Cashiers"
-                    value={String(summary.staffBreakdown.cashiers)}
-                  />
-                  <InfoRow
-                    label="Branch Locations"
-                    value={
-                      summary.branchLocations.length
-                        ? summary.branchLocations.join(", ")
-                        : summary.plannedBranches > 0
-                          ? summary.primaryLocation
-                          : "Not provided"
-                    }
-                  />
-                </CardContent>
-              </Card>
+              <OperationsTabContent summary={summary} />
             </TabsContent>
 
             <TabsContent value="subscription" className="mt-4">
-              <Card className="border-2 border-border/70">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <CreditCard className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
-                    Subscription Selection (Signup)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  <InfoRow
-                    label="Selected Plan"
-                    value={summary.selectedTier.toUpperCase() || "NOT SET"}
-                  />
-                  <InfoRow
-                    label="Recommended Plan"
-                    value={summary.recommendedTier.toUpperCase() || "NOT SET"}
-                  />
-                  <InfoRow
-                    label="Payment Status"
-                    value={data.pharmacy.paymentStatus || "Not provided"}
-                  />
-                  <InfoRow
-                    label="Monthly Cost"
-                    value={`ETB ${data.pharmacy.monthlyCost ?? 0}`}
-                  />
-                  <InfoRow
-                    label="Terms Accepted"
-                    value={
-                      summary.termsAccepted === undefined
-                        ? "Not captured (legacy)"
-                        : summary.termsAccepted
-                          ? "Yes"
-                          : "No"
-                    }
-                  />
-                </CardContent>
-              </Card>
+              <SubscriptionTabContent
+                summary={summary}
+                paymentStatus={data.pharmacy.paymentStatus}
+                monthlyCost={data.pharmacy.monthlyCost}
+              />
             </TabsContent>
           </Tabs>
         </div>
       </div>
 
-      {/* Suspend Dialog */}
-      <Dialog open={suspendDialog} onOpenChange={setSuspendDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              Suspend Pharmacy
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to suspend{" "}
-              <strong>{data.pharmacy.name}</strong>? This action will:
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-3">
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                <span>Immediately revoke all user access</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                <span>Disable all pharmacy operations</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                <span>Notify the pharmacy owner</span>
-              </li>
-            </ul>
-            <div>
-              <Label htmlFor="suspend-reason">
-                Reason for Suspension{" "}
-                <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="suspend-reason"
-                placeholder="Provide detailed reason for this suspension..."
-                value={suspendReason}
-                onChange={(e) => setSuspendReason(e.target.value)}
-                rows={4}
-                className="mt-2"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSuspendDialog(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleSuspend}>
-              <X className="h-4 w-4 mr-2" />
-              Suspend Pharmacy
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SuspendPharmacyDialog
+        open={suspendDialog}
+        onOpenChange={setSuspendDialog}
+        pharmacyId={pharmacyId!}
+        pharmacyName={data.pharmacy.name}
+      />
 
-      {/* Send Message Dialog */}
-      <Dialog open={messageDialog} onOpenChange={setMessageDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5 text-[hsl(var(--medical-teal))]" />
-              Send Message to Pharmacy
-            </DialogTitle>
-            <DialogDescription>
-              Send a message to <strong>{data.pharmacy.name}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div>
-              <Label htmlFor="message-title">
-                Title <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="message-title"
-                placeholder="Message title..."
-                value={messageData.title}
-                onChange={(e) =>
-                  setMessageData((prev) => ({ ...prev, title: e.target.value }))
-                }
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label htmlFor="message-content">
-                Message <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="message-content"
-                placeholder="Type your message here..."
-                value={messageData.message}
-                onChange={(e) =>
-                  setMessageData((prev) => ({
-                    ...prev,
-                    message: e.target.value,
-                  }))
-                }
-                rows={6}
-                className="mt-2"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMessageDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSendMessage}>
-              <Mail className="h-4 w-4 mr-2" />
-              Send Message
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border/60 bg-background p-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="text-sm font-semibold mt-1">{value}</p>
+      <SendMessageDialog
+        open={messageDialog}
+        onOpenChange={setMessageDialog}
+        pharmacyId={pharmacyId!}
+        pharmacyName={data.pharmacy.name}
+      />
     </div>
   );
 }

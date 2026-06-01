@@ -4,8 +4,6 @@ import {
   Calendar,
   CheckCircle,
   Copy,
-  Download,
-  FileText,
   DollarSign,
   Send,
 } from "lucide-react";
@@ -22,11 +20,14 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { FileText } from "lucide-react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
+import { PlanCard } from "./PlanCard";
+import { BillingItem } from "./BillingItem";
+import { PaymentRow, InvoiceRow } from "./SubscriptionHistoryRows";
 
 type Pharmacy = Doc<"pharmacies">;
 
@@ -66,10 +67,6 @@ const planDetails = {
     ],
   },
 };
-
-type PlanDetails = typeof planDetails;
-type PlanKey = keyof PlanDetails;
-type Plan = PlanDetails[PlanKey];
 
 type SubscriptionHistoryItem = Doc<"subscription_history">;
 type SubscriptionPlan = Doc<"subscription_plans">;
@@ -232,10 +229,8 @@ export function SubscriptionBillingSection({
 
       <TabsContent value="current" className="mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Current Plan Card */}
           <PlanCard plan={currentPlan} isCurrent={true} />
 
-          {/* Billing Details */}
           <Card className="border-2 border-border">
             <CardHeader>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -360,7 +355,6 @@ export function SubscriptionBillingSection({
           </Card>
         </div>
 
-        {/* Features List */}
         <Card className="mt-6 border-2 border-[hsl(var(--medical-teal))]/20 bg-gradient-to-br from-background to-[hsl(var(--medical-teal))]/5">
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -471,156 +465,5 @@ export function SubscriptionBillingSection({
         </Card>
       </TabsContent>
     </Tabs>
-  );
-}
-
-interface PlanCardProps {
-  plan: Plan;
-  isCurrent: boolean;
-}
-
-function PlanCard({ plan, isCurrent }: PlanCardProps) {
-  return (
-    <Card
-      className={cn(
-        "border-2",
-        isCurrent
-          ? "border-[hsl(var(--medical-teal))] shadow-lg"
-          : "border-border",
-      )}
-    >
-      <CardHeader
-        className={cn(
-          "pb-4",
-          isCurrent &&
-            "bg-gradient-to-r from-[hsl(var(--medical-teal))] to-[hsl(var(--medical-teal))]/80",
-        )}
-      >
-        <div className="flex items-center justify-between">
-          <CardTitle
-            className={cn("text-lg font-semibold", isCurrent && "text-white")}
-          >
-            {plan.name} Plan
-          </CardTitle>
-          {isCurrent && (
-            <Badge className="bg-white text-[hsl(var(--medical-teal))]">
-              Current
-            </Badge>
-          )}
-        </div>
-        <div className="mt-4">
-          <span className={cn("text-3xl font-bold", isCurrent && "text-white")}>
-            ETB {plan.price}
-          </span>
-          <span
-            className={cn(
-              "text-sm text-muted-foreground ml-1",
-              isCurrent && "text-white/80",
-            )}
-          >
-            /month
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-4 space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <StatItem label="Branches" value={plan.branches} />
-          <StatItem label="Users" value={plan.users} />
-        </div>
-        <div className="space-y-2 pt-3 border-t border-border/50">
-          <p className="text-sm font-medium text-muted-foreground mb-2">
-            Includes:
-          </p>
-          {plan.features.slice(0, 3).map((feature: string, idx: number) => (
-            <div key={idx} className="flex items-center gap-2 text-sm">
-              <CheckCircle className="h-4 w-4 text-[hsl(var(--medical-teal))]" />
-              <span>{feature}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function BillingItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
-    </div>
-  );
-}
-
-interface PaymentRowProps {
-  payment: {
-    id: string;
-    date: string;
-    amount: number;
-    status: string;
-    method: string;
-    invoice: string;
-  };
-}
-
-function PaymentRow({ payment }: PaymentRowProps) {
-  return (
-    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-      <div className="flex-1">
-        <p className="text-sm font-medium">{payment.invoice}</p>
-        <p className="text-xs text-muted-foreground">
-          {new Date(payment.date).toLocaleDateString()}
-        </p>
-      </div>
-      <div className="flex items-center gap-4">
-        <div className="text-right">
-          <p className="text-sm font-semibold">ETB {payment.amount}</p>
-          <p className="text-xs text-muted-foreground">{payment.method}</p>
-        </div>
-        <Badge
-          variant={payment.status === "paid" ? "default" : "destructive"}
-          className="text-xs"
-        >
-          {payment.status}
-        </Badge>
-      </div>
-    </div>
-  );
-}
-
-function InvoiceRow({ payment }: PaymentRowProps) {
-  return (
-    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-[hsl(var(--medical-teal))]" />
-          <p className="text-sm font-medium">{payment.invoice}</p>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {new Date(payment.date).toLocaleDateString()}
-        </p>
-      </div>
-      <div className="flex items-center gap-3">
-        <Badge
-          variant={payment.status === "paid" ? "default" : "destructive"}
-          className="text-xs"
-        >
-          {payment.status}
-        </Badge>
-        <Button variant="outline" size="sm">
-          <Download className="h-4 w-4 mr-1" />
-          PDF
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function StatItem({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="p-3 bg-muted/30 rounded-lg">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-semibold">{value}</p>
-    </div>
   );
 }

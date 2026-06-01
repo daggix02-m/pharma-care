@@ -2,9 +2,6 @@ import * as React from "react";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -13,64 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Mail,
-  Building2,
-  Users,
-  User,
-  Send,
-  CheckCircle2,
-  X,
-  Loader2,
-  AtSign,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { TargetSelectionStep, type TargetType } from "./TargetSelectionStep";
+import { ComposeStep } from "./ComposeStep";
+import { Loader2, Send, CheckCircle2, X } from "lucide-react";
 
 interface OwnerInternalMessageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-type TargetType =
-  | "all_managers"
-  | "specific_branch"
-  | "specific_role"
-  | "specific_individual";
-
-const TARGET_OPTIONS: {
-  value: TargetType;
-  icon: React.ElementType;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "all_managers",
-    icon: Users,
-    label: "All Managers",
-    description: "Send to all managers in your pharmacy",
-  },
-  {
-    value: "specific_branch",
-    icon: Building2,
-    label: "Specific Branch",
-    description: "Send to managers at a specific branch",
-  },
-  {
-    value: "specific_role",
-    icon: User,
-    label: "Specific Role",
-    description: "Send to all staff with a specific role",
-  },
-  {
-    value: "specific_individual",
-    icon: User,
-    label: "Specific Person",
-    description: "Send to a specific staff member",
-  },
-];
 
 export function OwnerInternalMessageDialog({
   open,
@@ -195,7 +144,21 @@ export function OwnerInternalMessageDialog({
                   <div className="inline-flex items-center gap-2">
                     <div className="relative">
                       <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full blur-xl opacity-40 animate-pulse" />
-                      <Mail className="relative h-12 w-12 text-emerald-600" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="relative text-emerald-600"
+                      >
+                        <rect width="20" height="16" x="2" y="4" rx="2" />
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                      </svg>
                     </div>
                     <h2 className="font-display text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent">
                       Internal Message
@@ -207,258 +170,31 @@ export function OwnerInternalMessageDialog({
                 </div>
 
                 {step === 1 && (
-                  <div
-                    className={cn(
-                      "space-y-6",
-                      "transition-all duration-700 delay-200 ease-out",
-                      isAnimating
-                        ? "opacity-100 translate-y-0"
-                        : "opacity-0 translate-y-4",
-                    )}
-                    style={{ transitionDelay: isAnimating ? "200ms" : "0ms" }}
-                  >
-                    <div className="space-y-4">
-                      <h3 className="font-display text-xl font-semibold text-slate-800">
-                        Who should receive this message?
-                      </h3>
-
-                      <RadioGroup
-                        value={targetType}
-                        onValueChange={handleTargetTypeChange}
-                      >
-                        <div className="grid grid-cols-2 gap-3">
-                          {TARGET_OPTIONS.map((option) => (
-                            <div
-                              key={option.value}
-                              className={cn(
-                                "relative p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer group",
-                                "bg-white/80 backdrop-blur-sm hover:bg-white/95",
-                                targetType === option.value
-                                  ? "border-emerald-500 shadow-md"
-                                  : "border-slate-200",
-                              )}
-                            >
-                              <RadioGroupItem
-                                value={option.value}
-                                className="sr-only"
-                                id={`target-${option.value}`}
-                              />
-                              <label
-                                htmlFor={`target-${option.value}`}
-                                className="flex flex-col gap-2 cursor-pointer"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="relative">
-                                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl blur-md opacity-0 group-hover:opacity-20 transition-opacity" />
-                                    <div
-                                      className={cn(
-                                        "relative w-10 h-10 rounded-xl flex items-center justify-center",
-                                        targetType === option.value
-                                          ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm"
-                                          : "bg-slate-100 text-slate-600",
-                                      )}
-                                    >
-                                      <option.icon className="h-5 w-5" />
-                                    </div>
-                                  </div>
-                                  <span className="font-display font-semibold text-slate-800">
-                                    {option.label}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-slate-500 leading-relaxed">
-                                  {option.description}
-                                </p>
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      </RadioGroup>
-
-                      {targetType === "specific_branch" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="branch-input">Branch Name</Label>
-                          <Input
-                            id="branch-input"
-                            placeholder="Enter branch name..."
-                            value={specificValue}
-                            onChange={(e) => setSpecificValue(e.target.value)}
-                            className="h-12"
-                          />
-                        </div>
-                      )}
-
-                      {targetType === "specific_role" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="role-input">Role</Label>
-                          <select
-                            id="role-input"
-                            value={specificValue}
-                            onChange={(e) => setSpecificValue(e.target.value)}
-                            className="w-full h-12 px-4 rounded-xl border-2 border-slate-200 bg-white/80 backdrop-blur-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                          >
-                            <option value="">Select role...</option>
-                            <option value="manager">Manager</option>
-                            <option value="pharmacist">Pharmacist</option>
-                            <option value="cashier">Cashier</option>
-                            <option value="inventory_clerk">
-                              Inventory Clerk
-                            </option>
-                            <option value="delivery_staff">
-                              Delivery Staff
-                            </option>
-                          </select>
-                        </div>
-                      )}
-
-                      {targetType === "specific_individual" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="email-input">Staff Email</Label>
-                          <Input
-                            id="email-input"
-                            type="email"
-                            placeholder="Enter staff email..."
-                            value={specificValue}
-                            onChange={(e) => setSpecificValue(e.target.value)}
-                            className="h-12"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <TargetSelectionStep
+                    targetType={targetType}
+                    specificValue={specificValue}
+                    onTargetTypeChange={handleTargetTypeChange}
+                    onSpecificValueChange={setSpecificValue}
+                    canProceed={canProceed()}
+                    isAnimating={isAnimating}
+                  />
                 )}
 
                 {step === 2 && (
-                  <div
-                    className={cn(
-                      "space-y-6",
-                      "transition-all duration-700 delay-300 ease-out",
-                      isAnimating
-                        ? "opacity-100 translate-y-0"
-                        : "opacity-0 translate-y-4",
-                    )}
-                    style={{ transitionDelay: isAnimating ? "300ms" : "0ms" }}
-                  >
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-5 w-5 text-emerald-600" />
-                        <h3 className="font-display text-xl font-semibold text-slate-800">
-                          Compose your message
-                        </h3>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="message-title">
-                          Title <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          id="message-title"
-                          placeholder="Enter message title..."
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="h-12"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="message-content">
-                          Message <span className="text-destructive">*</span>
-                        </Label>
-                        <Textarea
-                          id="message-content"
-                          placeholder="Enter your message content..."
-                          value={message}
-                          onChange={(e) => setMessage(e.target.value)}
-                          rows={6}
-                          className="resize-none"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Priority</Label>
-                          <Button
-                            type="button"
-                            variant={isUrgent ? "destructive" : "outline"}
-                            onClick={() => setIsUrgent(!isUrgent)}
-                            className="w-full justify-start"
-                          >
-                            {isUrgent ? (
-                              <>
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Urgent
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Normal
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Delivery Method</Label>
-                        <Button
-                          type="button"
-                          variant={
-                            includeEmailNotification ? "default" : "outline"
-                          }
-                          onClick={() =>
-                            setIncludeEmailNotification(
-                              !includeEmailNotification,
-                            )
-                          }
-                          className="w-full justify-start"
-                        >
-                          <AtSign className="h-4 w-4 mr-2" />
-                          {includeEmailNotification
-                            ? "Email + In-App"
-                            : "In-App Only"}
-                        </Button>
-                        <p className="text-xs text-slate-500">
-                          {includeEmailNotification
-                            ? "Staff will receive this message in-app and via email"
-                            : "Staff will receive this message in-app only"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-slate-100/80">
-                      <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wider">
-                        Preview
-                      </p>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-emerald-600" />
-                          <span className="text-xs text-slate-500">
-                            to:{" "}
-                            {
-                              TARGET_OPTIONS.find((t) => t.value === targetType)
-                                ?.label
-                            }
-                          </span>
-                          {isUrgent && (
-                            <Badge variant="destructive" className="text-xs">
-                              URGENT
-                            </Badge>
-                          )}
-                        </div>
-                        <h4 className="font-semibold text-slate-900">
-                          {title || "<Untitled>"}
-                        </h4>
-                        <p className="text-sm text-slate-700 whitespace-pre-wrap">
-                          {message || "<Your message here>"}
-                        </p>
-                        {includeEmailNotification && (
-                          <div className="flex items-center gap-1 text-xs text-slate-500">
-                            <AtSign className="h-3 w-3" />
-                            <span>+ Email notification will be sent</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <ComposeStep
+                    title={title}
+                    message={message}
+                    isUrgent={isUrgent}
+                    includeEmailNotification={includeEmailNotification}
+                    targetType={targetType}
+                    onTitleChange={setTitle}
+                    onMessageChange={setMessage}
+                    onUrgentToggle={() => setIsUrgent(!isUrgent)}
+                    onEmailNotificationToggle={() =>
+                      setIncludeEmailNotification(!includeEmailNotification)
+                    }
+                    isAnimating={isAnimating}
+                  />
                 )}
               </div>
             </div>
@@ -468,7 +204,7 @@ export function OwnerInternalMessageDialog({
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => setStep(Math.max(1, step - 1) as 1 | 2 | 3)}
+                onClick={() => setStep(Math.max(1, step - 1) as 1 | 2)}
                 disabled={step === 1 || isSending}
                 className="flex-1"
               >

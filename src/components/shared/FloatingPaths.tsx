@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
+import { useEffect, useRef, useState } from "react";
+import gsap from "gsap";
 
 export function FloatingPaths({ position }: { position: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -8,7 +8,7 @@ export function FloatingPaths({ position }: { position: number }) {
   // Detect theme
   useEffect(() => {
     const checkTheme = () => {
-      const isDarkMode = document.documentElement.classList.contains('dark');
+      const isDarkMode = document.documentElement.classList.contains("dark");
       setIsDark(isDarkMode);
     };
 
@@ -18,7 +18,7 @@ export function FloatingPaths({ position }: { position: number }) {
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class'],
+      attributeFilter: ["class"],
     });
 
     return () => observer.disconnect();
@@ -58,7 +58,7 @@ export function FloatingPaths({ position }: { position: number }) {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const svgPaths = containerRef.current.querySelectorAll('path');
+    const svgPaths = containerRef.current.querySelectorAll("path");
 
     svgPaths.forEach((path) => {
       const length = path.getTotalLength();
@@ -71,16 +71,16 @@ export function FloatingPaths({ position }: { position: number }) {
 
       // Slower animation - 30-45 seconds (user requested slower)
       const duration = 30 + Math.random() * 15;
-      const tl = gsap.timeline({ repeat: -1, ease: 'none' });
+      const tl = gsap.timeline({ repeat: -1, ease: "none" });
 
       tl.to(
         path,
         {
           strokeDasharray: `${length} ${length}`,
           duration: duration,
-          ease: 'none',
+          ease: "none",
         },
-        0
+        0,
       );
 
       tl.to(
@@ -90,9 +90,9 @@ export function FloatingPaths({ position }: { position: number }) {
           duration: duration / 2,
           yoyo: true,
           repeat: 1,
-          ease: 'none',
+          ease: "none",
         },
-        0
+        0,
       );
 
       tl.to(
@@ -102,9 +102,9 @@ export function FloatingPaths({ position }: { position: number }) {
           duration: duration / 2,
           yoyo: true,
           repeat: 1,
-          ease: 'none',
+          ease: "none",
         },
-        0
+        0,
       );
     });
 
@@ -117,20 +117,23 @@ export function FloatingPaths({ position }: { position: number }) {
   const getPathColor = (path: { isPrimary: boolean }): string => {
     if (path.isPrimary) {
       // Light theme: Brown #644a40, Dark theme: Golden #ffe0c2
-      return isDark ? 'hsl(33 100% 88%)' : 'hsl(16 22% 32%)';
+      return isDark ? "hsl(33 100% 88%)" : "hsl(16 22% 32%)";
     } else {
       // Light theme: Cream #ffdfb5, Dark theme: Lighter cream
-      return isDark ? 'hsl(33 100% 92%)' : 'hsl(35 100% 86%)';
+      return isDark ? "hsl(33 100% 92%)" : "hsl(35 100% 86%)";
     }
   };
 
   return (
-    <div ref={containerRef} className='pointer-events-none absolute inset-0 overflow-hidden'>
+    <div
+      ref={containerRef}
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
       <svg
-        className='h-full w-full'
-        viewBox='0 0 696 316'
-        preserveAspectRatio='xMidYMid slice'
-        fill='none'
+        className="h-full w-full"
+        viewBox="0 0 696 316"
+        preserveAspectRatio="xMidYMid slice"
+        fill="none"
       >
         <title>Background Paths</title>
         {paths.map((path) => (
@@ -140,7 +143,7 @@ export function FloatingPaths({ position }: { position: number }) {
             stroke={getPathColor(path)}
             strokeWidth={path.width}
             strokeOpacity={path.opacity}
-            strokeLinecap='round'
+            strokeLinecap="round"
           />
         ))}
       </svg>

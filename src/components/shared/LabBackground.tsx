@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import gsap from 'gsap';
-import { cn } from '@/lib/utils';
+import { useEffect, useRef } from "react";
+import gsap from "gsap";
+import { cn } from "@/lib/utils";
 
 interface LabBackgroundProps {
   className?: string;
@@ -18,26 +18,26 @@ export function LabBackground({ className }: LabBackgroundProps) {
       gsap.fromTo(
         dotsRef.current,
         {
-          clipPath: 'circle(0% at 50% 50%)',
+          clipPath: "circle(0% at 50% 50%)",
           opacity: 0,
         },
         {
-          clipPath: 'circle(150% at 50% 50%)',
+          clipPath: "circle(150% at 50% 50%)",
           opacity: 1,
           duration: 0.4,
-          ease: 'power4.out',
+          ease: "power4.out",
           immediateRender: true,
-        }
+        },
       );
 
       // Subtle idle movement
       gsap.to(dotsRef.current, {
-        x: '+=5',
-        y: '+=5',
+        x: "+=5",
+        y: "+=5",
         duration: 15,
         repeat: -1,
         yoyo: true,
-        ease: 'sine.inOut',
+        ease: "sine.inOut",
       });
     }, containerRef);
 
@@ -47,13 +47,16 @@ export function LabBackground({ className }: LabBackgroundProps) {
   return (
     <div
       ref={containerRef}
-      className={cn('absolute inset-0 overflow-hidden pointer-events-none', className)}
+      className={cn(
+        "absolute inset-0 overflow-hidden pointer-events-none",
+        className,
+      )}
     >
-      <div className='absolute inset-0 lab-bg'>
+      <div className="absolute inset-0 lab-bg">
         <div
           ref={dotsRef}
-          className='absolute inset-0 lab-bg-dots'
-          style={{ width: '105%', height: '105%', left: '-2.5%', top: '-2.5%' }}
+          className="absolute inset-0 lab-bg-dots"
+          style={{ width: "105%", height: "105%", left: "-2.5%", top: "-2.5%" }}
         />
       </div>
     </div>

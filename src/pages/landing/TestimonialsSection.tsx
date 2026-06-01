@@ -156,7 +156,7 @@ function TestimonialsSection() {
         </div>
 
         <div ref={carouselRef} className="max-w-4xl mx-auto">
-          <div className="relative bg-white/50 backdrop-blur-md rounded-2xl border border-border p-8 md:p-12 shadow-lg">
+          <div className="relative bg-card/50 backdrop-blur-md rounded-2xl border border-border p-8 md:p-12 shadow-lg">
             <Quote className="absolute top-6 left-6 h-12 w-12 text-primary/20" />
 
             <div className="flex flex-col items-center text-center">

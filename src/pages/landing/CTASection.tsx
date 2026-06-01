@@ -55,7 +55,7 @@ function CTASection({ content }: { content?: CTAContent }) {
       <div className="container mx-auto px-4 md:px-6">
         <div
           ref={containerRef}
-          className="flex flex-col text-center bg-white/40 backdrop-blur-md rounded-3xl shadow-sm p-8 lg:p-20 gap-8 items-center border border-border"
+          className="flex flex-col text-center bg-card/50 backdrop-blur-md rounded-3xl shadow-sm p-8 lg:p-20 gap-8 items-center border border-border"
         >
           <Badge className="bg-muted text-muted-foreground border-border font-display uppercase tracking-widest text-[10px]">
             Get Started
@@ -71,7 +71,7 @@ function CTASection({ content }: { content?: CTAContent }) {
           <div className="flex flex-col sm:flex-row gap-4 mt-4">
             <Button
               size="lg"
-              className="gap-4 bg-white text-foreground border border-border hover:bg-muted h-12 px-8 rounded-xl font-bold tracking-wide"
+              className="gap-4 bg-background text-foreground border border-border hover:bg-muted h-12 px-8 rounded-xl font-bold tracking-wide"
               variant="outline"
               onClick={() => {
                 const el = document.getElementById("contact");

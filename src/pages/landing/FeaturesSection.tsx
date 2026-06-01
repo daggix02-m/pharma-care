@@ -189,7 +189,7 @@ function FeaturesSection() {
                   cardsRef.current[index] = el;
                   return;
                 }}
-                className="group relative overflow-hidden rounded-2xl border border-border p-6 transition-all hover:bg-white/50 backdrop-blur-[2px] bg-white/30 cursor-pointer shadow-sm"
+                className="group relative overflow-hidden rounded-2xl border border-border p-6 transition-all hover:bg-card/80 backdrop-blur-[2px] bg-card/40 cursor-pointer shadow-sm dark:bg-card/20 dark:hover:bg-card/40"
                 onMouseEnter={() => handleCardHover(index, true)}
                 onMouseLeave={() => handleCardHover(index, false)}
               >

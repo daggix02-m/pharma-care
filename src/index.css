@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:wght@400&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=DM+Serif+Display:wght@400&family=Source+Sans+3:wght@300;400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -18,7 +18,7 @@
     --secondary: 33 100% 85%;
     --secondary-foreground: 15 52% 23%;
     --muted: 0 0% 94%;
-    --muted-foreground: 0 0% 39%;
+    --muted-foreground: 0 0% 25%;
     --accent: 0 0% 91%;
     --accent-foreground: 0 0% 13%;
     --destructive: 11 79% 54%;
@@ -36,9 +36,11 @@
     --chart-5: 15 25% 33%;
 
     /* Typography - DM Serif Display for headings, Source Sans 3 for body */
-    --font-display: 'DM Serif Display', Georgia, 'Times New Roman', serif;
-    --font-sans: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
+    --font-sans:
+      "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono:
+      "JetBrains Mono", "SF Mono", Menlo, Monaco, Consolas, monospace;
   }
 
   .dark {
@@ -191,7 +193,7 @@
   }
 
   .nav-link-brutalist::after {
-    content: '';
+    content: "";
     position: absolute;
     bottom: 0;
     left: 0;
@@ -285,8 +287,16 @@
   /* Subtle background pattern */
   .bg-pattern-grid {
     background-image:
-      linear-gradient(to right, hsl(var(--foreground) / 0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--foreground) / 0.02) 1px, transparent 1px);
+      linear-gradient(
+        to right,
+        hsl(var(--foreground) / 0.02) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        hsl(var(--foreground) / 0.02) 1px,
+        transparent 1px
+      );
     background-size: 40px 40px;
   }
 

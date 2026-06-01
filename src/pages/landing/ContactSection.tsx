@@ -162,7 +162,7 @@ function ContactSection() {
           </p>
           <div className="mt-8 space-y-6">
             <div className="flex items-start gap-4">
-              <div className="rounded-xl bg-muted p-3 border border-border">
+              <div className="rounded-xl bg-muted/50 dark:bg-muted p-3 border border-border">
                 <MapPin className="h-5 w-5 text-primary" />
               </div>
               <div>
@@ -177,7 +177,7 @@ function ContactSection() {
             <div className="flex items-start gap-4">
               <a
                 href={phoneHref}
-                className="rounded-xl bg-muted p-3 border border-border hover:bg-muted/80 transition-colors"
+                className="rounded-xl bg-muted/50 dark:bg-muted p-3 border border-border hover:bg-muted/80 transition-colors"
               >
                 <Phone className="h-5 w-5 text-primary" />
               </a>
@@ -198,7 +198,7 @@ function ContactSection() {
 
         <div
           ref={formRef}
-          className="rounded-3xl border border-border bg-white/50 backdrop-blur-md p-8 lg:p-10 shadow-sm"
+          className="rounded-3xl border border-border bg-card/50 backdrop-blur-md p-8 lg:p-10 shadow-sm"
         >
           <h3 className="text-2xl font-bold mb-2 text-foreground font-display">
             Send Us a Message
@@ -211,7 +211,7 @@ function ContactSection() {
               <div className="space-y-2">
                 <label
                   htmlFor="first-name"
-                  className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1"
+                  className="text-xs font-bold text-foreground uppercase tracking-widest ml-1"
                 >
                   First name *
                 </label>
@@ -219,7 +219,7 @@ function ContactSection() {
                   id="first-name"
                   name="firstName"
                   placeholder="Abebe"
-                  className="h-12 bg-white/80 border-slate-200 focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all rounded-xl"
+                  className="h-12 bg-background border-input focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-xl"
                   value={formData.firstName}
                   onChange={handleInputChange}
                   required
@@ -229,7 +229,7 @@ function ContactSection() {
               <div className="space-y-2">
                 <label
                   htmlFor="last-name"
-                  className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1"
+                  className="text-xs font-bold text-foreground uppercase tracking-widest ml-1"
                 >
                   Last name *
                 </label>
@@ -237,7 +237,7 @@ function ContactSection() {
                   id="last-name"
                   name="lastName"
                   placeholder="Kebede"
-                  className="h-12 bg-white/80 border-slate-200 focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all rounded-xl"
+                  className="h-12 bg-background border-input focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-xl"
                   value={formData.lastName}
                   onChange={handleInputChange}
                   required
@@ -248,7 +248,7 @@ function ContactSection() {
             <div className="space-y-2">
               <label
                 htmlFor="email"
-                className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1"
+                className="text-xs font-bold text-foreground uppercase tracking-widest ml-1"
               >
                 Email *
               </label>
@@ -257,7 +257,7 @@ function ContactSection() {
                 name="email"
                 type="email"
                 placeholder="abebe@example.com"
-                className="h-12 bg-white/80 border-slate-200 focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all rounded-xl"
+                className="h-12 bg-background border-input focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-xl"
                 value={formData.email}
                 onChange={handleInputChange}
                 required
@@ -267,7 +267,7 @@ function ContactSection() {
             <div className="space-y-2">
               <label
                 htmlFor="message"
-                className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1"
+                className="text-xs font-bold text-foreground uppercase tracking-widest ml-1"
               >
                 Message *
               </label>
@@ -275,7 +275,7 @@ function ContactSection() {
                 id="message"
                 name="message"
                 placeholder="How can we help you?"
-                className="min-h-[120px] bg-white/80 border-slate-200 focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all rounded-xl p-4"
+                className="min-h-[120px] bg-background border-input focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-xl p-4"
                 value={formData.message}
                 onChange={handleInputChange}
                 required
@@ -288,7 +288,7 @@ function ContactSection() {
             </div>
 
             {countdown > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
                 Please wait {countdown} minute{countdown !== 1 ? "s" : ""}{" "}
                 before sending another message.
               </div>
