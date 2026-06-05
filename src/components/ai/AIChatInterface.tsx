@@ -280,7 +280,7 @@ export function AIChatInterface({
   if (variant === "dialog") {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden h-[600px]">
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden h-[600px] max-h-[85vh]">
           {chatContent}
         </DialogContent>
       </Dialog>

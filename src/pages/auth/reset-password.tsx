@@ -89,7 +89,7 @@ export function ResetPasswordPage() {
           </Link>
         </Button>
 
-        <div className="flex flex-col space-y-2 text-left mt-8">
+        <div className="flex flex-col space-y-2 text-left">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
             Reset Password
           </h1>
@@ -122,7 +122,7 @@ export function ResetPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none min-w-[44px]"
                 aria-label={
                   showPassword ? "Hide new password" : "Show new password"
                 }
@@ -157,7 +157,7 @@ export function ResetPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none min-w-[44px]"
                 aria-label={
                   showConfirmPassword
                     ? "Hide confirm password"

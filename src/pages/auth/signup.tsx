@@ -37,15 +37,18 @@ export function SignupPage() {
         </Button>
       </div>
 
-      <div className="mb-10 w-full max-w-sm xl:max-w-md mx-auto pt-8 lg:pt-0">
-        <div className="flex justify-between mb-2">
+      <div className="mb-10 w-full max-w-sm md:max-w-md xl:max-w-lg mx-auto pt-28 lg:pt-0">
+        <div className="flex justify-between mb-2 gap-1 overflow-x-auto">
           {STEP_LABELS.map((label, i) => {
             const stepNumber = i + 1;
             const isActive = stepNumber === currentStep;
             const isCompleted = stepNumber < currentStep;
 
             return (
-              <div key={label} className="flex flex-col items-center gap-2">
+              <div
+                key={label}
+                className="flex flex-col items-center gap-2 shrink-0"
+              >
                 <div
                   className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-all duration-300",
@@ -64,7 +67,7 @@ export function SignupPage() {
                 </div>
                 <span
                   className={cn(
-                    "text-[10px] font-bold uppercase tracking-widest",
+                    "text-[10px] font-bold uppercase tracking-widest block",
                     isActive ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
@@ -82,7 +85,7 @@ export function SignupPage() {
         </div>
       </div>
 
-      <div className="w-full max-w-sm xl:max-w-md mx-auto">
+      <div className="w-full max-w-sm md:max-w-md xl:max-w-lg mx-auto">
         <div className="flex flex-col space-y-2 text-left mb-6">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
             Create Your Account

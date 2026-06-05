@@ -17,7 +17,7 @@ export const getDashboardStats = query({
 
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
 
     const pharmacyMedicines = medicines.filter((m: any) =>
       branchIds.includes(m.branchId),
@@ -33,7 +33,7 @@ export const getDashboardStats = query({
     ).length;
 
     // Get sales for today or last 30 days
-    const sales = await ctx.db.query("sales").collect();
+    const sales = await ctx.db.query("sales").take(200);
     const pharmacySales = sales.filter((s: any) =>
       branchIds.includes(s.branchId),
     );
@@ -100,7 +100,7 @@ export const getAllMedicines = query({
 
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
 
     return medicines.filter((m: any) => branchIds.includes(m.branchId));
   },
@@ -168,8 +168,8 @@ export const getSales = query({
     if (!args.branchId) {
       const branches = await ctx.db
         .query("branches")
-        .filter((b: any) => b.eq(b.field("pharmacyId"), manager.pharmacyId))
-        .collect();
+        .filter((q: any) => q.eq(q.field("pharmacyId"), manager.pharmacyId))
+        .take(100);
       const branchIds = branches.map((b: any) => b._id);
       return allSales.filter((s: any) => branchIds.includes(s.branchId));
     }
@@ -345,7 +345,7 @@ export const searchMedicines = query({
       .collect();
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
     const pharmacyMedicines = medicines.filter((m: any) =>
       branchIds.includes(m.branchId),
     );
@@ -373,7 +373,7 @@ export const getMedicinesByCategory = query({
       .collect();
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
     const pharmacyMedicines = medicines.filter(
       (m: any) =>
         branchIds.includes(m.branchId) &&
@@ -441,7 +441,7 @@ export const getReportsSales = query({
         startDate.setDate(startDate.getDate() - 7);
     }
 
-    const sales = await ctx.db.query("sales").collect();
+    const sales = await ctx.db.query("sales").take(200);
     const pharmacySales = sales.filter(
       (s: any) =>
         branchIds.includes(s.branchId) &&
@@ -488,7 +488,7 @@ export const getReportsInventory = query({
       .collect();
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
     const pharmacyMedicines = medicines.filter((m: any) =>
       branchIds.includes(m.branchId),
     );
@@ -713,7 +713,7 @@ export const getSalesByPeriod = query({
         startDate.setDate(startDate.getDate() - 7);
     }
 
-    const sales = await ctx.db.query("sales").collect();
+    const sales = await ctx.db.query("sales").take(200);
     const pharmacySales = sales.filter(
       (s: any) =>
         branchIds.includes(s.branchId) &&
@@ -763,7 +763,7 @@ export const getExpiringMedicines = query({
       .collect();
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
     const pharmacyMedicines = medicines.filter((m: any) =>
       branchIds.includes(m.branchId),
     );
@@ -792,7 +792,7 @@ export const getLowStockMedicines = query({
       .collect();
     const branchIds = branches.map((b: any) => b._id);
 
-    const medicines = await ctx.db.query("medicines").collect();
+    const medicines = await ctx.db.query("medicines").take(500);
     const pharmacyMedicines = medicines.filter((m: any) =>
       branchIds.includes(m.branchId),
     );

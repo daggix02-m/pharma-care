@@ -24,7 +24,7 @@ export const getDashboardStats = query({
     const medicines = await ctx.db
       .query("medicines")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
-      .collect();
+      .take(500);
 
     const lowStockItems = medicines.filter((m: any) => m.stock <= 10).length;
 
@@ -35,7 +35,7 @@ export const getDashboardStats = query({
     const sales = await ctx.db
       .query("sales")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
-      .collect();
+      .take(500);
 
     const todaySalesItems = sales.filter(
       (s: any) => s._creationTime >= todayStart,
@@ -70,7 +70,7 @@ export const getMedicines = query({
     return await ctx.db
       .query("medicines")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
-      .collect();
+      .take(500);
   },
 });
 
@@ -102,7 +102,7 @@ export const getSoldItemsHistory = query({
       .query("sales")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .order("desc")
-      .collect();
+      .take(500);
 
     const items = [];
     for (const sale of sales) {
@@ -133,7 +133,7 @@ export const getStockRequests = query({
       .query("stock_requests")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
       .order("desc")
-      .collect();
+      .take(500);
 
     const items = [];
     for (const req of requests) {
@@ -161,7 +161,7 @@ export const getExpiringMedicines = query({
     const medicines = await ctx.db
       .query("medicines")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
-      .collect();
+      .take(500);
 
     const thirtyDaysFromNow = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
@@ -186,7 +186,7 @@ export const getLowStockMedicines = query({
     const medicines = await ctx.db
       .query("medicines")
       .withIndex("by_branch", (q: any) => q.eq("branchId", user.branchId))
-      .collect();
+      .take(500);
 
     return medicines.filter((m: any) => m.stock <= 10);
   },

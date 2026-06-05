@@ -33,8 +33,8 @@ function HeroSection() {
     return (
       <section className="relative min-h-screen w-full flex items-center justify-center">
         <div className="text-center space-y-4">
-          <Skeleton className="h-16 w-96 mx-auto" />
-          <Skeleton className="h-8 w-64 mx-auto" />
+          <Skeleton className="h-16 w-full max-w-sm sm:w-96 mx-auto" />
+          <Skeleton className="h-8 w-full max-w-xs sm:w-64 mx-auto" />
           <Skeleton className="h-12 w-32 mx-auto" />
         </div>
       </section>

@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import ExcelJS from "exceljs";
 import { FileSpreadsheet, AlertCircle, CheckCircle } from "lucide-react";
 
 interface ExcelImportProps {
@@ -44,6 +43,7 @@ export function ExcelImport({ onImport }: ExcelImportProps) {
           return;
         }
 
+        const ExcelJS = await import("exceljs");
         const data = new Uint8Array(result as ArrayBuffer);
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(data.buffer as ArrayBuffer);

@@ -71,16 +71,14 @@ export const Breadcrumb = React.memo(function Breadcrumb({
 }: BreadcrumbProps) {
   const paths = useBreadcrumbs();
 
-  // Don't render if there are no breadcrumbs
-  if (!paths.length) return null;
-
-  // Add Dashboard as first item if not present and showHome is true
   const breadcrumbPaths = React.useMemo(() => {
     if (showHome && paths.length > 0 && paths[0].name !== "Dashboard") {
       return [{ name: "Dashboard", href: "/dashboard" }, ...paths];
     }
     return paths;
   }, [paths, showHome]);
+
+  if (!paths.length) return null;
 
   return (
     <nav className={cn("flex items-center", className)} aria-label="Breadcrumb">

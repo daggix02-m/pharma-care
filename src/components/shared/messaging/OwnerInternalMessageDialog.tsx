@@ -105,7 +105,7 @@ export function OwnerInternalMessageDialog({
             Compose and send one-way internal messages to managers and staff.
           </DialogDescription>
         </DialogHeader>
-        <div className="relative h-[700px] flex flex-col">
+        <div className="relative h-[700px] max-h-[85vh] flex flex-col">
           <Button
             variant="ghost"
             size="icon"

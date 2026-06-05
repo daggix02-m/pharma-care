@@ -10,26 +10,72 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-// Layouts
-import { DashboardLayout } from "./layouts/DashboardLayout";
+// Layouts - Lazy loaded
+const DashboardLayout = React.lazy(() =>
+  import("./layouts/DashboardLayout").then((m) => ({
+    default: m.DashboardLayout,
+  })),
+);
 
-// Pages - Landing
-import LandingPage from "./pages/landing/LandingPage";
-import AboutPage from "./pages/landing/AboutPage";
-import ContactSuccess from "./pages/landing/ContactSuccess";
+// Pages - Landing - Lazy loaded for code splitting
+const LandingPage = React.lazy(() => import("./pages/landing/LandingPage"));
+const AboutPage = React.lazy(() => import("./pages/landing/AboutPage"));
+const ContactSuccess = React.lazy(
+  () => import("./pages/landing/ContactSuccess"),
+);
 
-// Pages - Auth
-import { LoginPage } from "./pages/auth/login";
-import { SignupPage } from "./pages/auth/signup";
-import { SSOCallbackPage } from "./pages/auth/SSOCallbackPage";
-import { ForgotPasswordPage } from "./pages/auth/forgot-password";
-import { ResetPasswordPage } from "./pages/auth/reset-password";
-import { ChangePasswordPage } from "./pages/auth/change-password";
-import { VerifyEmailPage } from "./pages/auth/verify-email";
-import { PendingApprovalPage } from "./pages/auth/pending-approval";
-import { PharmacyRequestConfirmPage } from "./pages/auth/pharmacy-request-confirm";
-import { PharmacySuspendedPage } from "./pages/auth/pharmacy-suspended";
-import { FinishPaymentPage } from "./pages/subscription/FinishPaymentPage";
+// Pages - Auth - Lazy loaded for code splitting
+const LoginPage = React.lazy(() =>
+  import("./pages/auth/login").then((m) => ({ default: m.LoginPage })),
+);
+const SignupPage = React.lazy(() =>
+  import("./pages/auth/signup").then((m) => ({ default: m.SignupPage })),
+);
+const SSOCallbackPage = React.lazy(() =>
+  import("./pages/auth/SSOCallbackPage").then((m) => ({
+    default: m.SSOCallbackPage,
+  })),
+);
+const ForgotPasswordPage = React.lazy(() =>
+  import("./pages/auth/forgot-password").then((m) => ({
+    default: m.ForgotPasswordPage,
+  })),
+);
+const ResetPasswordPage = React.lazy(() =>
+  import("./pages/auth/reset-password").then((m) => ({
+    default: m.ResetPasswordPage,
+  })),
+);
+const ChangePasswordPage = React.lazy(() =>
+  import("./pages/auth/change-password").then((m) => ({
+    default: m.ChangePasswordPage,
+  })),
+);
+const VerifyEmailPage = React.lazy(() =>
+  import("./pages/auth/verify-email").then((m) => ({
+    default: m.VerifyEmailPage,
+  })),
+);
+const PendingApprovalPage = React.lazy(() =>
+  import("./pages/auth/pending-approval").then((m) => ({
+    default: m.PendingApprovalPage,
+  })),
+);
+const PharmacyRequestConfirmPage = React.lazy(() =>
+  import("./pages/auth/pharmacy-request-confirm").then((m) => ({
+    default: m.PharmacyRequestConfirmPage,
+  })),
+);
+const PharmacySuspendedPage = React.lazy(() =>
+  import("./pages/auth/pharmacy-suspended").then((m) => ({
+    default: m.PharmacySuspendedPage,
+  })),
+);
+const FinishPaymentPage = React.lazy(() =>
+  import("./pages/subscription/FinishPaymentPage").then((m) => ({
+    default: m.FinishPaymentPage,
+  })),
+);
 
 // Pages - Dashboard - Lazy loaded for code splitting
 const OwnerDashboard = React.lazy(() =>
@@ -305,32 +351,41 @@ const SuspenseBoundary = React.memo(function SuspenseBoundary() {
 const AppRoutes = React.memo(function AppRoutes() {
   return (
     <Routes>
-      {/* Landing Page */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/about" element={<AboutPage />} />
-      <Route path="/contact-success" element={<ContactSuccess />} />
+      {/* Landing & Auth Pages - Wrapped in Suspense for lazy loading */}
+      <Route element={<SuspenseBoundary />}>
+        {/* Landing Page */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact-success" element={<ContactSuccess />} />
 
-      {/* Public Auth Routes - NO LoadingBoundary */}
-      <Route path="/auth/login/*" element={<LoginPage />} />
-      <Route path="/auth/signup/*" element={<SignupPage />} />
-      <Route path="/auth/sso-callback" element={<SSOCallbackPage />} />
-      <Route path="/auth/forgot-password/*" element={<ForgotPasswordPage />} />
-      <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/auth/change-password" element={<ChangePasswordPage />} />
-      <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/auth/pending-approval" element={<PendingApprovalPage />} />
-      <Route
-        path="/auth/pharmacy-request-confirm"
-        element={<PharmacyRequestConfirmPage />}
-      />
-      <Route
-        path="/auth/pharmacy-suspended"
-        element={<PharmacySuspendedPage />}
-      />
-      <Route
-        path="/subscription/finish-payment"
-        element={<FinishPaymentPage />}
-      />
+        {/* Public Auth Routes */}
+        <Route path="/auth/login/*" element={<LoginPage />} />
+        <Route path="/auth/signup/*" element={<SignupPage />} />
+        <Route path="/auth/sso-callback" element={<SSOCallbackPage />} />
+        <Route
+          path="/auth/forgot-password/*"
+          element={<ForgotPasswordPage />}
+        />
+        <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/auth/change-password" element={<ChangePasswordPage />} />
+        <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+        <Route
+          path="/auth/pending-approval"
+          element={<PendingApprovalPage />}
+        />
+        <Route
+          path="/auth/pharmacy-request-confirm"
+          element={<PharmacyRequestConfirmPage />}
+        />
+        <Route
+          path="/auth/pharmacy-suspended"
+          element={<PharmacySuspendedPage />}
+        />
+        <Route
+          path="/subscription/finish-payment"
+          element={<FinishPaymentPage />}
+        />
+      </Route>
 
       {/* Protected Routes - WITH LoadingBoundary and Suspense for lazy loading */}
       <Route element={<LoadingBoundary />}>

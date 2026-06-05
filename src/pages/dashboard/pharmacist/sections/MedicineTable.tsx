@@ -44,7 +44,7 @@ export function MedicineTable({
   onDelete,
 }: MedicineTableProps) {
   return (
-    <Card className="minimal-card overflow-hidden">
+    <Card className="minimal-card overflow-x-auto">
       <Table>
         <TableHeader className="bg-secondary/20">
           <TableRow>

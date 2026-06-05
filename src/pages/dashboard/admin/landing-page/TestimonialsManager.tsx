@@ -125,7 +125,8 @@ export function TestimonialsManager() {
   };
 
   const handleDelete = async (testimonialId: Id<"testimonials">) => {
-    if (!confirm("Are you sure you want to delete this testimonial?")) return;
+    if (!window.confirm("Are you sure you want to delete this testimonial?"))
+      return;
     try {
       await deleteTestimonial({
         testimonialId,

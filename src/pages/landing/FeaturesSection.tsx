@@ -5,22 +5,35 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import * as LucideIcons from "lucide-react";
+import {
+  Shield,
+  Cloud,
+  Smartphone,
+  Brain,
+  Lock,
+  Zap,
+  Clock,
+  Users,
+  BarChart3,
+  Server,
+  MapPin,
+  MessageSquare,
+  Circle,
+} from "lucide-react";
 
-// Map of Lucide icons
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  Shield: LucideIcons.Shield,
-  Cloud: LucideIcons.Cloud,
-  Smartphone: LucideIcons.Smartphone,
-  Brain: LucideIcons.Brain,
-  Lock: LucideIcons.Lock,
-  Zap: LucideIcons.Zap,
-  Clock: LucideIcons.Clock,
-  Users: LucideIcons.Users,
-  BarChart3: LucideIcons.BarChart3,
-  Server: LucideIcons.Server,
-  MapPin: LucideIcons.MapPin,
-  MessageSquare: LucideIcons.MessageSquare,
+  Shield,
+  Cloud,
+  Smartphone,
+  Brain,
+  Lock,
+  Zap,
+  Clock,
+  Users,
+  BarChart3,
+  Server,
+  MapPin,
+  MessageSquare,
 };
 
 function FeaturesSection() {
@@ -145,8 +158,8 @@ function FeaturesSection() {
         <div className="container px-4 md:px-6">
           <div className="text-center mb-12">
             <Skeleton className="h-6 w-24 mx-auto mb-4" />
-            <Skeleton className="h-12 w-96 mx-auto mb-4" />
-            <Skeleton className="h-6 w-64 mx-auto" />
+            <Skeleton className="h-12 w-full max-w-sm sm:w-96 mx-auto mb-4" />
+            <Skeleton className="h-6 w-full max-w-xs sm:w-64 mx-auto" />
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
@@ -181,7 +194,7 @@ function FeaturesSection() {
 
         <div className="mx-auto grid max-w-5xl items-center gap-6 md:grid-cols-2 lg:grid-cols-4">
           {features.map((feature, index) => {
-            const IconComponent = iconMap[feature.icon] || LucideIcons.Circle;
+            const IconComponent = iconMap[feature.icon] || Circle;
             return (
               <div
                 key={feature.id}

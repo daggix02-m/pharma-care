@@ -271,7 +271,10 @@ export default defineSchema({
     prescriptionRequired: v.boolean(),
     controlledSubstance: v.boolean(),
     dosageLimit: v.optional(v.number()),
-  }).index("by_branch", ["branchId"]),
+  })
+    .index("by_branch", ["branchId"])
+    .index("by_branch_and_category", ["branchId", "category"])
+    .index("by_branch_and_status", ["branchId", "status"]),
 
   sales: defineTable({
     branchId: v.id("branches"),
@@ -293,7 +296,11 @@ export default defineSchema({
     chapaPaymentMethod: v.optional(v.string()),
     chapaStatus: v.optional(v.string()),
     chapaReference: v.optional(v.string()),
-  }).index("by_branch", ["branchId"]),
+  })
+    .index("by_branch", ["branchId"])
+    .index("by_branch_and_date", ["branchId", "_creationTime"])
+    .index("by_cashier", ["cashierId"])
+    .index("by_status", ["status"]),
 
   audit_logs: defineTable({
     userId: v.id("users"),
@@ -302,7 +309,10 @@ export default defineSchema({
     entityType: v.string(), // e.g., "branch", "pharmacy"
     details: v.optional(v.string()),
     timestamp: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_entity", ["entityType"]),
 
   notifications: defineTable({
     userId: v.id("users"),

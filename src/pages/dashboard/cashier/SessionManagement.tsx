@@ -146,7 +146,7 @@ export function SessionManagement() {
           <CardContent className="p-8 flex-1">
             {activeSession ? (
               <form onSubmit={handleEndSession} className="space-y-6">
-                <div className="grid grid-cols-2 gap-8 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
                   <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                       Opening Balance
@@ -305,7 +305,7 @@ export function SessionManagement() {
                             CLOSED
                           </Badge>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="px-4 py-2 bg-slate-50 rounded-xl border border-slate-100/50">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
                               Sales

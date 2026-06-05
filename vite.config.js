@@ -75,14 +75,20 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ["react", "react-dom", "react-router-dom"],
-          ui: [
+          radix: [
             "@radix-ui/react-dialog",
             "@radix-ui/react-select",
             "@radix-ui/react-slot",
-            "lucide-react",
+            "@radix-ui/react-dropdown-menu",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-label",
+            "@radix-ui/react-switch",
+            "@radix-ui/react-alert-dialog",
           ],
+          icons: ["lucide-react"],
           charts: ["recharts"],
-          utils: ["clsx", "tailwind-merge", "date-fns", "gsap"],
+          gsap: ["gsap"],
+          utils: ["clsx", "tailwind-merge", "date-fns"],
         },
       },
     },

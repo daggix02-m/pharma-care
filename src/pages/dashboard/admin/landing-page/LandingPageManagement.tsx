@@ -65,7 +65,7 @@ export function LandingPageManagement() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-8 w-full max-w-xs sm:w-64" />
           <Skeleton className="h-10 w-32" />
         </div>
         <div className="grid gap-4 md:grid-cols-4">

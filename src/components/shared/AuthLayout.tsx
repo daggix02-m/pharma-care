@@ -66,7 +66,9 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           <ThemeToggle className="bg-background/50 backdrop-blur-sm" />
         </div>
 
-        <div className="mx-auto w-full max-w-sm xl:max-w-md">{children}</div>
+        <div className="relative mx-auto w-full max-w-sm md:max-w-md xl:max-w-lg">
+          {children}
+        </div>
       </div>
     </main>
   );

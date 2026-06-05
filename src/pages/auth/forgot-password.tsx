@@ -78,7 +78,7 @@ export function ForgotPasswordPage() {
           </Link>
         </Button>
 
-        <div className="flex flex-col space-y-2 text-left mt-8">
+        <div className="flex flex-col space-y-2 text-left">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
             Reset Password
           </h1>

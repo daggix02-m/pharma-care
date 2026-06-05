@@ -12,7 +12,7 @@ export const getDashboardStats = query({
     const sales = await ctx.db
       .query("sales")
       .filter((q) => q.eq(q.field("cashierId"), user._id))
-      .collect();
+      .take(200);
 
     // Summing today's sales could be done by filtering timestamps (Convex has _creationTime)
     const today = new Date();
@@ -42,7 +42,7 @@ export const getProducts = query({
     return await ctx.db
       .query("medicines")
       .filter((q) => q.eq(q.field("branchId"), user.branchId))
-      .collect();
+      .take(200);
   },
 });
 
@@ -82,7 +82,7 @@ export const searchMedicines = query({
     const medicines = await ctx.db
       .query("medicines")
       .filter((q) => q.eq(q.field("branchId"), user.branchId))
-      .collect();
+      .take(200);
 
     const filtered = medicines.filter(
       (m) =>
@@ -119,7 +119,7 @@ export const getTransactions = query({
       .query("sales")
       .filter((q) => q.eq(q.field("cashierId"), user._id))
       .order("desc")
-      .collect();
+      .take(200);
   },
 });
 
@@ -245,7 +245,7 @@ export const getSalesSummary = query({
     const sales = await ctx.db
       .query("sales")
       .filter((q) => q.eq(q.field("cashierId"), user._id))
-      .collect();
+      .take(200);
 
     const totalRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0);
     const averageSale = sales.length > 0 ? totalRevenue / sales.length : 0;
@@ -350,7 +350,7 @@ export const getPaymentsReport = query({
     let sales = await ctx.db
       .query("sales")
       .filter((q) => q.eq(q.field("cashierId"), user._id))
-      .collect();
+      .take(200);
 
     if (args.startDate !== undefined && args.startDate !== null) {
       sales = sales.filter((s) => s._creationTime >= args.startDate!);
@@ -456,7 +456,7 @@ export const getShiftSummary = query({
       .query("sales")
       .filter((q) => q.eq(q.field("cashierId"), user._id))
       .filter((q) => q.gte(q.field("_creationTime"), today.getTime()))
-      .collect();
+      .take(200);
 
     const totalRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0);
     const totalSales = sales.length;

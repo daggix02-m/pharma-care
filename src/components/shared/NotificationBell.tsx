@@ -234,7 +234,10 @@ export const NotificationBell = React.memo(function NotificationBell() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0 border-border">
+      <DropdownMenuContent
+        align="end"
+        className="w-[calc(100vw-2rem)] max-w-80 p-0 border-border"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
           <DropdownMenuLabel className="font-semibold text-foreground p-0">
             Notifications

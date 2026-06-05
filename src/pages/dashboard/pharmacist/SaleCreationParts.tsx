@@ -66,7 +66,7 @@ export function MedicineSearchList({
   onAddToCart,
 }: MedicineSearchListProps) {
   return (
-    <Card className="lg:col-span-2 rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden min-h-[700px] flex flex-col">
+    <Card className="lg:col-span-2 rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden min-h-[50vh] sm:min-h-[500px] lg:min-h-[700px] flex flex-col">
       <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>

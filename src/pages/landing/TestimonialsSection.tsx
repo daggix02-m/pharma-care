@@ -115,8 +115,8 @@ function TestimonialsSection() {
         <div className="container px-4 md:px-6">
           <div className="text-center mb-12">
             <Skeleton className="h-6 w-24 mx-auto mb-4" />
-            <Skeleton className="h-12 w-96 mx-auto mb-4" />
-            <Skeleton className="h-6 w-64 mx-auto" />
+            <Skeleton className="h-12 w-full max-w-sm sm:w-96 mx-auto mb-4" />
+            <Skeleton className="h-6 w-full max-w-xs sm:w-64 mx-auto" />
           </div>
           <div className="max-w-4xl mx-auto">
             <Skeleton className="h-64 w-full rounded-2xl" />

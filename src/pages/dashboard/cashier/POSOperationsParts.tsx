@@ -201,7 +201,7 @@ export function PaymentCard({
           <label className="block text-sm font-medium mb-2">
             Payment Method
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {["cash", "card", "mobile", "bank_transfer", "chapa"].map(
               (method) => (
                 <button

@@ -203,8 +203,8 @@ function ServicesSection() {
         <div className="container px-4 md:px-6">
           <div className="text-center mb-12">
             <Skeleton className="h-6 w-24 mx-auto mb-4" />
-            <Skeleton className="h-12 w-96 mx-auto mb-4" />
-            <Skeleton className="h-6 w-64 mx-auto" />
+            <Skeleton className="h-12 w-full max-w-sm sm:w-96 mx-auto mb-4" />
+            <Skeleton className="h-6 w-full max-w-xs sm:w-64 mx-auto" />
           </div>
           <div className="mx-auto grid max-w-5xl items-center gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (

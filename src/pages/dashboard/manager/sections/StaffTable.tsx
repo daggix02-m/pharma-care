@@ -78,7 +78,7 @@ export function StaffTable({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-xl border border-border/40 overflow-hidden">
+        <div className="rounded-xl border border-border/40 overflow-x-auto">
           <Table>
             <TableHeader className="bg-secondary/20">
               <TableRow>

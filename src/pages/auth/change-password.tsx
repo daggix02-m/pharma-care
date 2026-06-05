@@ -123,7 +123,7 @@ export function ChangePasswordPage() {
           </Link>
         </Button>
 
-        <div className="flex flex-col space-y-2 text-left mt-8">
+        <div className="flex flex-col space-y-2 text-left">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
             Change Password
           </h1>
@@ -152,7 +152,7 @@ export function ChangePasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowCurrent(!showCurrent)}
-                className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none min-w-[44px]"
                 aria-label={
                   showCurrent
                     ? "Hide current password"
@@ -187,7 +187,7 @@ export function ChangePasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowNew(!showNew)}
-                className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none min-w-[44px]"
                 aria-label={showNew ? "Hide new password" : "Show new password"}
               >
                 {showNew ? (
@@ -245,7 +245,7 @@ export function ChangePasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
-                className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground hover:text-foreground transition-colors focus:outline-none min-w-[44px]"
                 aria-label={
                   showConfirm
                     ? "Hide confirm password"

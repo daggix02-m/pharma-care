@@ -152,7 +152,7 @@ export function Step3OwnerInfo() {
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground"
+              className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground min-w-[44px]"
             >
               {showPassword ? (
                 <EyeOff className="size-4" />
@@ -186,7 +186,7 @@ export function Step3OwnerInfo() {
             <button
               type="button"
               onClick={() => setShowConfirmPassword((prev) => !prev)}
-              className="absolute inset-y-0 end-0 flex items-center pe-4 text-muted-foreground"
+              className="absolute inset-y-0 end-0 flex items-center justify-center pe-4 text-muted-foreground min-w-[44px]"
             >
               {showConfirmPassword ? (
                 <EyeOff className="size-4" />

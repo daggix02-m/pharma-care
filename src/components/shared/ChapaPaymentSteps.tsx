@@ -42,7 +42,7 @@ export function MethodStep({
         <p className="text-sm font-semibold text-slate-700 mb-4">
           Select Payment Method
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {paymentMethods.map((method) => (
             <button
               key={method.id}
